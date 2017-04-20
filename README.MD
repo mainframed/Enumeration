@@ -87,10 +87,10 @@ Displays a list of who is currently logged on to the mainframe either in TSO or 
 
 Big thanks goes out to the following for information which I used to build this script:
 
-Mark Zelden's IPLINFO Rexx: http://www.mzelden.com/mvsfiles/iplinfo.txt
-Jay Taylor's SETRRCVT: https://github.com/jaytay79/zos
-z/OS MVS Data Areas Volumes 1 through 6: https://www-03.ibm.com/systems/z/os/zos/library/bkserv/v2r2pdf/#IEA
-File # 221 EDP Auditor REXX tools updated from Lee Conyers: http://www.cbttape.org/ftp/cbt/CBT221.zip
-File # 496 REXX exec to do LISTA (display allocations): http://www.cbttape.org/ftp/cbt/CBT496.zip
+* Mark Zelden's IPLINFO Rexx: http://www.mzelden.com/mvsfiles/iplinfo.txt
+* Jay Taylor's SETRRCVT: https://github.com/jaytay79/zos
+* z/OS MVS Data Areas Volumes 1 through 6: https://www-03.ibm.com/systems/z/os/zos/library/bkserv/v2r2pdf/#IEA
+* File # 221 EDP Auditor REXX tools updated from Lee Conyers: http://www.cbttape.org/ftp/cbt/CBT221.zip
+* File # 496 REXX exec to do LISTA (display allocations): http://www.cbttape.org/ftp/cbt/CBT496.zip
 
 
