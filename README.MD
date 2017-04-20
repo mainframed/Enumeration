@@ -2,7 +2,7 @@
 
 This script is a proof of concept REXX script built to aide in system enumeration of z/OS. The purpose of this script is to help identify other areas of interest to look in to during a penetration test. It work in both TSO and OMVS (UNIX). When you run it for the first time it displays this screen:
 
-'''
+```
 $ ./ENUM
               _,cyyyyyc,_
   -------- . ?$$$$$$$$$$$7  -----------------------------------------
@@ -33,17 +33,17 @@ args:
 
 Example:
 ./ENUM WHO
-'''
+```
 
 So that it doesn't cause too many alarms or alerts the script tries to gather all information using storage (memory) calls. For example, to get the JOB Name (i.e. the name of the process executing this script) we look at a few storage areas that return pointers:
 
-'''REXX
+```REXX
 CVT = STORAGE(10,4)      /* FLCCVT-PSA DATA AREA */
 TCBP = STORAGE(D2X(C2D(CVT)),4)       /* CVTTCBP */
 TCB = STORAGE(D2X(C2D(TCBP)+4),4)
 TIOT = STORAGE(D2X(C2D(TCB)+12),4)     /* TCBTIO */
 say 'Exec JOBNAME:'STRIP(STORAGE(D2X(C2D(TIOT)),8)) /* TIOCNJOB */
-'''
+```
 
 ## Arguments
 
