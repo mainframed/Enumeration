@@ -164,6 +164,7 @@ say 'Exec JOBNAME:'STRIP(STORAGE(D2X(C2D(TIOT)),8)) /* TIOCNJOB */
 return 0
 
 USERS:
+numeric digits 10
 /* From CBT FILE221 */
 PSA = 0
 CVTPTR = D2X(C2D(STORAGE(10,4))) /* CVTBUF, location 16 bytes */
@@ -369,6 +370,7 @@ VER      = Storage(D2x(ECVT+512),2)        /* point to version     */
 REL      = Storage(D2x(ECVT+514),2)        /* point to release     */         
 MOD      = Storage(D2x(ECVT+516),2)        /* point to mod level   */         
 VRM      = VER'.'REL'.'MOD                                                    
+FMIDNUM  = Storage(D2x(CVT - 32),7)        /* point to fmid        */         
 SAY 'The OS version is 'PRODNAM2 VRM' - FMID' ,                             
          FMIDNUM' ('PRODNAME').'         
 
