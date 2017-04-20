@@ -65,7 +65,7 @@ Displays the name of the executing JOB
 
 ### PATH
 
-Displays information about the dataset concatenation (if in TSO). This is basically the 'path' which is search for executables.
+Displays information about the dataset concatenation (if in TSO). This is basically the 'path' which is searched for executables. When this function is called with the 'ALL' argument it attempts to display all DDNAMEs. When called specifically it will only show SYSPROC/SYSEXEC.
 
 ### SEC
 
