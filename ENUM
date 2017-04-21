@@ -233,7 +233,7 @@ Do a = 0 to asvtmaxu - 1
           system.0 = tmp
           
         End
-      If oucbsubn = 'OMVS ' & oucbtrxn = oucbusrd Then /* OMVS user */
+      If strip(oucbsubn) = 'OMVS' Then /* OMVS user */
         Do
           tmp = omvs.0 + 1
           omvs.tmp = oucbtrxn
@@ -242,7 +242,7 @@ Do a = 0 to asvtmaxu - 1
         End                                                            
       If ascbjbni<>0 & chtrkid = '03'x Then  /* JOBS */
         Do                                                             
-          If oucbsubn = 'OMVS ' & oucbtrxn = oucbusrd Then iterate
+          If strip(oucbsubn) = 'OMVS' Then iterate
           assb = ptr(ascb+336)
           jsab = ptr(assb+168)
           usid = stg(jsab+44,8)
