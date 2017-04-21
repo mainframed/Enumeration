@@ -174,6 +174,8 @@ asvt=ptr(cvt+556)+512                  /* Get asvt                   */
 tso_users.0 = 0 
 tasks.0 = 0
 tasks_users.0 = 0
+omvs.0 = 0
+omvs_users.0 = 0
 jobs.0 = 0
 jobs_users.0 = 0
 system.0 = 0
@@ -196,6 +198,10 @@ Do a = 0 to asvtmaxu - 1
       ftcb = ptr(asxb+4)
       ltcb = ptr(asxb+8)
       
+      ascboucb = ptr(ascb+144,4)
+      oucbsubn = stg(ascboucb+176,4)
+      oucbtrxn = stg(ascboucb+200,8) /* transaction name */
+      oucbusrd = stg(ascboucb+208,8) /* userid */
             
       If ascbjbns<>0 & chtrkid = '02'x Then  /* started task */
         Do                                                             
@@ -227,8 +233,16 @@ Do a = 0 to asvtmaxu - 1
           system.0 = tmp
           
         End
+      If oucbsubn = 'OMVS ' & oucbtrxn = oucbusrd Then /* OMVS user */
+        Do
+          tmp = omvs.0 + 1
+          omvs.tmp = oucbtrxn
+          omvs_users.tmp = oucbusrd
+          omvs.0 = tmp
+        End                                                            
       If ascbjbni<>0 & chtrkid = '03'x Then  /* JOBS */
         Do                                                             
+          If oucbsubn = 'OMVS ' & oucbtrxn = oucbusrd Then iterate
           assb = ptr(ascb+336)
           jsab = ptr(assb+168)
           usid = stg(jsab+44,8)
@@ -257,6 +271,12 @@ say ""
 say "**** TSO Users - Owner ****"
 DO i = 1 to tso_users.0
    say tso_users.i " - " tso_users.i 
+END
+
+say ""
+say "**** OMVS Users - Owner ****"
+DO i = 1 to omvs.0
+   say omvs.i " - " omvs_users.i
 END
 
 say ""
