@@ -53,7 +53,7 @@
 
 
 PARSE SOURCE s1 s2 prg s3 name s4 s5 space .
-PARSE ARG type
+PARSE UPPER ARG type
 
 if space == 'ISPF' then do
   say ''
@@ -160,7 +160,7 @@ CVT = STORAGE(10,4)      /* FLCCVT-PSA DATA AREA */
 TCBP = STORAGE(D2X(C2D(CVT)),4)       /* CVTTCBP */
 TCB = STORAGE(D2X(C2D(TCBP)+4),4)
 TIOT = STORAGE(D2X(C2D(TCB)+12),4)     /* TCBTIO */
-say 'Exec JOBNAME:'STRIP(STORAGE(D2X(C2D(TIOT)),8)) /* TIOCNJOB */
+say 'Exec JOBNAME: 'STRIP(STORAGE(D2X(C2D(TIOT)),8)) /* TIOCNJOB */
 return 0
 
 USERS:
