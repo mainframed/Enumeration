@@ -43,7 +43,9 @@
 |*        http://www.mzelden.com/mvsfiles/iplinfo.txt                 *|
 |*     File # 221 EDP Auditor REXX tools updated from Lee Conyers     *|
 |*        http://www.cbttape.org/ftp/cbt/CBT221.zip                   *|
-|*     Jay Taylor's SETRRCVT                                          *|
+|*     Ayoub Elaassal's ELV.SELF                                      *|
+|*        https://github.com/ayoul3/Privesc                           *|
+|*     Jim Taylor's SETRRCVT                                          *|
 |*        https://github.com/jaytay79/zos                             *|
 |*     File # 496 REXX exec to do LISTA (display allocations)         *|
 |*        http://www.cbttape.org/ftp/cbt/CBT496.zip                   *|
@@ -53,7 +55,7 @@
 
 
 PARSE SOURCE s1 s2 prg s3 name s4 s5 space .
-PARSE ARG type
+PARSE UPPER ARG type
 
 if space == 'ISPF' then do
   say ''
@@ -160,50 +162,110 @@ CVT = STORAGE(10,4)      /* FLCCVT-PSA DATA AREA */
 TCBP = STORAGE(D2X(C2D(CVT)),4)       /* CVTTCBP */
 TCB = STORAGE(D2X(C2D(TCBP)+4),4)
 TIOT = STORAGE(D2X(C2D(TCB)+12),4)     /* TCBTIO */
-say 'Exec JOBNAME:'STRIP(STORAGE(D2X(C2D(TIOT)),8)) /* TIOCNJOB */
+say 'Exec JOBNAME: 'STRIP(STORAGE(D2X(C2D(TIOT)),8)) /* TIOCNJOB */
 return 0
 
 USERS:
 numeric digits 10
-/* From CBT FILE221 */
-PSA = 0
-CVTPTR = D2X(C2D(STORAGE(10,4))) /* CVTBUF, location 16 bytes */
-                                 /* from 0                    */
-ASVTPTR = X2D(CVTPTR) + 556      /* Location is CVTPTR        */
-                                 /* + 556 offset              */
-ASVT = D2X(C2D(STORAGE(D2X(ASVTPTR),4)))
 
-ASVTMAXU = C2D(STORAGE(D2X(X2D(ASVT)+516),4))
-ASIZE =  524 + (4 * (ASVTMAXU - 1)) /* why minus one? */
+cvt=ptr(16)                            /* Get CVT                    */ 
+asvt=ptr(cvt+556)+512                  /* Get asvt                   */ 
 
-/* Size is the total size, which includes the 524 bytes of */
-/* header information */
+tso_users.0 = 0 
+tasks.0 = 0
+tasks_users.0 = 0
+jobs.0 = 0
+jobs_users.0 = 0
+system.0 = 0
 
-say 'Current logged on users:'
-
-Do i=524 to ASIZE by 4 /* loop through each potential ASID */
- ASCB = STORAGE(D2X(X2D(ASVT)+i),4)
- If BITAND(LEFT(ASCB,1),'80'x) \= '80'x Then Do
-  /* The left most bit is off, this ASID is in use */
-  /* Page 71 */
-  ASCBASID = STORAGE(D2X(C2D(ASCB)+36),2)
-  ASCBOUCB = STORAGE(D2X(C2D(ASCB)+144),4)
-  /* SYSTEM RESOURCES MANAGER (SRM) USER CONTROL BLOCK POINTER */
-  OUCBSUBN = STORAGE(D2X(C2D(ASCBOUCB)+176),4)
-  /* Subsystem name used by SMF and for workload activity reporting */
-  OUCBTRXN = STORAGE(D2X(C2D(ASCBOUCB)+200),8) /* TRANSACTION NAME */
-  OUCBUSRD = STORAGE(D2X(C2D(ASCBOUCB)+208),8) /* USERID */
-  If OUCBSUBN = 'TSO ' Then Do
-   Say 'TSO :' OUCBUSRD
-  End
-  If OUCBSUBN = 'OMVS ' & OUCBTRXN = OUCBUSRD Then Do
-   /* OMVS creates multiple threads under UserID# but only */
-   /* the case where USERID == TRANSACTION NAME is that the user */
-   say 'OMVS:' OUCBUSRD
-  End
- End
+asvtmaxu=ptr(asvt+4)                   /* Get max asvt entries       */ 
+Do a = 0 to asvtmaxu - 1                                                
+  ascb=stg(asvt+16+a*4,4)              /* Get ptr to ascb (Skip master) */   
+                
+  If bitand(ascb,'80000000'x) = '00000000'x Then /* If in use        */ 
+    Do                                                                  
+      ascb=c2d(ascb)                   /* Get ascb address           */ 
+      cscb=ptr(ascb+56)                /* Get CSCB address           */ 
+      chtrkid=stg(cscb+28,1)           /* Check addr space type      */ 
+      ascbjbni=ptr(ascb+172)           /* Get ascbjbni               */ 
+      ascbjbns=ptr(ascb+176)           /* Get ascbjbns               */ 
+      asxb = ptr(ascb+108)
+      
+      acee = ptr(asxb+200)      
+      
+      ftcb = ptr(asxb+4)
+      ltcb = ptr(asxb+8)
+      
+            
+      If ascbjbns<>0 & chtrkid = '02'x Then  /* started task */
+        Do                                                             
+          assb = ptr(ascb+336)
+          jsab = ptr(assb+168)
+          if jsab = 0 then
+            usid = ""
+          else
+            usid = stg(jsab+44,8)
+          
+          tmp = tasks.0 + 1
+          tasks.tmp = stg(ascbjbns,8)
+          tasks_users.tmp = usid
+          tasks.0 = tmp   
+               
+          
+        End
+      If ascbjbns<>0 & chtrkid = '01'x Then  /* TSO user */
+        Do                                                             
+          tmp = tso_users.0 + 1
+          tso_users.tmp = stg(ascbjbns,8)
+          tso_users.0 = tmp
+          
+        End
+      If ascbjbns<>0 & chtrkid = '04'x Then  /* System */
+        Do                                                             
+          tmp = system.0 + 1
+          system.tmp = stg(ascbjbns,8)
+          system.0 = tmp
+          
+        End
+      If ascbjbni<>0 & chtrkid = '03'x Then  /* JOBS */
+        Do                                                             
+          assb = ptr(ascb+336)
+          jsab = ptr(assb+168)
+          usid = stg(jsab+44,8)
+          
+          if jsab = 0 then
+            usid = ""
+          else
+            usid = stg(jsab+44,8)
+            
+          tmp = jobs.0 + 1
+          jobs.tmp = stg(ascbjbni,8)
+          jobs_users.tmp = usid
+          jobs.0 = tmp
+        
+          
+        End
+    End                                                                
 End
-return 0
+
+say "**** Started Task - Owner *****"
+DO i = 1 to tasks.0
+   say tasks.i " - " tasks_users.i 
+END                                                       
+
+say ""
+say "**** TSO Users - Owner ****"
+DO i = 1 to tso_users.0
+   say tso_users.i " - " tso_users.i 
+END
+
+say ""
+say "**** Jobs - Owner ****"
+DO i = 1 to jobs.0
+   say jobs.i " - " jobs_users.i 
+END
+
+return 0                          
 
 SECURITY:
 say 'External Security Manager:'
@@ -394,7 +456,37 @@ IF JESPJESN = 'JES3' THEN DO
 END
 ELSE IF JESPJESN = 'JES2' THEN DO
  JESVERS = Strip(Storage(D2x(SSCTSUSE),8))
- JESNODE = Strip(Storage(D2x(SSCTSUS2+656),8))
+  Select                                                               
+    When Substr(JESVERS,1,8) == 'z/OS 2.2' then , /* z/OS 2.2        */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+664),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,8) == 'z/OS 2.1' | ,  /* z/OS 2.1          */
+      Substr(JESVERS,1,8) == 'z/OS1.13'   | ,   /* z/OS 1.13         */
+      Substr(JESVERS,1,8) == 'z/OS1.12'   | ,   /* z/OS 1.12         */
+      Substr(JESVERS,1,8) == 'z/OS1.11' then,   /* z/OS 1.11         */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+656),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,8) == 'z/OS1.10' | , /* z/OS 1.10          */
+      Substr(JESVERS,1,8) == 'z/OS 1.9' then,   /* z/OS 1.9          */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+708),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,8) == 'z/OS 1.8' then, /* z/OS 1.8         */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+620),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,8) == 'z/OS 1.7' then, /* z/OS 1.7         */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+616),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,8) == 'z/OS 1.5' | , /* z/OS 1.5 & 1.6     */
+      Substr(JESVERS,1,8) == 'z/OS 1.4' then  /* z/OS 1.4            */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+532),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,7) == 'OS 2.10' | , /* OS/390 2.10 and     */
+      Substr(JESVERS,1,8) == 'z/OS 1.2' then, /* z/OS 1.2            */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+452),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,6) == 'OS 1.1' | , /* OS/390 1.1 or        */
+      Substr(JESVERS,1,4) == 'SP 5' then ,   /* ESA V5 JES2          */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+336),8)) /*  JES2 NODE   */
+    When Substr(JESVERS,1,5) == 'OS 1.' | ,  /* OS/390 1.2           */
+      Substr(JESVERS,1,5) == 'OS 2.' then,   /*  through OS/390 2.9  */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+372),8)) /* JES2 NODE    */
+    Otherwise ,                              /* Lower than ESA V5    */
+      If ENV = 'OMVS' then JESNODE = '*not_avail*'                     
+      else JESNODE  = SYSVAR('SYSNODE')      /* TSO/E VAR for JESNODE*/
+  End  /* select */                                                    
 END
 
 /* DF */
@@ -876,3 +968,7 @@ END
 IF LENGTH(ARG(1)) // 8 /= 0 THEN
 SAY HEXOUT "|" SUBSTR(ARG(1),j,LENGTH(ARG(1)))
 RETURN 0
+/*-------------------------------------------------------------------*/ 
+ptr:  Return c2d(storage(d2x(Arg(1)),4))     /* Return a pointer */     
+/*-------------------------------------------------------------------*/ 
+stg:  Return storage(d2x(Arg(1)),Arg(2))     /* Return storage */       

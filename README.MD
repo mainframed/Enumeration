@@ -69,7 +69,7 @@ Displays information about the dataset concatenation (if in TSO). This is basica
 
 ### SEC
 
-Information about the security product installed. RACF gives a lot of information. ACF2 less, TopSecret, so secretive it only tells if your running TopSecret or not.
+Information about the security product installed. RACF gives a lot of information. ACF2 less, TopSecret, so secretive it only tells if you're running TopSecret or not.
 
 ### SVC
 
