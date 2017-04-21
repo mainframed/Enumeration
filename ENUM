@@ -394,7 +394,37 @@ IF JESPJESN = 'JES3' THEN DO
 END
 ELSE IF JESPJESN = 'JES2' THEN DO
  JESVERS = Strip(Storage(D2x(SSCTSUSE),8))
- JESNODE = Strip(Storage(D2x(SSCTSUS2+656),8))
+  Select                                                               
+    When Substr(JESVERS,1,8) == 'z/OS 2.2' then , /* z/OS 2.2        */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+664),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,8) == 'z/OS 2.1' | ,  /* z/OS 2.1          */
+      Substr(JESVERS,1,8) == 'z/OS1.13'   | ,   /* z/OS 1.13         */
+      Substr(JESVERS,1,8) == 'z/OS1.12'   | ,   /* z/OS 1.12         */
+      Substr(JESVERS,1,8) == 'z/OS1.11' then,   /* z/OS 1.11         */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+656),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,8) == 'z/OS1.10' | , /* z/OS 1.10          */
+      Substr(JESVERS,1,8) == 'z/OS 1.9' then,   /* z/OS 1.9          */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+708),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,8) == 'z/OS 1.8' then, /* z/OS 1.8         */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+620),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,8) == 'z/OS 1.7' then, /* z/OS 1.7         */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+616),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,8) == 'z/OS 1.5' | , /* z/OS 1.5 & 1.6     */
+      Substr(JESVERS,1,8) == 'z/OS 1.4' then  /* z/OS 1.4            */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+532),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,7) == 'OS 2.10' | , /* OS/390 2.10 and     */
+      Substr(JESVERS,1,8) == 'z/OS 1.2' then, /* z/OS 1.2            */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+452),8)) /* JES2 NODE    */
+    When Substr(JESVERS,1,6) == 'OS 1.1' | , /* OS/390 1.1 or        */
+      Substr(JESVERS,1,4) == 'SP 5' then ,   /* ESA V5 JES2          */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+336),8)) /*  JES2 NODE   */
+    When Substr(JESVERS,1,5) == 'OS 1.' | ,  /* OS/390 1.2           */
+      Substr(JESVERS,1,5) == 'OS 2.' then,   /*  through OS/390 2.9  */
+      JESNODE  = Strip(Storage(D2x(SSCTSUS2+372),8)) /* JES2 NODE    */
+    Otherwise ,                              /* Lower than ESA V5    */
+      If ENV = 'OMVS' then JESNODE = '*not_avail*'                     
+      else JESNODE  = SYSVAR('SYSNODE')      /* TSO/E VAR for JESNODE*/
+  End  /* select */                                                    
 END
 
 /* DF */
