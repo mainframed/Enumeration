@@ -43,7 +43,9 @@
 |*        http://www.mzelden.com/mvsfiles/iplinfo.txt                 *|
 |*     File # 221 EDP Auditor REXX tools updated from Lee Conyers     *|
 |*        http://www.cbttape.org/ftp/cbt/CBT221.zip                   *|
-|*     Jay Taylor's SETRRCVT                                          *|
+|*     Ayoub Elaassal's ELV.SELF                                      *|
+|*        https://github.com/ayoul3/Privesc                           *|
+|*     Jim Taylor's SETRRCVT                                          *|
 |*        https://github.com/jaytay79/zos                             *|
 |*     File # 496 REXX exec to do LISTA (display allocations)         *|
 |*        http://www.cbttape.org/ftp/cbt/CBT496.zip                   *|
@@ -165,45 +167,105 @@ return 0
 
 USERS:
 numeric digits 10
-/* From CBT FILE221 */
-PSA = 0
-CVTPTR = D2X(C2D(STORAGE(10,4))) /* CVTBUF, location 16 bytes */
-                                 /* from 0                    */
-ASVTPTR = X2D(CVTPTR) + 556      /* Location is CVTPTR        */
-                                 /* + 556 offset              */
-ASVT = D2X(C2D(STORAGE(D2X(ASVTPTR),4)))
 
-ASVTMAXU = C2D(STORAGE(D2X(X2D(ASVT)+516),4))
-ASIZE =  524 + (4 * (ASVTMAXU - 1)) /* why minus one? */
+cvt=ptr(16)                            /* Get CVT                    */ 
+asvt=ptr(cvt+556)+512                  /* Get asvt                   */ 
 
-/* Size is the total size, which includes the 524 bytes of */
-/* header information */
+tso_users.0 = 0 
+tasks.0 = 0
+tasks_users.0 = 0
+jobs.0 = 0
+jobs_users.0 = 0
+system.0 = 0
 
-say 'Current logged on users:'
-
-Do i=524 to ASIZE by 4 /* loop through each potential ASID */
- ASCB = STORAGE(D2X(X2D(ASVT)+i),4)
- If BITAND(LEFT(ASCB,1),'80'x) \= '80'x Then Do
-  /* The left most bit is off, this ASID is in use */
-  /* Page 71 */
-  ASCBASID = STORAGE(D2X(C2D(ASCB)+36),2)
-  ASCBOUCB = STORAGE(D2X(C2D(ASCB)+144),4)
-  /* SYSTEM RESOURCES MANAGER (SRM) USER CONTROL BLOCK POINTER */
-  OUCBSUBN = STORAGE(D2X(C2D(ASCBOUCB)+176),4)
-  /* Subsystem name used by SMF and for workload activity reporting */
-  OUCBTRXN = STORAGE(D2X(C2D(ASCBOUCB)+200),8) /* TRANSACTION NAME */
-  OUCBUSRD = STORAGE(D2X(C2D(ASCBOUCB)+208),8) /* USERID */
-  If OUCBSUBN = 'TSO ' Then Do
-   Say 'TSO :' OUCBUSRD
-  End
-  If OUCBSUBN = 'OMVS ' & OUCBTRXN = OUCBUSRD Then Do
-   /* OMVS creates multiple threads under UserID# but only */
-   /* the case where USERID == TRANSACTION NAME is that the user */
-   say 'OMVS:' OUCBUSRD
-  End
- End
+asvtmaxu=ptr(asvt+4)                   /* Get max asvt entries       */ 
+Do a = 0 to asvtmaxu - 1                                                
+  ascb=stg(asvt+16+a*4,4)              /* Get ptr to ascb (Skip master) */   
+                
+  If bitand(ascb,'80000000'x) = '00000000'x Then /* If in use        */ 
+    Do                                                                  
+      ascb=c2d(ascb)                   /* Get ascb address           */ 
+      cscb=ptr(ascb+56)                /* Get CSCB address           */ 
+      chtrkid=stg(cscb+28,1)           /* Check addr space type      */ 
+      ascbjbni=ptr(ascb+172)           /* Get ascbjbni               */ 
+      ascbjbns=ptr(ascb+176)           /* Get ascbjbns               */ 
+      asxb = ptr(ascb+108)
+      
+      acee = ptr(asxb+200)      
+      
+      ftcb = ptr(asxb+4)
+      ltcb = ptr(asxb+8)
+      
+            
+      If ascbjbns<>0 & chtrkid = '02'x Then  /* started task */
+        Do                                                             
+          assb = ptr(ascb+336)
+          jsab = ptr(assb+168)
+          if jsab = 0 then
+            usid = ""
+          else
+            usid = stg(jsab+44,8)
+          
+          tmp = tasks.0 + 1
+          tasks.tmp = stg(ascbjbns,8)
+          tasks_users.tmp = usid
+          tasks.0 = tmp   
+               
+          
+        End
+      If ascbjbns<>0 & chtrkid = '01'x Then  /* TSO user */
+        Do                                                             
+          tmp = tso_users.0 + 1
+          tso_users.tmp = stg(ascbjbns,8)
+          tso_users.0 = tmp
+          
+        End
+      If ascbjbns<>0 & chtrkid = '04'x Then  /* System */
+        Do                                                             
+          tmp = system.0 + 1
+          system.tmp = stg(ascbjbns,8)
+          system.0 = tmp
+          
+        End
+      If ascbjbni<>0 & chtrkid = '03'x Then  /* JOBS */
+        Do                                                             
+          assb = ptr(ascb+336)
+          jsab = ptr(assb+168)
+          usid = stg(jsab+44,8)
+          
+          if jsab = 0 then
+            usid = ""
+          else
+            usid = stg(jsab+44,8)
+            
+          tmp = jobs.0 + 1
+          jobs.tmp = stg(ascbjbni,8)
+          jobs_users.tmp = usid
+          jobs.0 = tmp
+        
+          
+        End
+    End                                                                
 End
-return 0
+
+say "**** Started Task - Owner *****"
+DO i = 1 to tasks.0
+   say tasks.i " - " tasks_users.i 
+END                                                       
+
+say ""
+say "**** TSO Users - Owner ****"
+DO i = 1 to tso_users.0
+   say tso_users.i " - " tso_users.i 
+END
+
+say ""
+say "**** Jobs - Owner ****"
+DO i = 1 to jobs.0
+   say jobs.i " - " jobs_users.i 
+END
+
+return 0                          
 
 SECURITY:
 say 'External Security Manager:'
@@ -906,3 +968,7 @@ END
 IF LENGTH(ARG(1)) // 8 /= 0 THEN
 SAY HEXOUT "|" SUBSTR(ARG(1),j,LENGTH(ARG(1)))
 RETURN 0
+/*-------------------------------------------------------------------*/ 
+ptr:  Return c2d(storage(d2x(Arg(1)),4))     /* Return a pointer */     
+/*-------------------------------------------------------------------*/ 
+stg:  Return storage(d2x(Arg(1)),Arg(2))     /* Return storage */       
