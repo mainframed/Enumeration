@@ -36,6 +36,7 @@
 |*             SVC  - Display SVC Information                         *|
 |*             VERS - Operating System Version Info                   *|
 |*             WHO  - Who is currently logged on through TSO/OMVS     *|
+|*             TSTA - Display TESTAUTH authorization                  *|
 |*                                                                    *|
 |*                                                                    *|
 |* Sources:                                                           *|
@@ -89,6 +90,8 @@ SELECT
   END
   WHEN type == 'CAT' THEN
     x = CAT()
+  WHEN type == 'TSTA' THEN
+    x = TSTA()
   WHEN type = 'ALL' THEN DO
     say 'z/OS System Enumeration'
     say ''
@@ -113,6 +116,9 @@ SELECT
     x = SVC()
     say '-----------------------------------------'
     say '' 
+    x = TSTA()
+    say '-----------------------------------------'
+    say '' 
     if space /== 'OMVS' THEN
       x = PATH(1)
   END
@@ -123,7 +129,7 @@ say "         .    %$$$$$$$$$7            z/OS System Enumeration Script  "
 say "            `  ?$$$$$$$7"
 say "          '    .?$$$$$7              Arguments: ALL, APF, CAT, JOB,"
 say "   sof        '  """'`'"""                        PATH, SEC, SVC, VERS,"
-say "                _qQ$Qp_         .  .            WHO"
+say "                _qQ$Qp_         .  .            WHO, TSTA"
 say "       .        $$$$$$$   . :  .:  ."
 say "   I$$$$$$$$$$L `?jlj7' j$l$l$$il$$I"
 say "   :$$$$$$$$$i$b.     .d$$$$$$$$$$$:"
@@ -143,6 +149,7 @@ say "---z-o-s---e-n-u-m-e-r-a-t-i-o-n-------------------------------------"
     say "'SVC'  Display All SVCs"
     say "'VERS' Display System Information"
     say "'WHO'  Display Logged On TSO/OMVS Users"
+    say "'TSTA' Display TESTAUTH authorization"
     say ''
     say 'Example:'
     if space /== 'OMVS' then
@@ -674,6 +681,20 @@ IPASCAT  = Storage(D2x(ECVTIPA + 224),63)
 MCATDSN  = Strip(Substr(IPASCAT,11,44))    /* master catalog dsn   */         
 MCATVOL  = Substr(IPASCAT,1,6) 
 say 'Master Catalog:' MCATDSN 'Volume:' MCATVOL
+return 0
+
+TSTA:
+/* Try to use TESTAUTH, failures are not logged (RACROUTE with LOG=NONE) */
+ADDRESS 'TSO' 'NEWSTACK'
+QUEUE "END"
+RC = OUTTRAP('OUT.')
+ADDRESS 'TSO' "TESTAUTH 'SYS1.LINKLIB(ICEPRML)'"
+RC = OUTTRAP('OFF')
+ADDRESS 'TSO' 'DELSTACK'
+IF OUT.0 = 0 THEN
+  SAY 'You ARE authorized to use TESTAUTH <-'
+ELSE
+  SAY OUT.1
 return 0
 
 SETROPTS:
