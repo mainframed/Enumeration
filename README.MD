@@ -10,7 +10,7 @@ $ ./ENUM
             `  ?$$$$$$$7
           '    .?$$$$$7              Arguments: ALL, APF, CAT, JOB,
    sof        '  "`"                          PATH, SEC, SVC, VERS,
-                _qQ$Qp_         .  .            WHO
+                _qQ$Qp_         .  .            WHO, TSTA
        .        $$$$$$$   . :  .:  .
    I$$$$$$$$$$L `?jlj7' j$l$l$$il$$I
    :$$$$$$$$$i$b.     .d$$$$$$$$$$$:
@@ -30,6 +30,7 @@ args:
 'SVC'  Display All SVCs
 'VERS' Display System Information
 'WHO'  Display Logged On TSO/OMVS Users
+'TSTA' Display TESTAUTH authorization
 
 Example:
 ./ENUM WHO
@@ -82,6 +83,10 @@ Displays version information about the operating system and some other component
 ### WHO
 
 Displays a list of who is currently logged on to the mainframe either in TSO or OMVS (UNIX).
+
+### TSTA
+
+Displays authorization status for TESTAUTH program.
 
 ## Sources
 
