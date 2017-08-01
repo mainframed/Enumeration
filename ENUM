@@ -6,7 +6,7 @@
             `  ?$$$$$$$7                                              |
           '    .?$$$$$7              Arguments: ALL, APF, CAT, JOB,   |
    sof        '  "'`'"                          PATH, SEC, SVC, VERS, |
-                _qQ$Qp_         .  .            WHO                   |
+                _qQ$Qp_         .  .            WHO, TSTA             |
        .        $$$$$$$   . :  .:  .                                  |
    I$$$$$$$$$$L `?jlj7' j$l$l$$il$$I Description: Enumerates z/OS sys |
    :$$$$$$$$$i$b.     .d$$$$$$$$$$$:              information for use |
@@ -36,6 +36,7 @@
 |*             SVC  - Display SVC Information                         *|
 |*             VERS - Operating System Version Info                   *|
 |*             WHO  - Who is currently logged on through TSO/OMVS     *|
+|*             TSTA - Display TESTAUTH authorization                  *|
 |*                                                                    *|
 |*                                                                    *|
 |* Sources:                                                           *|
@@ -89,6 +90,8 @@ SELECT
   END
   WHEN type == 'CAT' THEN
     x = CAT()
+  WHEN type == 'TSTA' THEN
+    x = TSTA()
   WHEN type = 'ALL' THEN DO
     say 'z/OS System Enumeration'
     say ''
@@ -113,6 +116,9 @@ SELECT
     x = SVC()
     say '-----------------------------------------'
     say '' 
+    x = TSTA()
+    say '-----------------------------------------'
+    say '' 
     if space /== 'OMVS' THEN
       x = PATH(1)
   END
@@ -123,7 +129,7 @@ say "         .    %$$$$$$$$$7            z/OS System Enumeration Script  "
 say "            `  ?$$$$$$$7"
 say "          '    .?$$$$$7              Arguments: ALL, APF, CAT, JOB,"
 say "   sof        '  """'`'"""                        PATH, SEC, SVC, VERS,"
-say "                _qQ$Qp_         .  .            WHO"
+say "                _qQ$Qp_         .  .            WHO, TSTA"
 say "       .        $$$$$$$   . :  .:  ."
 say "   I$$$$$$$$$$L `?jlj7' j$l$l$$il$$I"
 say "   :$$$$$$$$$i$b.     .d$$$$$$$$$$$:"
@@ -143,6 +149,7 @@ say "---z-o-s---e-n-u-m-e-r-a-t-i-o-n-------------------------------------"
     say "'SVC'  Display All SVCs"
     say "'VERS' Display System Information"
     say "'WHO'  Display Logged On TSO/OMVS Users"
+    say "'TSTA' Display TESTAUTH authorization"
     say ''
     say 'Example:'
     if space /== 'OMVS' then
@@ -233,7 +240,7 @@ Do a = 0 to asvtmaxu - 1
           system.0 = tmp
           
         End
-      If oucbsubn = 'OMVS ' & oucbtrxn = oucbusrd Then /* OMVS user */
+      If strip(oucbsubn) = 'OMVS' Then /* OMVS user */
         Do
           tmp = omvs.0 + 1
           omvs.tmp = oucbtrxn
@@ -242,7 +249,7 @@ Do a = 0 to asvtmaxu - 1
         End                                                            
       If ascbjbni<>0 & chtrkid = '03'x Then  /* JOBS */
         Do                                                             
-          If oucbsubn = 'OMVS ' & oucbtrxn = oucbusrd Then iterate
+          If strip(oucbsubn) = 'OMVS' Then iterate
           assb = ptr(ascb+336)
           jsab = ptr(assb+168)
           usid = stg(jsab+44,8)
@@ -676,6 +683,20 @@ MCATVOL  = Substr(IPASCAT,1,6)
 say 'Master Catalog:' MCATDSN 'Volume:' MCATVOL
 return 0
 
+TSTA:
+/* Try to use TESTAUTH, failures are not logged (RACROUTE with LOG=NONE) */
+ADDRESS 'TSO' 'NEWSTACK'
+QUEUE "END"
+RC = OUTTRAP('OUT.')
+ADDRESS 'TSO' "TESTAUTH 'SYS1.LINKLIB(ICEPRML)'"
+RC = OUTTRAP('OFF')
+ADDRESS 'TSO' 'DELSTACK'
+IF OUT.0 = 0 THEN
+  SAY 'You ARE authorized to use TESTAUTH <-'
+ELSE
+  SAY OUT.1
+return 0
+
 SETROPTS:
 /*********************************************************************/
 /* Rexx to pull out all useful SETROPTS info from storage.           */
@@ -881,7 +902,7 @@ if RCVTINAC = "0" then
 RCVTHIST = C2D(Strip(Storage(D2x(RCVT + 240),1))) /* pw generations  */
 if RCVTHIST = "0" then
  say "No password history in use"
- else say "Password generations:" RCVTHIST
+ else say "Password history:" RCVTHIST "generations"
 /* Misc password related bit string flags */
 RCVTFLG3 = RCVx + 633                          /* point to RCVTFLG3  */
 RCVTFLGX = X2B(C2X(STORAGE(D2X(RCVTFLG3),8)))  /* get the bits       */
@@ -895,6 +916,10 @@ if SUBSTR(RCVTFLGX,6,1) = 1 then
  else say "Enhanced password options under OA43999 are not available"
 if SUBSTR(RCVTFLGX,7,1) = 1 then say "Multi factor auth is available"
  else say "Multi factor auth is not available"
+RCVTFLG4 = RCVx + 640                          /* point to RCVTFLG4  */
+RCVTFLGY = X2B(C2X(STORAGE(D2X(RCVTFLG4),8)))  /* get the bits       */
+if SUBSTR(RCVTFLGY,2,1) = 1 then say " MFA3 is available (OA50930)"
+ else say " MFA3 is not available (OA50930)"
 /* Checks for new password encryption */
 RCVTPALG = C2D(Strip(Storage(D2x(RCVT + 635),1))) /* pw encryption   */
 if RCVTPALG = "1" then say "KDFAES encryption is active"
