@@ -902,7 +902,7 @@ if RCVTINAC = "0" then
 RCVTHIST = C2D(Strip(Storage(D2x(RCVT + 240),1))) /* pw generations  */
 if RCVTHIST = "0" then
  say "No password history in use"
- else say "Password generations:" RCVTHIST
+ else say "Password history:" RCVTHIST "generations"
 /* Misc password related bit string flags */
 RCVTFLG3 = RCVx + 633                          /* point to RCVTFLG3  */
 RCVTFLGX = X2B(C2X(STORAGE(D2X(RCVTFLG3),8)))  /* get the bits       */
@@ -916,6 +916,10 @@ if SUBSTR(RCVTFLGX,6,1) = 1 then
  else say "Enhanced password options under OA43999 are not available"
 if SUBSTR(RCVTFLGX,7,1) = 1 then say "Multi factor auth is available"
  else say "Multi factor auth is not available"
+RCVTFLG4 = RCVx + 640                          /* point to RCVTFLG4  */
+RCVTFLGY = X2B(C2X(STORAGE(D2X(RCVTFLG4),8)))  /* get the bits       */
+if SUBSTR(RCVTFLGY,2,1) = 1 then say " MFA3 is available (OA50930)"
+ else say " MFA3 is not available (OA50930)"
 /* Checks for new password encryption */
 RCVTPALG = C2D(Strip(Storage(D2x(RCVT + 635),1))) /* pw encryption   */
 if RCVTPALG = "1" then say "KDFAES encryption is active"
