@@ -6,7 +6,7 @@
             `  ?$$$$$$$7                                              |
           '    .?$$$$$7              Arguments: ALL, APF, CAT, JOB,   |
    sof        '  "'`'"                          PATH, SEC, SVC, VERS, |
-                _qQ$Qp_         .  .            WHO                   |
+                _qQ$Qp_         .  .            WHO, TSTA             |
        .        $$$$$$$   . :  .:  .                                  |
    I$$$$$$$$$$L `?jlj7' j$l$l$$il$$I Description: Enumerates z/OS sys |
    :$$$$$$$$$i$b.     .d$$$$$$$$$$$:              information for use |
