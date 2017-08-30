@@ -1,4 +1,6 @@
-# Z/OS System Enumeration Script
+# Z/OS System Enumeration Scripts
+
+## ENUM
 
 This script is a proof of concept REXX script built to aide in system enumeration of z/OS. The purpose of this script is to help identify other areas of interest to look in to during a penetration test. It work in both TSO and OMVS (UNIX). When you run it for the first time it displays this screen:
 
@@ -46,7 +48,7 @@ TIOT = STORAGE(D2X(C2D(TCB)+12),4)     /* TCBTIO */
 say 'Exec JOBNAME:'STRIP(STORAGE(D2X(C2D(TIOT)),8)) /* TIOCNJOB */
 ```
 
-## Arguments
+### Arguments
 
 ### ALL
 
@@ -88,7 +90,7 @@ Displays a list of who is currently logged on to the mainframe either in TSO or 
 
 Displays authorization status for TESTAUTH program.
 
-## Sources
+### Sources
 
 Big thanks goes out to the following for information which I used to build this script:
 
@@ -98,4 +100,36 @@ Big thanks goes out to the following for information which I used to build this 
 * File # 221 EDP Auditor REXX tools updated from Lee Conyers: http://www.cbttape.org/ftp/cbt/CBT221.zip
 * File # 496 REXX exec to do LISTA (display allocations): http://www.cbttape.org/ftp/cbt/CBT496.zip
 
+## STARTMAP
 
+This REXX script was designed to map out mainframe startup (IPL) settings, files, proclibs, etc. Simply call the 
+program with `ex 'HLQ.STARTMAP'` or `ex 'HLQ.DATASET(STARTMAP)'` and read the results. 
+
+There's a lot of results to part here so recording your output might be a good idea. 
+
+```
+  
+    .dP"Y8 8888888   d8b    88"""Yb 8888888
+    "Ybo."   888    dP8Yb   88___dP   888
+    o."Y8b   888   dP___Yb  88""Yb    888
+    8bodP"   888  dP"",""Yb 88   Yb   888
+   ------------------,N,--------------------
+  |: NNN,    ,N :::',NNN,:::: NNNNNNNNN#y,':|
+  |: NNNN,  ,NN ::',NNNNN,::: NNNNNNNNNNNNi |
+  |: NNNNN,,NNN :',NNN'NNN,:: NNNNNNNNNNNNl |
+  |: NNNNNbdNNN ',NNN' :NNN,' NNNNNNNNNN7''.|
+  |: NNN NNNN N ,NNN'   :NNN, NNNNNN :::::::|
+   ------------,NNN',NNNNNNNN,--------------
+   M A I N F R A M E    I P L    M A P P E R
+  
+  
+ > Identifying Load Parameters in storage
+  + IPL Dataset: SYS1.IPLPARM(LOADCS)
+  + VOLUME: 0A82
+  + SYSPARM: CS
+  + IEASYM: 00
+  + PARMLIB #1 is USER.PARMLIB
+  + PARMLIB #2 is FEU.Z22B.PARMLIB
+  + PARMLIB #3 is ADCD.Z22B.PARMLIB
+  + PARMLIB #4 is SYS1.PARMLIB
+```
