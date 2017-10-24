@@ -371,8 +371,6 @@ APF:
 say 'APF Authorized Libraries'
 say ''
 
-MISSING = '  Yes '
-
 IF space == 'OMVS' THEN DO
  SAY '! APF Dataset Checking Not Supported in UNIX'
  MISSING = '******'
@@ -395,6 +393,7 @@ IF CVTAUTHL = C2D('7FFFF001'x) THEN DO
  LAST = c2d(storage(d2x(APF_PTR+12),4))    
  DO FOREVER
   DATASET = storage(d2x(CUR+24),44)
+  MISSING = '  Yes '
   IF SUBSTR(DATASET,1,1) \= '00'x THEN DO /* Its not deleted */
    VOL_SMS = storage(d2x(CUR+4),1)
    IF bitand(VOL_SMS,'80'x) = '80'x THEN DO
