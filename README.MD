@@ -133,3 +133,76 @@ There's a lot of results to part here so recording your output might be a good i
   + PARMLIB #3 is ADCD.Z22B.PARMLIB
   + PARMLIB #4 is SYS1.PARMLIB
 ```
+
+## CATMAP
+
+This tool was developed to help identify all (nonvsam) datasets (and their members) on z/OS. 
+
+
+```
+ex 'h4cked.catmap' '-h'
+
+Catalog            .'.
+   Mapper           : :
+                     : :
+                      | |
+                      | |
+    /:---/:   _,---._ | |
+   /:   :  :,'       :. ;
+  ( O   O   )           ;
+   :.=o=__,'            :
+     /         _,--.__   :
+    /  _ )   ,'   :-. :-. :
+   / ,' /  ,'        : : : :
+  / /  / ,'          (,_)(,_)
+ (,;  (,,)                SoF
+
+CATMAP - A tool to walk the catalog and datasets
+
+Arguments:
+ -h this help
+ -b brutal mode (gets PDS/PDSE member listings)
+ -verbose enables verbose mode
+ -f <dataset name> saves output to a file
+     (-vol <volume>) Volume for dataset - optional
+      (-space <# cylinders>) size of dataset in cylinders
+                             100 cyls = 59 MB - optional
+ 
+ Defaults:
+  Verbose Mode: Disabled
+  Brutal Mode:  Disabled
+  Space:        59MB
+  Volume:       System Default
+ 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!                                                     !!
+!! WARNING: Brutal mode may create thousands of access !!
+!!          violations. Use with caution.              !!
+!!                                                     !!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+```
+
+Examples usage:
+
+```
+ex 'h4cked.catmap' '-b'
+  
+  
+  
+ Starting BRUTAL MODE
+ ADCD.DYNISPF.ISPPLIB(IBMPRODS)
+ ADCD.DYNISPF.ISPPLIB(IPC@PRIM)
+ ADCD.DYNISPF.ISPPLIB(ISR@PRIM)
+ ADCD.DYNISPF.ISPPLIB(ISRFPA)
+ ADCD.DYNISPF.ISPPLIB(ISRFP01)
+ ADCD.DYNISPF.ISPPLIB(ISRFP05)
+ ADCD.DYNISPF.ISPPLIB(ISRJPA)
+ ADCD.DYNISPF.ISPPLIB(ISRJPB)
+ ADCD.DYNISPF.ISPPLIB(ISRJP01)
+ ADCD.DYNISPF.ISPPLIB(ISRJP05)
+ ADCD.DYNISPF.ISPPLIB(ISR40000)
+ ADCD.DYNISPF.ISPPLIB(ISR41000)
+ ADCD.DYNISPF.ISPPLIB(ISR41006)
+ ADCD.DYNISPF.ISPPLIB(ISR50000)
+ ADCD.DYNISPF.ISPPLIB(ISR51000)
+```
