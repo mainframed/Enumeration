@@ -206,3 +206,30 @@ ex 'h4cked.catmap' '-b'
  ADCD.DYNISPF.ISPPLIB(ISR50000)
  ADCD.DYNISPF.ISPPLIB(ISR51000)
 ```
+
+# SYS0WN
+
+A rexx script to check on the permissions, create and reference dates for the SYSPROC and SYSEXEC datasets. SYSPROC (CLISTs) and SYSEXEC (REXX execs) are basically your `$PATH` variable in TSO. The order displayed is the search order in TSO. 
+
+Usage: ex 'user.SYS0WN'
+
+```
+Script to check SYSPROC/SYSEXEC permissions                             
+SYSPROC:                                                                
++----------------------------------------------------------------------+
+| Sysproc DSN        | Volume | Created Date | Reference Date | Access |
+|--------------------|--------|--------------|----------------|--------|
+| USER.CLIST         | DEV2C2 |   13/03/16   |    05/06/18    | ALTER  |
+| ISP.SISPCLIB       | DEVFFF |   02/04/15   |    05/06/18    | NONE   |
+| SYS1.DGTCLIB       | PROD01 |   19/09/13   |    05/06/18    | ALTER  |
+| SYS1.HRFCLST       | DEVFFF |   19/09/13   |    05/06/18    | ALTER  |
+| SYS1.SBLSCLI0      | DEVFFF |   19/09/13   |    05/06/18    | ALTER  |
+| SYS1.SBPXEXEC      | PROD1T |   21/05/15   |    05/06/18    | ALTER  |
+| SYS1.SCBDCLST      | DEVFFF |   19/09/13   |    05/06/18    | ALTER  |
+| SYS1.SEDGEXE1      | DEVFFF |   19/09/13   |    05/06/18    | ALTER  |
+| SYS1.SERBCLS       | DEVFFF |   19/09/13   |    05/06/18    | ALTER  |
+| EOY.SEOYPROC       | DEVFFF |   19/09/13   |    05/06/18    | READ   |
+| IOE.SIOEEXEC       | PROD0A |   19/09/13   |    05/06/18    | READ   |
+| USER.PROCLIB       | DEV2C2 |   13/03/16   |    05/06/18    | ALTER  |
++----------------------------------------------------------------------+
+``` 
