@@ -799,6 +799,8 @@ say ""
 /* Get password and other related settings */
 RCVTPINV  = C2d(Storage(D2x(RCVT + 155),1))  /* point to RCVTPINV   */
 say "Global password change interval:" RCVTPINV "days"
+RCVTPMIN  = C2d(Storage(D2x(RCVT + 634),1))  /* point to RCVTPMIN   */
+say "Minimum password change interval:" RCVTPMIN "days"
 /* Note that if a rule is set to 8 "*"s then it defaults to "0"s    */
 /* which means the rule appears blank.                              */
 /* Workaround for this is to look at the max length of each rule to */
