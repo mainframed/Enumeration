@@ -10,6 +10,7 @@ address tso
 verbose = 0
 brutal = 0
 file = 0
+prod = 0
 vol = 0
 spc = 0
 if length(args) > 0 then do
@@ -35,6 +36,7 @@ if length(args) > 0 then do
   say ""
   say " Arguments:"
   say "  -h this help"
+  say "  -p display product info based on HLQ"
   say "  -b brutal mode (gets PDS/PDSE member listings)"
   say "  -verbose enables verbose mode"
   say "  -f <dataset name> saves output to a file"
@@ -63,6 +65,10 @@ if length(args) > 0 then do
  if index(args,'-b') > 0 then do
    if verbose then say "Enabling Brutal Mode"
    brutal = 1
+ end
+ if index(args,'-p') > 0 then do
+   if verbose then say "Product ID Enabled"
+   prod = 1
  end
  if index(args,'-vol') > 0 then do
    parse var args . '-vol' volume .
@@ -120,7 +126,8 @@ end
 prof = SYSVAR(syspref)
 "PROFILE NOPREFIX MSGID NOWTPMSG NOINTERCOM"
 stat = MSG("OFF")
-/* Master Catalog routing from IPLINFO */
+/* Master Catalog routing from rexx script: */
+/*    IPLINFO by Mark Zelden                */
 CVT      = C2d(Storage(10,4))
 ECVT     = C2d(Storage(D2x(CVT + 140),4))
 ECVTIPA  = C2d(Storage(D2x(ECVT + 392),4)) /* point to IPA         */
@@ -236,7 +243,7 @@ if brutal then do
                 else say d
                 j = j + 1
               end
-              else do                
+              else do
                 d = ds.i || '('||member||')'
                 if file then push d
                 else say d
@@ -279,6 +286,7 @@ if brutal then do
       else do
         if verbose then say ds.i 'Access Denied'
         d = ds.i||"(PDS) Access Denied"
+        if prod then d = d||PRODID(LEFT(d,3))
         if file then push d
         else say d
         j = j + 1
@@ -302,6 +310,7 @@ else do
     x = LISTDSI(ds.i)
     j = j + 1
     d = ds.i||'('||SYSDSSMS||')'
+    if prod then d = d||PRODID(LEFT(d,3))
     if file then push d
     else say d
   end
@@ -319,3 +328,156 @@ if file then do
     "ISPEXEC EDIT DATASET('"outfile"')"
 end
 exit
+ 
+PRODID:
+/* Attempts to figure out software based on name */
+prod.ADF = ' TSO and TSO/E session manager'
+prod.ADR = ' DFSMSdss'
+prod.ADY = ' Dump analysis and elimination (DAE)'
+prod.AFH = ' Fortran Library'
+prod.AHL = ' Macros for GTF (formerly AMDPRDMP macros)'
+prod.AMA = ' AMATERSE service aid '
+prod.AMB = ' LIST service aid (AMBLIST)'
+prod.AMD = ' Stand-alone dump (SADMP)'
+prod.AMS = ' System Availability Management (SAM) of the Resource',
+           ' Measurement Facility (RMF)'
+prod.ANT = ' System data mover'
+prod.AOM = ' Device Support Services (AOM)'
+prod.ARC = ' DFSMShsm'
+prod.ASA = ' MVS reuse'
+prod.ASB = ' Advanced Program-to-Program Communication (APPC) scheduler'
+prod.ASE = ' Address space services'
+prod.ASR = ' Symptom record (SYMREC) services'
+prod.ATB = ' Advanced Program-to-Program Communication (APPC)'
+prod.ATR = ' Resource recovery services IFHSTATR utility'
+prod.AVF = ' Availability manager'
+prod.AXR = ' System REXX'
+prod.BCD = ' z/OS Batch Runtime'
+prod.BCN = ' SMP/E Planning and Migration Assistant'
+prod.BLR = ' Interactive problem control system (IPCS)'
+prod.BLS = ' Interactive problem control system (IPCS)'
+prod.BLW = ' Loadwait/Restart'
+prod.BOP = ' z/OS UNIX (z/OS UNIX System Services) support'
+prod.BPX = ' z/OS UNIX System Services'
+prod.CBD = ' Hardware configuration definition (HCD)'
+prod.CBP = ' MVS configuration program (MVSCP)'
+prod.CBQ = ' Runtime Library Extensions'
+prod.CBR = ' Object Access Method (OAM)'
+prod.CDA = ' Runtime Library Extensions'
+prod.CDS = ' Open Cryptographic Services Facility'
+prod.CEA = ' Common Event Adapter'
+prod.CEE = ' Language Environment'
+prod.CEH = ' Language Environment'
+prod.CEJ = ' Language Environment'
+prod.CEL = ' Language Environment'
+prod.CEQ = ' Language Environment'
+prod.CEU = ' Language Environment'
+prod.CEZ = ' Language Environment'
+prod.CHS = ' Start of changeTSO/E Enhanced Connectivity Facility'
+prod.CIP = ' Utilities (3800 Offline Utility)'
+prod.CLB = ' Runtime Library Extensions'
+prod.CLE = ' Runtime Library Extensions'
+prod.CNL = ' MVS message service (MMS)'
+prod.CNN = ' XL C/C++ Compiler'
+prod.CNZ = ' Console Services'
+prod.COF = ' Virtual lookaside facility (VLF)'
+prod.CRG = ' Context services (Registration services)'
+prod.CRT = ' C++ Standard Library'
+prod.CSF = ' Integrated Cryptographic Service Facility '
+prod.CSR = ' Callable service requests (ICSF)'
+prod.CSV = ' Contents supervision '
+prod.CTV = ' C/C++ Performance Analyzer'
+prod.CTX = ' Context services'
+prod.CUN = ' Unicode Services'
+prod.CVA = ' Common volume table of contents (VTOC) access facility (CVAF)'
+prod.DAS = ' Device Support: DASD error recovery program (ERP)'
+prod.DGT = ' Interactive storage management facility (ISMF)',
+           ' and Hardware Configuration Definition (HCD)'
+prod.EDC = ' C/C++ Library'
+prod.EDG = ' DFSMSrmm'
+prod.END = ' TSO and TSO/E session manager'
+prod.ERB = ' Resource Measurement Facility (RMF)'
+prod.EUV = ' Network Authentication Service'
+prod.EZA = ' Communication Server for z/OS IP Services'
+prod.EZB = ' Communication Server for z/OS IP Services'
+prod.EZY = ' Communication Server for z/OS IP Services'
+prod.EZZ = ' Communication Server for z/OS IP Services'
+prod.FOM = ' z/OS UNIX System Services application services'
+prod.FPG = ' Hardware accelerator manager (HWAM)'
+prod.FPZ = ' zEnterprise® Data Compression (ZEDC)'
+prod.FSU = ' z/OS Shell and Utilities'
+prod.GFU = ' Hierarchical File System (HFS) Adapter'
+prod.GIM = ' SMP/E'
+prod.GLD = ' LDAP Server'
+prod.GSK = ' System SSL'
+prod.HAS = ' JES2'
+prod.HEW = ' Program Management (linkage editor and batch loader)'
+prod.HPD = ' IBM Policy Director Authorization Services for z/OS'
+prod.HZR = ' Runtime Diagnostics'
+prod.HZS = ' IBM Health Checker for z/OS'
+prod.IAR = ' Real storage manager (RSM)'
+prod.IAS = ' External writer (XWTR)'
+prod.IAT = ' JES3'
+prod.IAX = ' Real storage manager (RSM)'
+prod.IAZ = ' Functional subsystem interface (FSI)'
+prod.IBM = ' PL/I Library, VA PL/I Library'
+prod.ICA = ' Firewall Technologies'
+prod.ICH = ' Resource Access Control Facility (RACF)'
+prod.ICK = ' Device Support Facilities'
+prod.ICP = ' Input/output configuration program (IOCP)'
+prod.ICQ = ' TSO/E Information Center Facility (ICF)'
+prod.ICV = ' Common volume table of contents (VTOC) access facility (CVAF)'
+prod.ICY = ' Media manager'
+prod.IDD = ' Basic access methods Start of change(Virtual I/O (VIO))'
+prod.IEB = ' Utilities Start of change(IEBCOMPR, IEBCOPY, IEBDG,',
+           ' IEBEDIT, IEBGENER, IEBIMAGE, IEBPTPCH, IEBUPDTE)End of change'
+prod.IEC = ' Basic (non-VSAM) access methods (BAM)'
+prod.IEH = ' Utilities (IEHINITT, IEHLIST, IEHMOVE, IEHPROGM)'
+prod.IEZ = ' Communications task (COMMTASK)'
+prod.IFA = ' System management facilities (SMF) and SMF scheduler'
+prod.IFB = ' Environmental Record Editing and Printing (EREP)',
+           ' program & Logrec error recording'
+prod.IFC = ' Environmental Record Editing and Printing (EREP)',
+           ' program & IFCDIP00 service aid'
+prod.IFD = ' Online test executive program (OLTEP)'
+prod.IFH = ' IFHSTATR utility'
+prod.IGB = ' DFSMS Common Services'
+prod.IGC = ' Basic access methods (BAM), Catalog, Checkpoit,',
+           ' VTOC, Dataset Password, JES2, TSO/E TEST, TSO, and more'
+prod.IGU = ' Device console services'
+prod.IGX = ' TSO and TSO/E scheduler'
+prod.IGZ = ' COBOL Library'
+prod.IHA = ' Mapping macros of supervisor control'
+prod.IHB = ' System macros'
+prod.IHJ = ' Checkpoint/restart'
+prod.IKJ = ' TSO/E'
+prod.IKY = ' PKI Services'
+prod.ILR = ' Auxiliary storage manager (ASM)'
+prod.INM = ' TSO/E interactive data transmission facility'
+prod.IOE = ' z/OS Distributed File Service &  z/OS File System (zFS)'
+prod.IOS = ' Input/output supervisor (IOS)'
+prod.IPX = ' Initial program load (IPL)'
+prod.IQP = ' PCIE services'
+prod.IRA = ' System resources manager (SRM)'
+prod.IRR = ' Resource Access Control Facility (RACF) '
+prod.IRX = ' Start of changeTSO/EEnd of change REXX'
+prod.ISG = ' Global resource serialization'
+prod.ISN = ' Service processor interface (SPI)'
+prod.IST = ' Virtual Telecommunications Access Method (VTAM)'
+prod.ITR = ' System trace'
+prod.ITT = ' Utilities (IEHINITT, IEHLIST, IEHMOVE, IEHPROGM) Component trace'
+prod.ITV = ' Data-in-virtual'
+prod.ITZ = ' Transaction trace'
+prod.IWM = ' Workload manager (WLM)'
+prod.IXC = ' Cross-system coupling facility (XCF)'
+prod.IXG = ' System logger'
+prod.IXL = ' Cross-system extended services (XES)'
+prod.IXM = ' XML Toolkit for z/OS'
+prod.IXP = ' Input/output configuration program (IOCP)'
+prod.SGS = ' Stand-alone dump Start of change(SADMP)End of change'
+ 
+parse arg item
+ 
+if LENGTH(prod.item) <= 8 then return ' No Product ID Found for' item
+else  return prod.item
+return '' /* a catchall */
