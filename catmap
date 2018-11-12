@@ -328,9 +328,10 @@ if file then do
     "ISPEXEC EDIT DATASET('"outfile"')"
 end
 exit
- 
+
 PRODID:
 /* Attempts to figure out software based on name */
+prod.ADB = ' Db2'
 prod.ADF = ' TSO and TSO/E session manager'
 prod.ADR = ' DFSMSdss'
 prod.ADY = ' Dump analysis and elimination (DAE)'
@@ -350,6 +351,7 @@ prod.ASE = ' Address space services'
 prod.ASR = ' Symptom record (SYMREC) services'
 prod.ATB = ' Advanced Program-to-Program Communication (APPC)'
 prod.ATR = ' Resource recovery services IFHSTATR utility'
+prod.AUT = ' System Automation'
 prod.AVF = ' Availability manager'
 prod.AXR = ' System REXX'
 prod.BCD = ' z/OS Batch Runtime'
@@ -359,6 +361,7 @@ prod.BLS = ' Interactive problem control system (IPCS)'
 prod.BLW = ' Loadwait/Restart'
 prod.BOP = ' z/OS UNIX (z/OS UNIX System Services) support'
 prod.BPX = ' z/OS UNIX System Services'
+prod.CBC = ' C/C++ Runtime Library'
 prod.CBD = ' Hardware configuration definition (HCD)'
 prod.CBP = ' MVS configuration program (MVSCP)'
 prod.CBQ = ' Runtime Library Extensions'
@@ -391,8 +394,11 @@ prod.CTX = ' Context services'
 prod.CUN = ' Unicode Services'
 prod.CVA = ' Common volume table of contents (VTOC) access facility (CVAF)'
 prod.DAS = ' Device Support: DASD error recovery program (ERP)'
+prod.DFH = ' CICS'
+prod.DFS = ' IMS'
 prod.DGT = ' Interactive storage management facility (ISMF)',
            ' and Hardware Configuration Definition (HCD)'
+prod.DSN = ' Db2'
 prod.EDC = ' C/C++ Library'
 prod.EDG = ' DFSMSrmm'
 prod.END = ' TSO and TSO/E session manager'
@@ -402,11 +408,13 @@ prod.EZA = ' Communication Server for z/OS IP Services'
 prod.EZB = ' Communication Server for z/OS IP Services'
 prod.EZY = ' Communication Server for z/OS IP Services'
 prod.EZZ = ' Communication Server for z/OS IP Services'
+prod.FFS = ' First Failure Support Technology (FFST) for VTAM'
 prod.FOM = ' z/OS UNIX System Services application services'
 prod.FPG = ' Hardware accelerator manager (HWAM)'
 prod.FPZ = ' zEnterprise® Data Compression (ZEDC)'
 prod.FSU = ' z/OS Shell and Utilities'
 prod.GFU = ' Hierarchical File System (HFS) Adapter'
+prod.GDD = ' GDDM'
 prod.GIM = ' SMP/E'
 prod.GLD = ' LDAP Server'
 prod.GSK = ' System SSL'
@@ -442,7 +450,7 @@ prod.IFC = ' Environmental Record Editing and Printing (EREP)',
 prod.IFD = ' Online test executive program (OLTEP)'
 prod.IFH = ' IFHSTATR utility'
 prod.IGB = ' DFSMS Common Services'
-prod.IGC = ' Basic access methods (BAM), Catalog, Checkpoit,',
+prod.IGC = ' Basic access methods (BAM), Catalog, Checkpoint,',
            ' VTOC, Dataset Password, JES2, TSO/E TEST, TSO, and more'
 prod.IGU = ' Device console services'
 prod.IGX = ' TSO and TSO/E scheduler'
@@ -453,6 +461,7 @@ prod.IHJ = ' Checkpoint/restart'
 prod.IKJ = ' TSO/E'
 prod.IKY = ' PKI Services'
 prod.ILR = ' Auxiliary storage manager (ASM)'
+prod.IMS = ' IMS'
 prod.INM = ' TSO/E interactive data transmission facility'
 prod.IOE = ' z/OS Distributed File Service &  z/OS File System (zFS)'
 prod.IOS = ' Input/output supervisor (IOS)'
@@ -461,8 +470,10 @@ prod.IQP = ' PCIE services'
 prod.IRA = ' System resources manager (SRM)'
 prod.IRR = ' Resource Access Control Facility (RACF) '
 prod.IRX = ' Start of changeTSO/EEnd of change REXX'
+prod.ISF = ' SDSF'
 prod.ISG = ' Global resource serialization'
 prod.ISN = ' Service processor interface (SPI)'
+prod.ISP = ' ISPF'
 prod.IST = ' Virtual Telecommunications Access Method (VTAM)'
 prod.ITR = ' System trace'
 prod.ITT = ' Utilities (IEHINITT, IEHLIST, IEHMOVE, IEHPROGM) Component trace'
@@ -474,10 +485,13 @@ prod.IXG = ' System logger'
 prod.IXL = ' Cross-system extended services (XES)'
 prod.IXM = ' XML Toolkit for z/OS'
 prod.IXP = ' Input/output configuration program (IOCP)'
+prod.NET = ' NetView'
+prod.QMF = ' QMF'
 prod.SGS = ' Stand-alone dump Start of change(SADMP)End of change'
- 
+prod.TCP = ' TCP/IP'
+
 parse arg item
- 
+
 if LENGTH(prod.item) <= 8 then return ' No Product ID Found for' item
 else  return prod.item
 return '' /* a catchall */
