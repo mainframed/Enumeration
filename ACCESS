@@ -2,44 +2,40 @@
 CHKACCSS TITLE 'Checks Access to a Dataset'
          PRINT ON,DATA,GEN
 CLEAR    CSECT
+         YREGS                 # Register readability macro
 *         SETUP registers and save areas thanks @bigendiansmalls      *
-MAIN     STM   14,12,12(13)    # Save caller reg
-         LR    8,15            # Base register
-         USING MAIN,8          # R8 for addressability
-         GETMAIN RU,LV=72      # for our savearea
-         ST    13,4(,1)        # Store Caller's SA address
-         ST    1,8(,13)        # Put my SA addr in caller's SA
-         LR    13,1            # R13 has addr of our SA
-         DS    0H              # halfword boundaries
+MAIN     BAKR  R14,0           # Save regs linkage stack
+         LR    R8,R15          # R15 Program base into R8 for Adrsblty
+         USING MAIN,R8         # R8 for addressability
+         DS    0H              # Halfword boundaries
 * Get the Dataset we're going to check
 * CASE is ImPoRtAnT
          TPUT  MESSAGE1,L'MESSAGE1,EDIT   # Get Dataset Name
          TGET  GETDSN,130                 # Case sensitive
          TPUT  MESSAGE2,L'MESSAGE2,EDIT   # Get Dataset Volume
          TGET  GETVOL,6                   # Case sensitive
-         TPUT  GETDSN,L'GETDSN,EDIT # For some reason I need this
+*        TPUT  GETDSN,L'GETDSN,EDIT # For some reason I need this
 *                                   # or this abends *shrugs*
 * Now we need to check access
-SAFCHK   DS    0F         # RACROUTE Check from  David Spiegel
-         RACROUTE REQUEST=AUTH,                                        x
+SAFCHK   RACROUTE REQUEST=AUTH,                                        x
                RELEASE=1.9,                                            x
                STATUS=ACCESS,                                          x
                CLASS='DATASET',                                        x
                ATTR=UPDATE,                                            x
                ENTITY=GETDSN,VOLSER=GETVOL,                            x
                WORKA=SAFWORKA
-         LM    3,4,SAFCHK+4 # Save Return Code, Reason Code in R3/R4
+         LM    R3,R4,SAFCHK+4 # Save Return Code, Rsn Code in R3/R4
 CHECKRTN DS    0H           # Check SAF Return Code in R15
-         C     15,=F'0'     # If its zero check RACF RC
+         C     R15,=F'0'    # If its zero check RACF RC
          BE    CHECKACS
-         C     15,=F'4'     # Otherwise is the SAF RC 4?
+         C     R15,=F'4'    # Otherwise is the SAF RC 4?
          BNE   ERROR        # Its not? Then its 8/64 and thats bad
-         C     3,=F'4'      # The specified resource is not protected
+         C     R3,=F'4'     # The specified resource is not protected
          BNE   NOACCESS     # We get no access (if rc is 8)
          MVC   OUTPUTA,NOTPROTA
          B     PRINTMSG     # Print not protected message
 CHECKACS DS    0H
-         C     3,=F'20'     # Is the SAF return code 0x14?
+         C     R3,=F'20'    # Is the SAF return code 0x14?
          BNE   ERROR        # No? Then we dont care
 *
 * SAF Return Codes (when R15 is 0 and R3 is  x14)
@@ -50,23 +46,23 @@ CHECKACS DS    0H
 * xC   = CONTROL
 * x10  = ALTER
 *
-NOACCESS C     4,=F'0'
+NOACCESS C     R4,=F'0'
          BNE   READ
          MVC   OUTPUTA,NONEA
          B     PRINTMSG
-READ     C     4,=F'4'
+READ     C     R4,=F'4'
          BNE   UPDATE
          MVC   OUTPUTA,READA
          B     PRINTMSG
-UPDATE   C     4,=F'8'
+UPDATE   C     R4,=F'8'
          BNE   CONTROL
          MVC   OUTPUTA,UPDATEA
          B     PRINTMSG
-CONTROL  C     4,=F'12'
+CONTROL  C     R4,=F'12'
          BNE   ALTER
          MVC   OUTPUTA,CONTROLA
          B     PRINTMSG
-ALTER    C     4,=F'16'
+ALTER    C     R4,=F'16'
          BNE   WHATTHE
          MVC   OUTPUTA,ALTERA
          B     PRINTMSG
@@ -76,17 +72,12 @@ PRINTMSG TPUT  OUTPUTA,L'OUTPUTA,EDIT
 ERROR    TPUT  ERRORMSG,L'ERRORMSG,EDIT
 * Now we're done lets exit
 EXITP    DS    0H
-         LR    1,13            # Move my SA into R1
-         L     13,4(,13)       # RST Caller SA Addr
-         FREEMAIN RU,A=(1),LV=72
-         LM    14,12,12(13)    # restore registers
-         XR    15,15           # zero return code
-         LR    15,4            # Return the results
-         BCR   15,14           # Branch back to caller
+         XR    R15,R15         # zero return code
+*        LR    R15,R4          # Return the results
+         PR    ,               # Return to caller
 *
 * FILE AND WORK AREA DEFINITIONS
 *
-SAVE     DS    18F                LOCAL SAVE AREA
 MESSAGE1 DC    C'** ENTER DATASET:'
 MESSAGE2 DC    C'** ENTER VOLUME SERIAL:'
 ERRORMSG DC    C'** ERROR: SAF RC NOT 00 - Dataset/Volume incorrect'
@@ -101,4 +92,6 @@ WHATA    DC    C'RC Not documented     '
 NOTPROTA DC    C'Not Protected by RACF '
 OUTPUTA  DS    CL(L'CONTROLA)
 SAFWORKA DS    CL512
-         END   ,
+         LTORG ,     # Literal pool here
+         DROP  R8    # Drop R8 Addressability
+         END   MAIN  # Peace owt
