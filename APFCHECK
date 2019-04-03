@@ -30,10 +30,10 @@ CLEARIT  STLINENO LINE=1,CLEAR=YES #Clears the screen
          BNE   NOARG            # Nope its NOT
 ARGSEND  TPUT  MSGLIST6,L'MSGLIST6,EDIT # Print Verbose is on
 PUTMSG   TPUT  MSGLIST1,L'MSGLIST1,EDIT # Print Message to user
-         B     GETAPF                   # Go to GETAPF
+         B     APFTIME                   # Go to GETAPF
 NOARG    TPUT  MSGLIST5,L'MSGLIST5,EDIT # Print Verbose is off
 * Setup what we need to loop through all the APF libraries
-GETAPF   DS    0H                 # LETS DO THIS!
+APFTIME  DS    0H                 # LETS DO THIS!
          MVC   APAALEN,=AL4(4096) # Assume length is 4K
          L     R2,APAALEN         # Put that in R2
          GETMAIN RU,LV=(R2)       # Get storage for answer area
@@ -43,7 +43,7 @@ GETAPF   DS    0H                 # LETS DO THIS!
 * The CSVAPF macro is used in LIST mode to get a list of APF 
 * authorized libraries. It maps to CSVAPFAA
 *
-         CSVAPF REQUEST=LIST,ANSAREA=(R4),ANSLEN=APAALEN,              x
+GETAPF   CSVAPF REQUEST=LIST,ANSAREA=(R4),ANSLEN=APAALEN,              x
                RETCODE=LRETCODE,RSNCODE=LRSNCODE
 *
 * We check a few things here
