@@ -1,5 +1,10 @@
 /* USS Port checker for z/OS
    Compile with: c89 -D _OE_SOCKETS -o checkp checkp.c
+   To use in TSO (after compile in Unix):
+   /bin/tsocmd "ALLOCATE DATASET(PDSE) NEW VOLUME(DEV) SPACE(10,10) BLOCK(200) BLKSIZE(6144) RECFM(U) LRECL(0) DSNTYPE(LIBRARY) DSORG(PO)"
+   cp -X ./checkp "//'<HLQ>.PDSE(CHECKP)'"
+
+   in TSO: call '<HLQ>.PDSE(CHECKP)' '<port>/-a'
 
    License GPL
    Copyright Soldier of FORTRAN
@@ -66,8 +71,8 @@ char **argv;
     /* First check the arguments */
 
      if (0 == strcmp(argv[1], "-a")) {
-         printf("[+] You're in the butter zone now baby!\n");
-	 printf("[+] Checking ports 1 through 65535\n");
+         printf("*** You're in the butter zone now baby!\n");
+	 printf("*** Checking ports 1 through 65535\n");
          for( i = 1; i < 65535; i = i + 1 ) {
 	     results = checkp(i);
 	     if ( results == 1 ) {
@@ -77,15 +82,15 @@ char **argv;
 	 printf("\n");
      } else {
          port = (unsigned short) atoi(argv[1]);
-	 printf("[+] Checking if port %d is in use\n", port);
+	 printf("*** Checking if port %d is in use\n", port);
          results = checkp(port);
 	 if ( results == 1 ) {
-		 printf("[+] %d being used!\n", port);
+		 printf("*** %d being used!\n", port);
 	 } else {
-		 printf("[+] %d is not in use\n", port);
+		 printf("*** %d is not in use\n", port);
 	 }
      }
 
-    printf("[+] Done\n\n");
+    printf("*** Done\n\n");
     exit(0);
 }
