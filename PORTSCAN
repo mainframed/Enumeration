@@ -1,0 +1,283 @@
+/* REXX Port Scanner                                                 */
+/* Super helpful link:                                               */
+/* https://www.ibm.com/support/knowledgecenter/en/                   */
+/* SSLTBW_2.1.0/com.ibm.zos.v2r1.hala001/rexx_sockets_commands_r.htm */
+/* License GPL v3                                                    */
+/* Copyright Soldier of FORTRAN                                      */
+/* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
+
+/* LOL ISPF */
+say '';say '';say '';say '';say '';say ''
+say '#####  #### #   #   #   #   # '
+say '#   # #     #   #  # #  #   # '
+say '#   # #      #### ##### ##### '
+say '#   # #         # #   # #   # '
+say '#   #  ####     # #   # #   # '
+say ''                                            
+say "*** Port Scan by SoF"
+MAXSOCKETS = 100
+parse arg host v .
+if host == '' then do
+/* We need at least the target */
+  say '*** ERROR No target specified'
+  return -1
+eND
+/* pass literally any words after the target and you'll be */
+/* in verbose mode                                         */
+if v == '' then
+  v = 0
+else
+  v = 1
+if v then say '*** VERBOSE ON'
+/*                               */
+/* Time to get the sockets ready */
+/*                               */
+so_txt = Socket('Initialize', 'PORTSCAN', MAXSOCKETS)
+DO I=1 TO MAXSOCKETS
+  txt = Socket('Socket', 'AF_INET', 'STREAM', 'TCP')
+  parse var txt r_c socket_descriptor
+END
+DO I=1 to MAXSOCKETS
+  so_txt = Socket('SetSockOpt',I,'SOL_SOCKET','SO_ASCII','On')
+  so_txt = Socket('SetSockOpt',I,'SOL_SOCKET','SO_RCVTIMEO','30 0')
+  so_txt = Socket('SetSockOpt',I,'SOL_SOCKET','SO_SNDTIMEO','30 0')
+  so_txt = socket("FCNTL",I,F_SETFL,"NON-BLOCKING")
+  sockets.I = 0
+eND
+sockets.0 = MAXSOCKETS
+
+/* Sockets are ready to go get the target */
+txt = Socket('RESOLVE', host)
+parse var txt r_c ip .
+if r_c <> 0 then do
+   say "*** RESOLVE: Could not resolve" host
+   say "*** RESOVLE: Assuming IP address"
+   if v then say "*** RESOLVE:" txt
+   ip = host
+eND
+if v then say "*** TARGET:" ip
+say "*** Starting Port Scan"
+/* Start connecting */
+call ported /* Initialize the array of ports */
+
+if v then say "*** TOTAL PORTS:" allports.0
+DO FOREVER
+  DO I=1 to sockets.0 /* Is there a socket for us to work with? */
+    if sockets.I == 0 then do
+      /* socket available */
+      /* if v then say "*** SOCKETS AVAILABLE" I */
+      DO J=1 to allports.0
+        if J > allports.0 then leave
+        P = allports.J
+        if scanned.p == 'SCANNED.'||P then do
+          so_txt = Socket('CONNECT',I,'AF_INET' P ip)
+          parse var so_txt r_c results
+          if v then say "*** CONNECT" ip||":"||P "-" I "-" r_c "-" results
+          sockets.I = P
+          scanned.p = 'filtered'
+          /* sockets.sockid = port */
+          /* scanned.port = 'status' */
+          leave
+        eND
+   /*     else */
+   /*       if v then say "*** Scanned.p" P scanned.p */
+      eND
+    eND
+  eND
+  /* Now we check the sockets */
+  /* READ/WRITE means an open socket */
+  /* Exception means closed */
+  so_txt = SOCKET("SELECT","READ * WRITE * EXCEPTION *", 1)
+  if v then say "*** SELECT:" so_txt
+  parse value so_txt with 'READ' read_sock 'WRITE' .
+  parse value so_txt with 'WRITE' write_sock 'EXCEPTION' .
+  parse value so_txt with 'EXCEPTION' excp_sock
+  if excp_sock == '' & read_sock \= ' ' then do
+    if v then say "*** READ SOCKETS:" read_sock
+    do i =1 to words(read_sock)
+     socks = WORD(read_sock,i)
+     if v then say "*** READ SOCKS socket id:" SOCKS
+     data = socket("read", socks, 512) 
+     parse var data . . data
+     if v then say "*** DATA:" data
+     u = closed(socks,'open',data)
+     eND
+  eND
+  if excp_sock == '' & read_sock == ' ' & write_sock \= ' ' then do
+    if v then say "*** WRITE SOCKETS:" write_sock
+    do i =1 to words(write_sock)
+     socks = WORD(write_sock,i)
+     if v then say "*** WRITE SOCKS socket id:" SOCKS
+     u = closed(socks,'open')
+     eND
+  eND
+  if excp_sock \= '' then do
+    if v then say "*** EXCEPTION SOCKETS:" excp_sock
+    Do i = 1 to WORDS(excp_sock)
+       socks = WORD(excp_sock,i)
+     u = closed(socks,"closed")
+    eND
+  eND
+  if J >= allports.0 & read_sock == ' ' & write_sock == ' ' then do
+    if v then say "*** We are done here!"
+    leave
+  eND
+eND
+
+DO Y = 1 to allports.0
+  P = allports.Y
+  say ip||":"||LEFT(P,8) scanned.P
+eND 
+
+return 0
+
+closed:
+  parse arg sockid,status_port,data
+  /* wtf */
+  ugh = socket("CLOSE",sockid)
+  port = sockets.sockid
+  sockets.sockid = 0
+  scanned.port = LEFT(status_port,7)||data
+  txt = Socket('Socket', 'AF_INET', 'STREAM', 'TCP')
+  parse var txt r_c s_d
+  if v then say '*** CLOSING - PORT' port,
+                'status' status_port,
+                'sockid' sockid s_d
+  so_txt = Socket('SetSockOpt',s_d,'SOL_SOCKET','SO_ASCII','On')
+  so_txt = Socket('SetSockOpt',s_d,'SOL_SOCKET','SO_RCVTIMEO','30 0')
+  so_txt = Socket('SetSockOpt',s_d,'SOL_SOCKET','SO_SNDTIMEO','30 0')
+  so_txt = socket("FCNTL",s_d,F_SETFL,"NON-BLOCKING")
+  return 0
+
+
+ported:
+  allports.0 = 128
+  allports.1=80
+  allports.2=23
+  allports.3=443
+  allports.4=21
+  allports.5=22
+  allports.6=25
+  allports.7=3389
+  allports.8=110
+  allports.9=445
+  allports.10=139
+  allports.11=143
+  allports.12=53
+  allports.13=135
+  allports.14=3306
+  allports.15=8080
+  allports.16=1723
+  allports.17=111
+  allports.18=995
+  allports.19=993
+  allports.20=5900
+  allports.21=1025
+  allports.22=587
+  allports.23=8888
+  allports.24=199
+  allports.25=1720
+  allports.26=465
+  allports.27=548
+  allports.28=113
+  allports.29=81
+  allports.30=6001
+  allports.31=10000
+  allports.32=514
+  allports.33=5060
+  allports.34=179
+  allports.35=1026
+  allports.36=2000
+  allports.37=8443
+  allports.38=8000
+  allports.39=32768
+  allports.40=554
+  allports.41=26
+  allports.42=1433
+  allports.43=49152
+  allports.44=2001
+  allports.45=515
+  allports.46=8008
+  allports.47=49154
+  allports.48=1027
+  allports.49=5666
+  allports.50=646
+  allports.51=5000
+  allports.52=5631
+  allports.53=631
+  allports.54=49153
+  allports.55=8081
+  allports.56=2049
+  allports.57=88
+  allports.58=79
+  allports.59=5800
+  allports.60=106
+  allports.61=2121
+  allports.62=1110
+  allports.63=49155
+  allports.64=6000
+  allports.65=513
+  allports.66=990
+  allports.67=5357
+  allports.68=427
+  allports.69=49156
+  allports.70=543
+  allports.71=544
+  allports.72=5101
+  allports.73=144
+  allports.74=7
+  allports.75=389
+  allports.76=8009
+  allports.77=3128
+  allports.78=444
+  allports.79=9999
+  allports.80=5009
+  allports.81=7070
+  allports.82=5190
+  allports.83=3000
+  allports.84=5432
+  allports.85=3986
+  allports.86=13
+  allports.87=1029
+  allports.88=9
+  allports.89=6646
+  allports.90=49157
+  allports.91=1028
+  allports.92=873
+  allports.93=1755
+  allports.94=2717
+  allports.95=4899
+  allports.96=9100
+  allports.97=119
+  allports.98=37
+  allports.99=1000
+  allports.100=3001
+  allports.101=5001
+  allports.102=82
+  allports.103=10010
+  allports.104=1030
+  allports.105=9090
+  allports.106=2107
+  allports.107=1024
+  allports.108=2103
+  allports.109=6004
+  allports.110=1801
+  allports.111=19
+  allports.112=8031
+  allports.113=1041
+  allports.114=255
+  allports.115=3703
+  allports.116=17
+  allports.117=808
+  allports.118=3689
+  allports.119=1031
+  allports.120=1071
+  allports.121=5901
+  allports.122=9102
+  allports.123=9000
+  allports.124=2105
+  allports.125=636
+  allports.126=1038
+  allports.127=2601
+  allports.128=7000
+return 0
