@@ -77,15 +77,10 @@ DO I=1 TO MAXSOCKETS
   parse var txt r_c socket_descriptor
 end
 DO I=1 to MAXSOCKETS
-say "Socket " I "info:"
   so_txt = Socket("SetSockOpt",I,"SOL_SOCKET","SO_ASCII","On")
-say so_txt
   so_txt = Socket("SetSockOpt",I,"SOL_SOCKET","SO_RCVTIMEO","30 0")
-say so_txt
   so_txt = Socket("SetSockOpt",I,"SOL_SOCKET","SO_SNDTIMEO","30 0")
-say so_txt
   so_txt = socket("FCNTL",I,F_SETFL,"NON-BLOCKING")
-say so_txt
   sockets.I = 0
 end
 sockets.0 = MAXSOCKETS
@@ -1228,10 +1223,10 @@ Usage:
   say "USAGE:"
   say ""
   say ">>-PORSCAN--host--+------------------------------------+---------+----->"
-  say "                  |-PORT--customport----------------|  "-VERBOSE-"      "
-  say "                  "-PFROM--firstport--PTO--lastport-"                   "
+  say "                  |-PORT--customport----------------|  '-VERBOSE-'      "
+  say "                  '-PFROM--firstport--PTO--lastport-'                   "
   say ">---+-------+-><                                                        "
-  say "    "-DEBUG-"                                                           "
+  say "    '-DEBUG-'                                                           "
   say ""
   say "  host - the host to scan (mandatory)"
   say "  PORT - a single port to scan mutually exclusive with the next options"
