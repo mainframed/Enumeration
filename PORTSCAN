@@ -153,7 +153,6 @@ DO FOREVER
     Do i = 1 to WORDS(excp_sock)
        excp_sockets.i = WORD(excp_sock,i)
     end
-    excp_sockets.0 = 1
     if debug then call OutDebug "TOTAL EXCEPTION SOCKETS:" excp_sockets.0
   end
   /* Next we check if there are any sockets to read */
@@ -176,8 +175,8 @@ DO FOREVER
   if write_sock \= " " then do
     if debug then call OutDebug "WRITE SOCKETS:" write_sock
     do i =1 to words(write_sock)
-     if not_exception(socks) & not_read(socks) then do
-       socks = WORD(write_sock,i)
+      socks = WORD(write_sock,i)
+      if not_exception(socks) & not_read(socks) then do
        if debug then call OutDebug "WRITE SOCKS socket id:" SOCKS
        u = closed(socks,"open")
        end
@@ -199,10 +198,15 @@ DO FOREVER
     leave
   end
 end
- 
+
+/* Printing the results */
+/* Only print open ports by default */
+/* Show all ports in debug */
+
 DO Y = 1 to allports.0
   P = allports.Y
-  say ip||":"||LEFT(P,8) scanned.P
+  if debug & scanned.P == "closed" then
+    say ip||":"||LEFT(P,8) scanned.P
 end
  
 return 0
@@ -233,7 +237,7 @@ not_exception:
 /* Check to see if a port is in the exception list */
   parse arg ex_port
   Do x = 1 to excp_sockets.0
-    if excp_sockets == ex_port then
+    if excp_sockets.x == ex_port then
       return 0
   end
   return 1
@@ -242,7 +246,7 @@ not_read:
 /* Check to see if a port was already processed as READ */
   parse arg ex_port
   Do x = 1 to read_sockets.0
-    if read_sockets == ex_port then
+    if read_sockets.x == ex_port then
       return 0
   end
   return 1
