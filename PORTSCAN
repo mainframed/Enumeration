@@ -18,7 +18,6 @@ say "/_/     /____/ /____/ /_/       "
 say "Port Scanning Service Facility  "
 say ""
 say "*** Port Scan by SoF and GiRa"
-say "*** Port Scan by SoF and GiRa"
  
 /* START parse command line options */
 parse var options ,
@@ -135,8 +134,11 @@ DO FOREVER
   /* FIXME: I think this happens when we allocate too many sockets in a short
             amount of time
   */
-  if so_txt == "0 0 READ WRITE EXCEPTION" then
+  /* if so_txt == "0 0 READ WRITE EXCEPTION" then
     call OutWarning "FIXME: unmanaged socket status" so_txt
+    */
+  /* The above error occurs when the sockets are waiting (neither a RST */
+  /*   nor a FIN packet received so it just waits to time out)  */
 
   parse value so_txt with "READ" read_sock "WRITE" .
   parse value so_txt with "WRITE" write_sock "EXCEPTION" .
@@ -165,7 +167,6 @@ DO FOREVER
        if debug then call OutDebug "DATA:" data
        u = closed(socks,"open",data)
      end
-    end 
   end
   /* If there's no read, maybe sockets to write */
   if write_sock \= " " then do
@@ -186,6 +187,7 @@ DO FOREVER
     end
   end
   if J >= allports.0 &,
+     all_done() &,
      read_sock == " " &,
      write_sock == " " &,
      excp_sock == "" then do
@@ -236,6 +238,14 @@ not_read:
       return 0
   end
   return 1
+
+all_done:
+  /* Checks if we're waiting on ports */
+  DO thing=1 to sockets.0
+    if sockets.thing \= 0 then
+      return 0
+  end
+  return 1 
 
 init_ports:
   if custom_port then do
