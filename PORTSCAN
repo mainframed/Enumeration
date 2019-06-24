@@ -6,19 +6,17 @@
 /* Copyright Soldier of FORTRAN and GiRa                             */
 /* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
  
-/* LOL ISPF */
-say "";say "";say "";say "";say "";say ""
-say "#####  #### #   #   #   #   # "
-say "#   # #     #   #  # #  #   # "
-say "#   # #      #### ##### ##### "
-say "#   # #         # #   # #   # "
-say "#   #  ####     # #   # #   # "
-say ""
-say "*** Port Scan by SoF and GiRa"
- 
 /* Config */
 MAXSOCKETS = 100
 arg host options
+
+say "___________________________________   __"
+say "___  __ \_  ___/_  ____/__    |__  | / /"
+say "__  /_/ /____ \_  /    __  /| |_   |/ / "
+say "_  ____/____/ // /___  _  ___ |  /|  /  "
+say "/_/     /____/ \____/  /_/  |_/_/ |_/   "
+say ""
+say "*** Port Scan by SoF and GiRa"
  
 /* START parse command line options */
 parse var options ,
@@ -109,23 +107,20 @@ if verbose then call OutVerbose "Scanning..."
 DO FOREVER
   DO I=1 to sockets.0 /* Is there a socket for us to work with? */
     if sockets.I == 0 then do
-      /* socket available */
-      /* if v then say "SOCKETS AVAILABLE" I */
       DO J=1 to allports.0
         if J > allports.0 then leave
         P = allports.J
         if scanned.p == "SCANNED."||P then do
           so_txt = Socket("CONNECT",I,"AF_INET" P ip)
           parse var so_txt r_c results
-          if debug then call OutDebug "CONNECT" ip||":"||P "-" I "-" r_c "-" results
+          if debug then call OutDebug "CONNECT",
+                             ip||":"||P "-" I "-" r_c "-" results
           sockets.I = P
           scanned.p = "filtered"
           /* sockets.sockid = port */
           /* scanned.port = "status" */
           leave
         end
-   /*     else */
-   /*       if v then say "Scanned.p" P scanned.p */
       end
     end
   end
@@ -144,33 +139,53 @@ DO FOREVER
   parse value so_txt with "READ" read_sock "WRITE" .
   parse value so_txt with "WRITE" write_sock "EXCEPTION" .
   parse value so_txt with "EXCEPTION" excp_sock
-  if excp_sock == "" & read_sock \= " " then do
+  /* First fill a stem with exception sockets */
+  if excp_sock \= "" then do
+    excp_sockets.0 = 0
+    if debug then call OutDebug "EXCEPTION SOCKETS:" excp_sock
+    Do i = 1 to WORDS(excp_sock)
+       excp_sockets.i = WORD(excp_sock,i)
+    end
+    excp_sockets.0 = 1
+    if debug then call OutDebug "TOTAL EXCEPTION SOCKETS:" excp_sockets.0
+  end
+  /* Next we check if there are any sockets to read */
+  if read_sock \= " " then do
+    read_sockets.0 = 0  
     if debug then call OutDebug "READ SOCKETS:" read_sock
     do i =1 to words(read_sock)
      socks = WORD(read_sock,i)
-     if debug then call OutDebug "READ SOCKS socket id:" SOCKS
-     data = socket("read", socks, 512)
-     parse var data . . data
-     if debug then call OutDebug "DATA:" data
-     u = closed(socks,"open",data)
+     read_sockets.i = socks
+     if not_exception(socks) then do 
+       if debug then call OutDebug "READ SOCKS socket id:" SOCKS
+       data = socket("read", socks, 512)
+       parse var data . . data
+       if debug then call OutDebug "DATA:" data
+       u = closed(socks,"open",data)
      end
   end
-  if excp_sock == "" & read_sock == " " & write_sock \= " " then do
+  /* If there's no read, maybe sockets to write */
+  if write_sock \= " " then do
     if debug then call OutDebug "WRITE SOCKETS:" write_sock
     do i =1 to words(write_sock)
-     socks = WORD(write_sock,i)
-     if debug then call OutDebug "WRITE SOCKS socket id:" SOCKS
-     u = closed(socks,"open")
+     if not_exception(socks) & not_read(socks) then do
+       socks = WORD(write_sock,i)
+       if debug then call OutDebug "WRITE SOCKS socket id:" SOCKS
+       u = closed(socks,"open")
+       end
      end
   end
   if excp_sock \= "" then do
     if debug then call OutDebug "EXCEPTION SOCKETS:" excp_sock
     Do i = 1 to WORDS(excp_sock)
        socks = WORD(excp_sock,i)
-     u = closed(socks,"closed")
+       u = closed(socks,"closed")
     end
   end
-  if J >= allports.0 & read_sock == " " & write_sock == " " then do
+  if J >= allports.0 &,
+     read_sock == " " &,
+     write_sock == " " &,
+     excp_sock == "" then do
     if verbose then call OutVerbose "We are done here!"
     leave
   end
@@ -201,6 +216,24 @@ closed:
   so_txt = socket("FCNTL",s_d,F_SETFL,"NON-BLOCKING")
   return 0
  
+not_exception:
+/* Check to see if a port is in the exception list */
+  parse arg ex_port
+  Do x = 1 to excp_sockets.0
+    if excp_sockets == ex_port then
+      return 0
+  end
+  return 1
+
+not_read:
+/* Check to see if a port was already processed as READ */
+  parse arg ex_port
+  Do x = 1 to read_sockets.0
+    if read_sockets == ex_port then
+      return 0
+  end
+  return 1
+
 init_ports:
   if custom_port then do
     allports.0 = 1
