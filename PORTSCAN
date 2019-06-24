@@ -10,12 +10,14 @@
 MAXSOCKETS = 100
 arg host options
 
-say "___________________________________   __"
-say "___  __ \_  ___/_  ____/__    |__  | / /"
-say "__  /_/ /____ \_  /    __  /| |_   |/ / "
-say "_  ____/____/ // /___  _  ___ |  /|  /  "
-say "/_/     /____/ \____/  /_/  |_/_/ |_/   "
+say "________________________________"
+say "___  __ \_  ___/_  ___/__  ____/"
+say "__  /_/ /____ \_____ \__  /_    "
+say "_  ____/____/ /____/ /_  __/    "
+say "/_/     /____/ /____/ /_/       "
+say "Port Scanning Service Facility  "
 say ""
+say "*** Port Scan by SoF and GiRa"
 say "*** Port Scan by SoF and GiRa"
  
 /* START parse command line options */
