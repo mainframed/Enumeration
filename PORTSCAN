@@ -163,6 +163,7 @@ DO FOREVER
        if debug then call OutDebug "DATA:" data
        u = closed(socks,"open",data)
      end
+    end 
   end
   /* If there's no read, maybe sockets to write */
   if write_sock \= " " then do
