@@ -8,6 +8,7 @@
  
 /* Config */
 MAXSOCKETS = 100
+MODULO = 100
 arg host options
 
 say "________________________________"
@@ -112,6 +113,8 @@ DO FOREVER
         if J > allports.0 then leave
         P = allports.J
         if scanned.p == "SCANNED."||P then do
+          if J // MODULO == 0 then
+            if verbose then call OutVerbose "at port" P
           so_txt = Socket("CONNECT",I,"AF_INET" P ip)
           parse var so_txt r_c results
           if debug then call OutDebug "CONNECT",
