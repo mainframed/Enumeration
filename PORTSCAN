@@ -213,6 +213,10 @@ closed:
   scanned.port = LEFT(status_port,7)||data
   txt = Socket("Socket", "AF_INET", "STREAM", "TCP")
   parse var txt r_c s_d
+  if verbose then do
+    if status_port == "open" then
+        call OutVerbose "Discovered open port" port
+  end
   if debug then call OutDebug "CLOSING - PORT" port,
                               "status" status_port,
                               "sockid" sockid s_d
