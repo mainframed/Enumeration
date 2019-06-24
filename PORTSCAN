@@ -207,6 +207,8 @@ DO Y = 1 to allports.0
   P = allports.Y
   if debug & scanned.P == "closed" then
     say ip||":"||LEFT(P,8) scanned.P
+  if scanned.P == 'open' then
+    say ip||":"||LEFT(P,8) scanned.P
 end
  
 return 0
