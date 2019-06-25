@@ -134,15 +134,6 @@ DO FOREVER
   /* Exception means closed */
   so_txt = SOCKET("SELECT","READ * WRITE * EXCEPTION *", 1)
   if debug then call OutDebug "SOCKET SELECT:" so_txt
-  /* FIXME: I think this happens when we allocate too many sockets in a short
-            amount of time
-  */
-  /* if so_txt == "0 0 READ WRITE EXCEPTION" then
-    call OutWarning "FIXME: unmanaged socket status" so_txt
-    */
-  /* The above error occurs when the sockets are waiting (neither a RST */
-  /*   nor a FIN packet received so it just waits to time out)  */
-
   parse value so_txt with "READ" read_sock "WRITE" .
   parse value so_txt with "WRITE" write_sock "EXCEPTION" .
   parse value so_txt with "EXCEPTION" excp_sock
