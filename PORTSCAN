@@ -113,6 +113,7 @@ DO FOREVER
         if J > allports.0 then leave
         P = allports.J
         if scanned.p == "SCANNED."||P then do
+          /* Print the current port every MODULO ports */
           if J // MODULO == 0 then
             if verbose then call OutVerbose "at port" P
           so_txt = Socket("CONNECT",I,"AF_INET" P ip)
@@ -128,7 +129,12 @@ DO FOREVER
       end
     end
   end
-
+  /* Here, all the available sockets are assigned to a port           */
+  /* and try to connect to it                                         */
+  /*                                                                  */
+  /* The status of a port if "filtered" by default                    */
+  /* The next code detects the real status of a port                  */
+   
   /* Now we check the sockets */
   /* READ/WRITE means an open socket */
   /* Exception means closed */
@@ -137,22 +143,26 @@ DO FOREVER
   parse value so_txt with "READ" read_sock "WRITE" .
   parse value so_txt with "WRITE" write_sock "EXCEPTION" .
   parse value so_txt with "EXCEPTION" excp_sock
+
   /* First fill a stem with exception sockets */
-  if excp_sock \= "" then do
-    excp_sockets.0 = 0
+  excp_sockets.0 = 0
+  if excp_sock \= " " then do
     if debug then call OutDebug "EXCEPTION SOCKETS:" excp_sock
     Do i = 1 to WORDS(excp_sock)
        excp_sockets.i = WORD(excp_sock,i)
+       excp_sockets.0 = excp_sockets.0 + 1
     end
     if debug then call OutDebug "TOTAL EXCEPTION SOCKETS:" excp_sockets.0
   end
+
   /* Next we check if there are any sockets to read */
+  read_sockets.0 = 0
   if read_sock \= " " then do
-    read_sockets.0 = 0
     if debug then call OutDebug "READ SOCKETS:" read_sock
     do i =1 to words(read_sock)
      socks = WORD(read_sock,i)
      read_sockets.i = socks
+     read_sockets.0 = read_sockets.0 + 1
      if not_exception(socks) then do
        if debug then call OutDebug "READ SOCKS socket id:" SOCKS
        data = socket("read", socks, 512)
@@ -162,6 +172,7 @@ DO FOREVER
      end
     end
   end
+
   /* If there's no read, maybe sockets to write */
   if write_sock \= " " then do
     if debug then call OutDebug "WRITE SOCKETS:" write_sock
@@ -176,6 +187,7 @@ DO FOREVER
   if excp_sock \= "" then do
     if debug then call OutDebug "EXCEPTION SOCKETS:" excp_sock
     Do i = 1 to WORDS(excp_sock)
+     read_sockets.0 = read_sockets.0 + 1
        socks = WORD(excp_sock,i)
        u = closed(socks,"closed")
     end
@@ -193,12 +205,12 @@ end
 /* Printing the results */
 /* Only print open ports by default */
 /* Show all ports in debug */
-
 DO Y = 1 to allports.0
   P = allports.Y
-  if debug & scanned.P == "closed" then
+  if (verbose & scanned.P == "closed ") | custom_port then
     say ip||":"||LEFT(P,8) scanned.P
-  if scanned.P == 'open' then
+  /* If we are scanning just a port, we already output it */
+  if scanned.P == 'open   ' & \custom_port then
     say ip||":"||LEFT(P,8) scanned.P
 end
 
@@ -209,6 +221,7 @@ closed:
   /* wtf */
   ugh = socket("CLOSE",sockid)
   port = sockets.sockid
+  /* free the socket for use with another port */
   sockets.sockid = 0
   scanned.port = LEFT(status_port,7)||data
   txt = Socket("Socket", "AF_INET", "STREAM", "TCP")
