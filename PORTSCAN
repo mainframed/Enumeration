@@ -5,7 +5,7 @@
 /* License GPL v3                                                    */
 /* Copyright Soldier of FORTRAN and GiRa                             */
 /* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
- 
+
 /* Config */
 MAXSOCKETS = 100
 MODULO = 100
@@ -19,52 +19,52 @@ say "/_/     /____/ /____/ /_/       "
 say "Port Scanning Service Facility  "
 say ""
 say "*** Port Scan by SoF and GiRa"
- 
+
 /* START parse command line options */
 parse var options ,
   1 "PORT " port " ",
   1 "PFROM " pfrom " ",
   1 "PTO " pto " "
- 
+
 if host == "" then do
   call OutError "You must specify a host to scan"
   call Usage
   exit
 end
- 
+
 if port<>"" then
   custom_port = 1
 else
   custom_port = 0
- 
+
 if (pfrom<>"" && pto<>"") then do
   call OutError "You must specify both PFROM and PTO for custom ranges"
   call Usage
   exit
 end
- 
+
 if (pfrom<>"" & pto<>"") then
   custom_range = 1
 else
   custom_range = 0
- 
+
 if (custom_port & custom_range) then do
   call OutError("You cannot specify a custom port and a custom range")
   call Usage
   exit
 end
- 
+
 if wordpos(VERBOSE, options) > 0 then
   verbose = 1
 else
   verbose = 0
- 
+
 if wordpos(DEBUG, options) > 0 then
   debug = 1
 else
   debug = 0
 /* end parse command line options */
- 
+
 /* Timestamp */
 time
 
@@ -84,7 +84,7 @@ DO I=1 to MAXSOCKETS
   sockets.I = 0
 end
 sockets.0 = MAXSOCKETS
- 
+
 /* Sockets are ready to go get the target */
 txt = Socket("RESOLVE", host)
 parse var txt r_c ip .
@@ -94,16 +94,16 @@ if r_c <> 0 then do
    if debug then call OutDebug "RESOLVE" txt
    ip = host
 end
- 
+
 if verbose then call OutVerbose "TARGET:" ip
 if verbose then call OutVerbose "Starting Port Scan"
- 
+
 /* Non-blocking ping first */
-ping host 
+ping host
 
 /* Start connecting */
 call init_ports /* Initialize the array of ports */
- 
+
 if verbose then call OutVerbose "TOTAL PORTS:" allports.0
 if verbose then call OutVerbose "Scanning..."
 DO FOREVER
@@ -128,7 +128,7 @@ DO FOREVER
       end
     end
   end
- 
+
   /* Now we check the sockets */
   /* READ/WRITE means an open socket */
   /* Exception means closed */
@@ -157,19 +157,19 @@ DO FOREVER
   end
   /* Next we check if there are any sockets to read */
   if read_sock \= " " then do
-    read_sockets.0 = 0  
+    read_sockets.0 = 0
     if debug then call OutDebug "READ SOCKETS:" read_sock
     do i =1 to words(read_sock)
      socks = WORD(read_sock,i)
      read_sockets.i = socks
-     if not_exception(socks) then do 
+     if not_exception(socks) then do
        if debug then call OutDebug "READ SOCKS socket id:" SOCKS
        data = socket("read", socks, 512)
        parse var data . . data
        if debug then call OutDebug "DATA:" data
        u = closed(socks,"open",data)
      end
-    end 
+    end
   end
   /* If there's no read, maybe sockets to write */
   if write_sock \= " " then do
@@ -210,9 +210,9 @@ DO Y = 1 to allports.0
   if scanned.P == 'open' then
     say ip||":"||LEFT(P,8) scanned.P
 end
- 
+
 return 0
- 
+
 closed:
   parse arg sockid,status_port,data
   /* wtf */
@@ -234,7 +234,7 @@ closed:
   so_txt = Socket("SetSockOpt",s_d,"SOL_SOCKET","SO_SNDTIMEO","30 0")
   so_txt = socket("FCNTL",s_d,F_SETFL,"NON-BLOCKING")
   return 0
- 
+
 not_exception:
 /* Check to see if a port is in the exception list */
   parse arg ex_port
@@ -259,7 +259,7 @@ all_done:
     if sockets.thing \= 0 then
       return 0
   end
-  return 1 
+  return 1
 
 init_ports:
   if custom_port then do
@@ -1278,7 +1278,7 @@ init_ports:
     allports.1000=65389
   end
 return 0
- 
+
 Usage:
   say "USAGE:"
   say ""
@@ -1295,22 +1295,22 @@ Usage:
   say "  DEBUG - very informative debug messages"
   say ""
   return
- 
+
 OutError:
   arg message
   say "!!! ERROR:" message
   return
- 
+
 OutDebug:
   arg message
   say "*** DEBUG:" message
   return
- 
+
 OutVerbose:
   arg message
   say "--- " message
   return
- 
+
 OutWarning:
   arg message
   say "$$$ WARNING:" message
