@@ -187,7 +187,6 @@ DO FOREVER
   if excp_sock \= "" then do
     if debug then call OutDebug "EXCEPTION SOCKETS:" excp_sock
     Do i = 1 to WORDS(excp_sock)
-     read_sockets.0 = read_sockets.0 + 1
        socks = WORD(excp_sock,i)
        u = closed(socks,"closed")
     end
