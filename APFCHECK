@@ -12,8 +12,8 @@ CLEAR    AMODE 31
          YREGS                  # Register readability macro
 *         SETUP registers and save areas thanks @bigendiansmalls      *
 MAIN     BAKR  R14,0            # Save regs linkage stack
-M1       LR    R13,R15          # R15 Program base into R13 for 
-         USING MAIN,R13         # R13 for addressability
+M1       LR    R12,R15          # R15 Program base into R12 for 
+         USING MAIN,R12         # R12 for addressability
          DS    0H               # Halfword boundaries
 * Check to see if we've been passed arguments
 ARGS     L     R7,0(,R1)        # Get the location of the arg
@@ -194,7 +194,7 @@ LRETCODE DS    F             # Return code
 LRSNCODE DS    F             # Reason code
 ERRORMSG DC    C'ERROR: You done fucked up'
          CSVAPFAA ,          # Include CSVAPFAA mapping
-         DROP  R13    # Drop Addressability
+         DROP  R12    # Drop Addressability
          DROP  R10
          DROP  R11
          END   MAIN  # Peace owt
