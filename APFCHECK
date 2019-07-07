@@ -69,7 +69,7 @@ CHECK3   BNE   ERRORD                # WELP it wasnt that either, dang
          ST    R1,APAA@              # Save answer area address
          B     GETAPF                # Re-do LIST request
 ERRORD   DS    0H                    # Process other return codes
-         TPUT  ERRORMSG,L'ERRORMSG,EDIT # Print the error message
+         PUT   SYSPRINT,ERRORMSG     # Print the error message
          B EXITP                     # Go to EXITP
 LISTAPF  DS    0H                    # We've made it
          L     R10,APAA@             # Put the location of APAA@ in R10
@@ -181,7 +181,7 @@ APAA@    DS    A             # Address of APF answer area
 APAALEN  DS    A             # Length of APF answer area
 LRETCODE DS    F             # Return code
 LRSNCODE DS    F             # Reason code
-ERRORMSG DC    C'ERROR: You done fucked up'
+ERRORMSG DC    CL80'ERROR: You done fucked up'
 SYSPRINT DCB  DDNAME=SYSPRINT,MACRF=PM,DSORG=PS,LRECL=80
          CSVAPFAA ,          # Include CSVAPFAA mapping
          DROP  R12    # Drop Addressability
