@@ -1,38 +1,39 @@
+//JOBNAME JOB
+//*
+// EXPORT SYMLIST=*
+// SET LOAD=APFCHECK
+// SET LOADLIB=MY.LOADLIB
+//ASM       EXEC PGM=ASMA90,PARM='NODECK,XREF(SHORT)'
+//SYSLIB    DD  DSN=SYS1.MACLIB,DISP=SHR
+//SYSUT1    DD UNIT=SYSALLDA,SPACE=(CYL,(10,5))
+//SYSUT2    DD UNIT=SYSALLDA,SPACE=(CYL,(10,5))
+//SYSUT3    DD UNIT=SYSALLDA,SPACE=(CYL,(10,5))
+//SYSPRINT  DD SYSOUT=*
+//SYSLIN    DD SPACE=(CYL,10),UNIT=SYSALLDA,DISP=(,PASS)
+//SYSIN     DD *,SYMBOLS=JCLONLY
 * APFCHECK
 * Program to check your access to APF authorized libraries
 * Create by Soldier of FORTRAN 2019
 * Original idea David Speigel
 * Help from BigE Smalls
 * --------------------------------------------------------------------
-* For use on z/OS TSO only
-CHKACCSS TITLE 'List APF Datasets and check your access'
+* For use on z/OS TSO when SYSPRINT allocated
+*   I.E. "ALLOC FI(SYSPRINT) DA(*)"
+* Use in BATCH with SYPRINT DD
+&LOAD.   TITLE 'List APF Datasets and check your access'
          PRINT ON,DATA,GEN
-CLEAR    CSECT
-CLEAR    AMODE 31 
+&LOAD.   CSECT
+&LOAD.   AMODE 31
+&LOAD.   RMODE 24               # Needed for DCB
          YREGS                  # Register readability macro
 *         SETUP registers and save areas thanks @bigendiansmalls      *
 MAIN     BAKR  R14,0            # Save regs linkage stack
-M1       LR    R13,R15          # R15 Program base into R13 for 
-         USING MAIN,R13         # R13 for addressability
+M1       LR    R12,R15          # R15 Program base into R12 for
+         USING MAIN,R12         # R12 for addressability
          DS    0H               # Halfword boundaries
-* Check to see if we've been passed arguments
-ARGS     L     R7,0(,R1)        # Get the location of the arg
-         X     R7,=X'80000000'
-         LH    R8,0(,R7)        # R8 now contains the length
-CLEARIT  STLINENO LINE=1,CLEAR=YES #Clears the screen 
-         C     R8,=F'0'         # Did we get an argument?
-         BE    NOARG            # Nope, go to NOARG
-         A     R7,=F'2'         # R7 is the location of the arg
-         EX    R8,GETARG        # Needed to use the length
-* VERBARG now contains the argument (if one was passed)
-         ICM   R9,X'F',VERBARG  # Put the arg in R9
-         C     R9,VARG          # Is the argument 'V'?
-         BNE   NOARG            # Nope its NOT
-ARGSEND  TPUT  MSGLIST6,L'MSGLIST6,EDIT # Print Verbose is on
-PUTMSG   TPUT  MSGLIST1,L'MSGLIST1,EDIT # Print Message to user
-         B     APFTIME                   # Go to GETAPF
-NOARG    TPUT  MSGLIST5,L'MSGLIST5,EDIT # Print Verbose is off
-* Setup what we need to loop through all the APF libraries
+* Open SYSPRINT
+         OPEN  (SYSPRINT,(OUTPUT))
+PUTMSG   PUT   SYSPRINT,MSGLIST1
 APFTIME  DS    0H                 # LETS DO THIS!
          MVC   APAALEN,=AL4(4096) # Assume length is 4K
          L     R2,APAALEN         # Put that in R2
@@ -40,7 +41,7 @@ APFTIME  DS    0H                 # LETS DO THIS!
          ST    R1,APAA@           # Save answer area address
          L     R4,APAA@           # Get answer area address
 *
-* The CSVAPF macro is used in LIST mode to get a list of APF 
+* The CSVAPF macro is used in LIST mode to get a list of APF
 * authorized libraries. It maps to CSVAPFAA
 *
 GETAPF   CSVAPF REQUEST=LIST,ANSAREA=(R4),ANSLEN=APAALEN,              x
@@ -53,12 +54,12 @@ GETAPF   CSVAPF REQUEST=LIST,ANSAREA=(R4),ANSLEN=APAALEN,              x
 *
          CLC   LRETCODE,=AL4(CSVAPFRC_OK)   # Return code 0?
 CHECK1   BE    LISTAPF                      # Yes, process data
-         CLC   LRETCODE,=AL4(CSVAPFRC_WARN) # If it wasn't 0 
+         CLC   LRETCODE,=AL4(CSVAPFRC_WARN) # If it wasn't 0
 *                                             maybe it was a warning?
 CHECK2   BNE   ERROR                        # Nope, it was an error
          NC    LRSNCODE,=AL4(CSVAPFRSNCODEMASK) # Clear high order bit
 *        Now we check if maybe 4096 wasn't enough space
-         CLC   LRSNCODE,=AL4(CSVAPFRSNNOTALLDATARETURNED) 
+         CLC   LRSNCODE,=AL4(CSVAPFRSNNOTALLDATARETURNED)
 CHECK3   BNE   ERRORD                # WELP it wasnt that either, dang
          L     R3,APAALEN            # Get current length
          L     R2,APFHTLEN-APFHDR(R4) # Get required length
@@ -73,22 +74,18 @@ ERRORD   DS    0H                    # Process other return codes
 LISTAPF  DS    0H                    # We've made it
          L     R10,APAA@             # Put the location of APAA@ in R10
          USING APFHDR,R10            # And now we can address it
-         C     R9,VARG               # Are we verbose?
-         BNE   RECORDS               # No? Skip to RECORDS
-         TPUT  MSGLIST2,L'MSGLIST2,EDIT # Print message
-RECORDS  L     R5,APFH#REC           # R5 is the Number of records 
+         PUT   SYSPRINT,MSGLIST2
+RECORDS  L     R5,APFH#REC           # R5 is the Number of records
          LR    R11,R10               # Put R10 in to R11
          A     R11,APFHOFF      # Add the offset R11 now points at APFE
          USING APFE,R11              # And now we can address it
-* At this point: 
+* At this point:
 *        R5 contains the number of records
 *        Using BCT and R5 we can now loop through them all
 *        For each ot them we're going to check access
-         C     R9,VARG               # Are we verbose?
-         BNE   HEADER                # No, go to HEADER
-         TPUT  MSGLIST3,L'MSGLIST3,EDIT # Print we starting 
-HEADER   TPUT  MSGLIST4,L'MSGLIST4,EDIT # Print table header
-LOOPED   MVC   APFDSN,APFEDSNAME     # APFDSN is the dataset name 
+         PUT   SYSPRINT,MSGLIST3
+HEADER   PUT   SYSPRINT,MSGLIST4
+LOOPED   MVC   APFDSN,APFEDSNAME     # APFDSN is the dataset name
          MVC   APFVOL,APFEVOLUME     # APFVOL is the volume
          MVC   PRINTIT+10(6),APFEVOLUME # Prep PRINTIT with the vol
          MVC   PRINTIT+19(44),APFEDSNAME # Prep PRINTIT with DSN
@@ -130,14 +127,10 @@ CHECKACS DS    0H
          BNE   ERROR        # No? Then we dont care
 NOACCESS C     R4,=F'0'     # Check if we have no access
          BNE   READ         # We dont? try READ
-         C     R9,VARG      # Are we verbose?
-         BNE   NEXT         # No, okay
          MVC   PRINTIT(7),NONEA # We are, so print our access
          B     PRINTMSG     # Go to PRINTMSG
 READ     C     R4,=F'4'     # Check if we have READ access
          BNE   UPDATE
-         C     R9,VARG
-         BNE   NEXT
          MVC   PRINTIT(7),READA
          B     PRINTMSG
 UPDATE   C     R4,=F'8'     # Check if we have UPDATE access XD
@@ -153,12 +146,13 @@ ALTER    C     R4,=F'16'    # Check if we have ALTER access >:O
          MVC   PRINTIT(7),ALTERA
          B     PRINTMSG
 WHATTHE  MVC   PRINTIT(7),WHATA # I have no idea what i'm doing
-PRINTMSG TPUT  PRINTIT,L'PRINTIT,EDIT # Print the line
+PRINTMSG PUT   SYSPRINT,PRINTIT
          B     NEXT
-ERROR    TPUT  ERRORMSG,L'ERRORMSG,EDIT # Some error printed
+ERROR    PUT   SYSPRINT,ERRORMSG
 NEXT     AH    R11,APFELEN  # Advance R11 to the next entry
          BCT   R5,LOOPED    # Subtract 1 from R5 and go to LOOPED
 EXITP    DS    0H           # We're done lets exit
+         CLOSE (SYSPRINT)
          XR    R15,R15      # zero return code
          PR    ,            # Return to caller
 *
@@ -168,17 +162,12 @@ EXITP    DS    0H           # We're done lets exit
 APFDSN   DS    CL44  # APF Dataset Name
 APFVOL   DS    CL6   # APF Volume
 DELETED  DS    CL1   # If the first char is 0x00 the DSN is deleted
-MSGLIST1 DC    C'*** Gathering data'
-MSGLIST2 DC    C'*** Listing APF'
-MSGLIST3 DC    C'*** Checking Access'
-MSGLIST4 DC    C'ACCESS  | VOLUME | DATASET'
-MSGLIST5 DC    C'*** To get full list pass argument VERB'
-MSGLIST6 DC    C'*** Verbose Mode On'
+MSGLIST1 DC    CL80'*** Gathering data'
+MSGLIST2 DC    CL80'*** Listing APF'
+MSGLIST3 DC    CL80'*** Checking Access'
+MSGLIST4 DC    CL80'ACCESS  | VOLUME | DATASET'
 DIVIDER  DC    C'|'
-VERBARG  DS    CL8  # VERBOSE
-VARG     DC    C'VERB'
-GETARG   MVC   VERBARG(0),0(R7)
-PRINTIT  DS    CL64 
+PRINTIT  DS    CL80
 NONEA    DC    C'NONE   ' # No Access :( :(
 READA    DC    C'READ   ' # Read Access :(
 UPDATEA  DC    C'UPDATE ' # Update Access!
@@ -193,8 +182,19 @@ APAALEN  DS    A             # Length of APF answer area
 LRETCODE DS    F             # Return code
 LRSNCODE DS    F             # Reason code
 ERRORMSG DC    C'ERROR: You done fucked up'
+SYSPRINT DCB  DDNAME=SYSPRINT,MACRF=PM,DSORG=PS,LRECL=80
          CSVAPFAA ,          # Include CSVAPFAA mapping
-         DROP  R13    # Drop Addressability
+         DROP  R12    # Drop Addressability
          DROP  R10
          DROP  R11
          END   MAIN  # Peace owt
+//LINK    EXEC PGM=IEWL,COND=(0,NE),PARM='XREF,LET,LIST,NCAL'
+//SYSLMOD  DD  DISP=SHR,DSN=&LOADLIB.(&LOAD.)
+//SYSUT1   DD  UNIT=SYSDA,SPACE=(1024,(50,20))
+//SYSPRINT DD  SYSOUT=*
+//SYSLIN   DD  DISP=OLD,DSN=*.ASM.SYSLIN
+//*
+//GO        EXEC PGM=&LOAD.,COND=(0,NE)
+//STEPLIB  DD DISP=SHR,DSN=&LOADLIB.
+//SYSPRINT DD SYSOUT=*
+//*
