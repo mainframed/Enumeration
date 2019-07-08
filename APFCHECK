@@ -1,15 +1,14 @@
-//JOBNAME JOB
+//jobname JOB
 //*
 // EXPORT SYMLIST=*
 // SET LOAD=APFCHECK
-// SET LOADLIB=MY.LOADLIB
 //ASM       EXEC PGM=ASMA90,PARM='NODECK,XREF(SHORT)'
 //SYSLIB    DD  DSN=SYS1.MACLIB,DISP=SHR
-//SYSUT1    DD UNIT=SYSALLDA,SPACE=(CYL,(10,5))
-//SYSUT2    DD UNIT=SYSALLDA,SPACE=(CYL,(10,5))
-//SYSUT3    DD UNIT=SYSALLDA,SPACE=(CYL,(10,5))
+//SYSUT1    DD UNIT=SYSDA,SPACE=(CYL,(10,5))
+//SYSUT2    DD UNIT=SYSDA,SPACE=(CYL,(10,5))
+//SYSUT3    DD UNIT=SYSDA,SPACE=(CYL,(10,5))
 //SYSPRINT  DD SYSOUT=*
-//SYSLIN    DD SPACE=(CYL,10),UNIT=SYSALLDA,DISP=(,PASS)
+//SYSLIN    DD SPACE=(CYL,10),UNIT=WORK,DISP=(,PASS)
 //SYSIN     DD *,SYMBOLS=JCLONLY
 * APFCHECK
 * Program to check your access to APF authorized libraries
@@ -17,14 +16,12 @@
 * Original idea David Speigel
 * Help from BigE Smalls
 * --------------------------------------------------------------------
-* For use on z/OS TSO when SYSPRINT allocated
-*   I.E. "ALLOC FI(SYSPRINT) DA(*)"
-* Use in BATCH with SYPRINT DD
-&LOAD.   TITLE 'List APF Datasets and check your access'
+* For use on z/OS TSO only
+CHKACCSS TITLE 'List APF Datasets and check your access'
          PRINT ON,DATA,GEN
-&LOAD.   CSECT
-&LOAD.   AMODE 31
-&LOAD.   RMODE 24               # Needed for DCB
+CHKACCSS CSECT
+CHKACCSS AMODE 31
+CHKACCSS RMODE 24
          YREGS                  # Register readability macro
 *         SETUP registers and save areas thanks @bigendiansmalls      *
 MAIN     BAKR  R14,0            # Save regs linkage stack
@@ -146,7 +143,7 @@ ALTER    C     R4,=F'16'    # Check if we have ALTER access >:O
          MVC   PRINTIT(7),ALTERA
          B     PRINTMSG
 WHATTHE  MVC   PRINTIT(7),WHATA # I have no idea what i'm doing
-PRINTMSG PUT   SYSPRINT,PRINTIT
+PRINTMSG PUT   SYSPRINT,PRINTITL
          B     NEXT
 ERROR    PUT   SYSPRINT,ERRORMSG
 NEXT     AH    R11,APFELEN  # Advance R11 to the next entry
@@ -162,11 +159,25 @@ EXITP    DS    0H           # We're done lets exit
 APFDSN   DS    CL44  # APF Dataset Name
 APFVOL   DS    CL6   # APF Volume
 DELETED  DS    CL1   # If the first char is 0x00 the DSN is deleted
-MSGLIST1 DC    CL80'*** Gathering data'
-MSGLIST2 DC    CL80'*** Listing APF'
-MSGLIST3 DC    CL80'*** Checking Access'
-MSGLIST4 DC    CL80'ACCESS  | VOLUME | DATASET'
+         DS    0F
+MSGLIST1 DC    AL2((L'MSGDATA1)+4)
+         DC    H'0'
+MSGDATA1 DC    C'*** Gathering data'
+         DS    0H
+MSGLIST2 DC    AL2((L'MSGDATA2)+4)
+         DC    H'0'
+MSGDATA2 DC    C'*** Listing APF'
+         DS    0H
+MSGLIST3 DC    AL2((L'MSGDATA3)+4)
+         DC    H'0'
+MSGDATA3 DC    C'*** Checking Access'
+         DS    0H
+MSGLIST4 DC    AL2((L'MSGDATA4)+4)
+         DC    H'0'
+MSGDATA4 DC    C'ACCESS  | VOLUME | DATASET'
+         DS    0H
 DIVIDER  DC    C'|'
+PRINTITL DC    XL4'00500000'
 PRINTIT  DS    CL80
 NONEA    DC    C'NONE   ' # No Access :( :(
 READA    DC    C'READ   ' # Read Access :(
@@ -181,20 +192,26 @@ APAA@    DS    A             # Address of APF answer area
 APAALEN  DS    A             # Length of APF answer area
 LRETCODE DS    F             # Return code
 LRSNCODE DS    F             # Reason code
-ERRORMSG DC    CL80'ERROR: You done fucked up'
-SYSPRINT DCB  DDNAME=SYSPRINT,MACRF=PM,DSORG=PS,LRECL=80
+ERRORMSG DC    AL2((L'ERRORDAT)+4)
+         DC    H'0'
+ERRORDAT DC    C'ERROR: You done fucked up'
+SYSPRINT DCB   DDNAME=SYSPRINT,    dcb for output file                 X
+               DSORG=PS,                                               X
+               MACRF=PM,                                               X
+               RECFM=VB,                                               X
+               LRECL=132           128 + 4 for rdw
          CSVAPFAA ,          # Include CSVAPFAA mapping
          DROP  R12    # Drop Addressability
          DROP  R10
          DROP  R11
          END   MAIN  # Peace owt
 //LINK    EXEC PGM=IEWL,COND=(0,NE),PARM='XREF,LET,LIST,NCAL'
-//SYSLMOD  DD  DISP=SHR,DSN=&LOADLIB.(&LOAD.)
+//SYSLMOD  DD  DISP=SHR,DSN=HACK18.LOAD(&LOAD.)
 //SYSUT1   DD  UNIT=SYSDA,SPACE=(1024,(50,20))
 //SYSPRINT DD  SYSOUT=*
 //SYSLIN   DD  DISP=OLD,DSN=*.ASM.SYSLIN
 //*
 //GO        EXEC PGM=&LOAD.,COND=(0,NE)
-//STEPLIB  DD DISP=SHR,DSN=&LOADLIB.
+//STEPLIB  DD DISP=SHR,DSN=HACK18.LOAD
 //SYSPRINT DD SYSOUT=*
 //*
