@@ -12,13 +12,13 @@ say '*** BPX Access'
 call sayit("SEARCH CLASS(FACILITY) FILTER(BPX.**)")
 say '*** Surrogate Access'
 call sayit("SEARCH CLASS(SURROGAT) FILTER(*.SUBMIT)")
-
+return 0
 
 sayit:
 parse arg cmd
 rump = OUTTRAP('shaker.')
 ADDRESS TSO CMD
-lines = shaker.0 + 1
-DO i = lines TO shaker.0
+DO i = 1 to shaker.0
   SAY shaker.i
 END
+RETURN
