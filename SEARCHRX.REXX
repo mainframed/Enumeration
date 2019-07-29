@@ -7,7 +7,7 @@ call sayit("SR ALL WARNING NOMASK")
 SAY '*** READ or greater datasets'
 call sayit("SR FILTER(**)")
 say '*** Unix Privileged resources'
-call sayit("SR CLASS(UNIVPRIV)")
+call sayit("SR CLASS(UNIXPRIV)")
 say '*** BPX Access'
 call sayit("SEARCH CLASS(FACILITY) FILTER(BPX.**)")
 say '*** Surrogate Access'
