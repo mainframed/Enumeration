@@ -1,6 +1,5 @@
 /* WREXXX-N-EFFECT                            */
 /* All I want to do is zoom-a-zoom-zoom-zoom  */
-/* And a poom-poom, just shake ya rump        */
 
 ADDRESS TSO
 SAY '*** Datasets in WARNING mode'
@@ -21,5 +20,5 @@ rump = OUTTRAP('shaker.')
 ADDRESS TSO CMD
 lines = shaker.0 + 1
 DO i = lines TO shaker.0
-  SAY shaker.i                                  /* displays 5 members */
+  SAY shaker.i
 END
