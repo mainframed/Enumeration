@@ -13,44 +13,44 @@ M1       LR    R9,R15           # R15 Program base into R13 for
          USING MAIN,R9          # R13 for addressability
 * Clear the screen
 CLEARIT  STLINENO LINE=1,CLEAR=YES
-ARGSEND  TPUT  MSGLIST6,L'MSGLIST6,EDIT
+ARGSEND  TPUT  MSGLIST1,L'MSGLIST1,EDIT
 * Start getting records from CSI
 NEXTRCD  EQU   *
-NXT1     LA    1,PARMLIST # Load Parmlist in to R1
+NXT1     LA    R1,PARMLIST # Load Parmlist in to R1
 NXT2     CALL  IGGCSI00   # Call the CSI utility
-NXT3     LTR   15,15      # Is the return code zero?
+NXT3     LTR   R15,R15      # Is the return code zero?
 NXT4     BZ    NORTCODE   # Yes it is branch
-         CLC   PARMRC(4),FENTERR # No, Is it a field entry error?
-         BE    NORTCODE   # Yes, branch
-         MVC   RETDATA(4),PARMRC # No, welp fuck
-         BAL   3,ERRCNVRT # Print the error msg
+NXT5     CLC   PARMRC(4),FENTERR # No, Is it a field entry error?
+NXT6     BE    NORTCODE   # Yes, branch
+NXT7     MVC   RETDATA(4),PARMRC # No, welp fuck
+         BAL   R3,ERRCNVRT # Print the error msg
          B     ENDPRGM    # Exit program
 * Now we check the return code for CSI
 NORTCODE EQU   *
-NORT1    USING DATARET,5
-NORT2    LA    5,DATAAREA        # Put location of workarea in to R5
-NORT3    L     1,DRETCD          # Put return code in R1
-NORT4    LTR   1,1               # is return code zero?
+         USING DATARET,R5
+NORT2    LA    R5,DATAAREA       # Put location of workarea in to R5
+NORT3    L     R1,DRETCD          # Put return code in R1
+NORT4    LTR   R1,R1             # is return code zero?
 NORT5    BZ    NEXTFLD           # No? Sweet
          MVC   RETDATA(4),DRETCD # Yes? Fuck print the error
-         BAL   3,ERRCNVRT        # Print the error
+         BAL   R3,ERRCNVRT        # Print the error
          B     ENDPRGM           # Exit
 * 
 NEXTFLD  EQU *
-NXTFLD1  LA    4,DATAEND
-         LA    7,64
-         USING ENTRY,4
+NXTFLD1  LA    R4,DATAEND
+         LA    R7,64
+         USING ENTRY,R4
 NEXTENT  EQU   *
 NXTENT1  TM    EFLAG,X'40' # Is the bit CSIENTER set?
          BO    ERRDET      # Yes, shit, we have an issue
          B     DATASET     # No Its cool lets do this
 ERRDET   EQU   * Aww shit here we go again
          MVC   RETDATA(4),EERRCOD # put the error in RETDATA
-         BAL   3,ERRCNVRT         # Convert and Print the error code
-         LA    1,50               # Each entry is 50 get the next one
-         AR    7,1                # ADD ENTRY DATA LEN
-         AR    4,1                # ADD ENTRY DATA LEN
-         C     7,DUSEDLEN         # COMPARE USED TO CALC LEN
+         BAL   R3,ERRCNVRT         # Convert and Print the error code
+         LA    R1,50               # Each entry is 50 get the next one
+         AR    R7,1                # ADD ENTRY DATA LEN
+         AR    R4,1                # ADD ENTRY DATA LEN
+         C     R7,DUSEDLEN         # COMPARE USED TO CALC LEN
          BNM   NEXTRESM                     IF GT OR EQ  RESUME TEST
          B     NEXTENT                      NEXT ENTRY 
 DATASET  EQU   *
@@ -59,12 +59,12 @@ DATAPUT1 TPUT  OUTNAME,44,EDIT
          B     NEXTKEY                      CONTINUE   
 * Get next entry
 NEXTKEY  EQU   *
-         SR    1,1                          CLEAR REG 1
-         LH    1,EDATALN                    INSERT ENTRY DATA LEN
-         LA    1,46(1)                      ADD ENTRY HDR LENGTH
-         AR    7,1                          ADD ENTRY DATA LEN
-         AR    4,1                          ADD ENTRY DATA LEN
-         C     7,DUSEDLEN                   COMPARE USED TO CALC LEN
+         SR    R1,R1                          CLEAR REG 1
+         LH    R1,EDATALN                    INSERT ENTRY DATA LEN
+         LA    R1,46(1)                      ADD ENTRY HDR LENGTH
+         AR    R7,1                          ADD ENTRY DATA LEN
+         AR    R4,1                          ADD ENTRY DATA LEN
+         C     R7,DUSEDLEN                   COMPARE USED TO CALC LEN
          BNM   NEXTRESM                     IF GT OR EQ  RESUME TEST
          B     NEXTENT                      NEXT ENTRY
 * Get more records
@@ -79,24 +79,28 @@ ENDPRGM  DS    0H           # We're done lets exit
 ERRCNVRT EQU *
          MVI   OUTPUT,C' '   # Blank out the first char of output1
          MVC   OUTPUT+1(131),OUTPUT # Blank out all of output
-         SR    2,2           # Subtract R2 from R2 (zero out)
-         IC    2,RETDATA+3   # Insert first char to R2
-         CVD   2,DECIMAL     # Convert it to decimal
+         SR    R2,R2           # Subtract R2 from R2 (zero out)
+         IC    R2,RETDATA+3   # Insert first char to R2
+         CVD   R2,DECIMAL     # Convert it to decimal
          UNPK  UNPKAREA(4),DECIMAL+6(2)  # CONVERT RETURN CODE
          OI    UNPKAREA+3,X'F0'  # Converted
          MVC   RTN(3),UNPKAREA+1 # put it somewhere
-         SR    2,2               # CONVERT REASON CODE
-         IC    2,RETDATA+2
-         CVD   2,DECIMAL
+         SR    R2,R2               # CONVERT REASON CODE
+         IC    R2,RETDATA+2
+         CVD   R2,DECIMAL
          UNPK  UNPKAREA(4),DECIMAL+6(2)
          OI    UNPKAREA+3,X'F0'
          MVC   RSN(3),UNPKAREA+1
          MVC   MODIDO(2),RETDATA             MOVE MODULE ID
 *         MVC   ERRENT,ENAME
+         TPUT  MSGLIST2,L'MSGLIST2,EDIT
          TPUT  ERRORMSG,L'ERRORMSG,EDIT 
-         BR    3    
+         TPUT  MSGLIST3,L'MSGLIST3,EDIT
+         BR    R3    
 *
-MSGLIST6 DC    C'*** Starting Search - It takes a while'
+MSGLIST1 DC    C'*** Starting Search - It takes a while'
+MSGLIST2 DC    C'*** ERROR START ERROR'
+MSGLIST3 DC    C'*** ERROR  END  ERROR'
 * R1 PLIST
 PARMLIST DS    0D
          DC    A(MODRSNRT)  # 4 bytes module, reason, and return code
