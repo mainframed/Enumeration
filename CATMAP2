@@ -9,16 +9,18 @@ CLEAR    AMODE 31
          YREGS                  # Register readability macro
 *         SETUP registers and save areas thanks @bigendiansmalls      *
 MAIN     BAKR  R14,0            # Save regs linkage stack
-M1       LR    R13,R15          # R15 Program base into R13 for 
-         USING MAIN,R13         # R13 for addressability
+M1       LR    R9,R15           # R15 Program base into R13 for 
+         USING MAIN,R9          # R13 for addressability
 * Clear the screen
 CLEARIT  STLINENO LINE=1,CLEAR=YES
+ARGSEND  TPUT  MSGLIST6,L'MSGLIST6,EDIT
+ARGRGRG  SR    R15,R15
 * Start getting records from CSI
 NEXTRCD  EQU   *
-         LA    1,PARMLIST # Load Parmlist in to R1
-         CALL  IGGCSI00   # Call the CSI utility
-         LTR   15,15      # Is the return code zero?
-         BZ    NORTCODE   # Yes it is branch
+NXT1     LA    1,PARMLIST # Load Parmlist in to R1
+NXT2     CALL  IGGCSI00   # Call the CSI utility
+NXT3     LTR   15,15      # Is the return code zero?
+NXT4     BZ    NORTCODE   # Yes it is branch
          CLC   PARMRC(4),FENTERR # No, Is it a field entry error?
          BE    NORTCODE   # Yes, branch
          MVC   RETDATA(4),PARMRC # No, welp fuck
@@ -26,21 +28,21 @@ NEXTRCD  EQU   *
          B     ENDPRGM    # Exit program
 * Now we check the return code for CSI
 NORTCODE EQU   *
-         USING DATARET,5
-         LA    5,DATAAREA        # Put location of workarea in to R5
-         L     1,DRETCD          # Put return code in R1
-         LTR   1,1               # is return code zero?
-         BZ    NEXTFLD           # No? Sweet
+NORT1    USING DATARET,5
+NORT2    LA    5,DATAAREA        # Put location of workarea in to R5
+NORT3    L     1,DRETCD          # Put return code in R1
+NORT4    LTR   1,1               # is return code zero?
+NORT5    BZ    NEXTFLD           # No? Sweet
          MVC   RETDATA(4),DRETCD # Yes? Fuck print the error
          BAL   3,ERRCNVRT        # Print the error
          B     ENDPRGM           # Exit
 * 
 NEXTFLD  EQU *
-         LA    4,DATAEND
+NXTFLD1  LA    4,DATAEND
          LA    7,64
          USING ENTRY,4
 NEXTENT  EQU   *
-         TM    EFLAG,X'40' # Is the bit CSIENTER set?
+NXTENT1  TM    EFLAG,X'40' # Is the bit CSIENTER set?
          BO    ERRDET      # Yes, shit, we have an issue
          B     DATASET     # No Its cool lets do this
 ERRDET   EQU   * Aww shit here we go again
@@ -54,7 +56,7 @@ ERRDET   EQU   * Aww shit here we go again
          B     NEXTENT                      NEXT ENTRY 
 DATASET  EQU   *
          MVC   OUTNAME(44),ENAME             MOVE NAME INFO
-         TPUT  OUTNAME,44,EDIT
+DATAPUT1 TPUT  OUTNAME,44,EDIT
          B     NEXTKEY                      CONTINUE   
 * Get next entry
 NEXTKEY  EQU   *
@@ -95,6 +97,7 @@ ERRCNVRT EQU *
          TPUT  ERRORMSG,L'ERRORMSG,EDIT 
          BR    3    
 *
+MSGLIST6 DC    C'*** Verbose Mode On'
 * R1 PLIST
 PARMLIST DS    0D
          DC    A(MODRSNRT)  # 4 bytes module, reason, and return code
@@ -182,5 +185,5 @@ EFLD1LN  DS    XL2
 EFLD2LN  DS    XL2
 ECATTR   DS    XL1
 ENTEND   DS    0XL1
-         DROP  R13    # Drop Addressability
+         DROP  R9    # Drop Addressability
          END   MAIN  # Peace owt
