@@ -14,7 +14,6 @@ M1       LR    R9,R15           # R15 Program base into R13 for
 * Clear the screen
 CLEARIT  STLINENO LINE=1,CLEAR=YES
 ARGSEND  TPUT  MSGLIST6,L'MSGLIST6,EDIT
-ARGRGRG  SR    R15,R15
 * Start getting records from CSI
 NEXTRCD  EQU   *
 NXT1     LA    1,PARMLIST # Load Parmlist in to R1
@@ -97,7 +96,7 @@ ERRCNVRT EQU *
          TPUT  ERRORMSG,L'ERRORMSG,EDIT 
          BR    3    
 *
-MSGLIST6 DC    C'*** Verbose Mode On'
+MSGLIST6 DC    C'*** Starting Search - It takes a while'
 * R1 PLIST
 PARMLIST DS    0D
          DC    A(MODRSNRT)  # 4 bytes module, reason, and return code
