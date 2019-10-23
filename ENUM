@@ -37,6 +37,7 @@
 |*             VERS - Operating System Version Info                   *|
 |*             WHO  - Who is currently logged on through TSO/OMVS     *|
 |*             TSTA - Display TESTAUTH authorization                  *|
+|*             USSU - Display USS/OMVS user list                      *|
 |*                                                                    *|
 |*                                                                    *|
 |* Sources:                                                           *|
@@ -50,6 +51,7 @@
 |*        https://github.com/jaytay79/zos                             *|
 |*     File # 496 REXX exec to do LISTA (display allocations)         *|
 |*        http://www.cbttape.org/ftp/cbt/CBT496.zip                   *|
+|*     USS/OMVS user details list by Davide Girardi (@nogonosa)       *|
 |*                                                                    *|
 \*--------------------------------------------------------------------*/
                                         
@@ -92,6 +94,8 @@ SELECT
     x = CAT()
   WHEN type == 'TSTA' THEN
     x = TSTA()
+  WHEN type == 'USSU' THEN
+    call USSU
   WHEN type = 'ALL' THEN DO
     say 'z/OS System Enumeration'
     say ''
@@ -119,6 +123,9 @@ SELECT
     x = TSTA()
     say '-----------------------------------------'
     say '' 
+    call USSU
+    say '-----------------------------------------'
+    say ''
     if space /== 'OMVS' THEN
       x = PATH(1)
   END
@@ -150,6 +157,7 @@ say "---z-o-s---e-n-u-m-e-r-a-t-i-o-n-------------------------------------"
     say "'VERS' Display System Information"
     say "'WHO'  Display Logged On TSO/OMVS Users"
     say "'TSTA' Display TESTAUTH authorization"
+    say "'USSU' Display USS/OMVS user list"
     say ''
     say 'Example:'
     if space /== 'OMVS' then
@@ -1018,3 +1026,28 @@ RETURN 0
 ptr:  Return c2d(storage(d2x(Arg(1)),4))     /* Return a pointer */     
 /*-------------------------------------------------------------------*/ 
 stg:  Return storage(d2x(Arg(1)),Arg(2))     /* Return storage */       
+
+USSU: PROCEDURE
+  call syscalls 'ON'
+    address syscall
+    ucount = 0
+    Do Forever
+      "getpwent pw."
+      if retval=0 | retval=-1 then leave
+      else Do
+      Name = strip(pw.pw_name)
+      UID = strip(pw.pw_uid)
+      GID = strip(pw.pw_gid)
+      Home = strip(pw.pw_dir)
+      ucount = ucount + 1
+      usr.ucount = left(Name,8) left(UID,10) left(GID,10) left(Home, 48)
+    End
+    usr.0 = ucount
+  End
+  Say 'USS/OMVS user details:'
+  Say copies('-',41)
+  Say left('USER ID',8) left('GID',10) left('UID',10) left('HOME', 10)
+  Do i = 1 to usr.0
+    Say usr.i
+  End
+RETURN
