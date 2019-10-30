@@ -1285,7 +1285,7 @@ return 0
 Usage:
   say "USAGE:"
   say ""
-  say ">>-PORSCAN--host--+------------------------------------+---------+----->"
+  say ">>-PSSF-----host--+------------------------------------+---------+----->"
   say "                  |-PORT--customport----------------|  '-VERBOSE-'      "
   say "                  '-PFROM--firstport--PTO--lastport-'                   "
   say ">---+-------+-><                                                        "
