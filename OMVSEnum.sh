@@ -1021,17 +1021,17 @@ fi
 
 call_each()
 {
-#  header | tee header.log
-#  debug_info | tee debug_info.log
-#  system_info | tee system_info.log
-  user_info | tee user_info.log
-#  environmental_info | tee environmental_info.log
-#  networking_info | tee networking_info.log
-#  services_info | tee services_info.log
-#  software_configs | tee software_configs.log
-#  interesting_files | tee interesting_files.log
-#  racf_searches | tee racf_searches.log
-#  footer | tee footer.log
+  header
+  debug_info
+  system_info
+  user_info
+  environmental_info
+  networking_info
+  services_info
+  software_configs
+  interesting_files
+  racf_searches
+  footer
 }
 
 while getopts k:r:e:ht option; do
