@@ -359,6 +359,22 @@ if [ "$sshrootlogin" = "yes" ]; then
   echo "\n"
 fi
 
+# Dump the automount config
+if [ -f /etc/auto.master ]
+then
+    echo "[-] Automounht config (/etc/auto.master):"
+    cat /etc/auto.master
+    echo
+    cat /etc/auto.master | awk '{print $NF}' | while read line
+    do
+        if [ -f "$line" ]
+        then
+            echo "$line:"
+            cat "$line"
+            echo
+        fi
+    done
+fi
 }
 
 environmental_info()
@@ -1005,17 +1021,17 @@ fi
 
 call_each()
 {
-  header | tee header.log
-  debug_info | tee debug_info.log
-  system_info | tee system_info.log
+#  header | tee header.log
+#  debug_info | tee debug_info.log
+#  system_info | tee system_info.log
   user_info | tee user_info.log
-  environmental_info | tee environmental_info.log
-  networking_info | tee networking_info.log
-  services_info | tee services_info.log
-  software_configs | tee software_configs.log
-  interesting_files | tee interesting_files.log
-  racf_searches | tee racf_searches.log
-  footer | tee footer.log
+#  environmental_info | tee environmental_info.log
+#  networking_info | tee networking_info.log
+#  services_info | tee services_info.log
+#  software_configs | tee software_configs.log
+#  interesting_files | tee interesting_files.log
+#  racf_searches | tee racf_searches.log
+#  footer | tee footer.log
 }
 
 while getopts k:r:e:ht option; do
