@@ -554,7 +554,7 @@ fi
 # CICS USSHOME
 USSHOME=`find /usr/lpp/cicsts/ -exec ls -laE {} 2>/dev/null \; 2>/dev/null`
 if [ "$USSHOME" ]; then
-    echo "[-] CICS Default (USSHOME) File Permissions:\n$USSHOME"
+    echo "[-] CICS Default File Permissions (/usr/lpp/cicsts)\n$USSHOME"
     echo "\n"
 fi
 
