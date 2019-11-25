@@ -214,7 +214,7 @@ fi
 
 # Display group information
 usernum=`/bin/tsocmd lg 2>/dev/null|grep -ni "USER(S)="|cut -d":" -f1`
-if [ "$usernum" ]; then
+if [ "$usernum" -ne "" ]; then
   total_lines=`/bin/tsocmd lg 2>/dev/null|wc|awk '{print $1}'`
   group_lines=`expr $total_lines - $usernum`
   group_users=`/bin/tsocmd lg 2>/dev/null|tail -n $group_lines|grep -v CONNECT|grep -v REVOKE|awk '{print "\t"$1}'`
@@ -255,12 +255,10 @@ if [ "$loggedonusrs" ]; then
 fi
 
 #can we su without supplying a password
-su -s 2>/dev/null <<EOF
-echo ''
+su -s << EOF 2>/dev/null
 EOF
 
-su_rc=$?
-if [ "$su_rc" == 0 ]; then
+if [ "$?" -eq 0 ]; then
   echo "[+] We can su to root without supplying a password!"
   echo "\n"
 fi
@@ -361,6 +359,22 @@ if [ "$sshrootlogin" = "yes" ]; then
   echo "\n"
 fi
 
+# Dump the automount config
+if [ -f /etc/auto.master ]
+then
+    echo "[-] Automounht config (/etc/auto.master):"
+    cat /etc/auto.master
+    echo
+    cat /etc/auto.master | awk '{print $NF}' | while read line
+    do
+        if [ -f "$line" ]
+        then
+            echo "$line:"
+            cat "$line"
+            echo
+        fi
+    done
+fi
 }
 
 environmental_info()
@@ -556,7 +570,7 @@ fi
 # CICS USSHOME
 USSHOME=`find /usr/lpp/cicsts/ -exec ls -laE {} 2>/dev/null \; 2>/dev/null`
 if [ "$USSHOME" ]; then
-    echo "[-] CICS Default (USSHOME) File Permissions:\n$USSHOME"
+    echo "[-] CICS Default File Permissions (/usr/lpp/cicsts)\n$USSHOME"
     echo "\n"
 fi
 
@@ -953,8 +967,7 @@ echo "\n"
 tmpfilename=`head -3 /dev/urandom | tr -cd '[:alnum:]' | cut -c -5`
 touch /tmp/$tmpfilename.omvsenum
 extattr +a /tmp/$tmpfilename.omvsenum  2>/dev/null
-attr_rc=$?
-if [ "$attr_rc" == 0 ]; then
+if [ "$?" -eq 0 ]; then
   echo "[+] We can issue extattr +a!"
   echo "\n"
 else
