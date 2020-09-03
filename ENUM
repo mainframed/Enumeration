@@ -1040,7 +1040,7 @@ USSU: PROCEDURE
       GID = strip(pw.pw_gid)
       Home = strip(pw.pw_dir)
       ucount = ucount + 1
-      usr.ucount = left(Name,8) left(UID,10) left(GID,10) left(Home, 48)
+      usr.ucount = left(Name,8) left(GID,10) left(UID,10) left(Home, 48)
     End
     usr.0 = ucount
   End
