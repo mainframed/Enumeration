@@ -80,7 +80,7 @@ Do I = 1 to NUMSYMBS
     If VALLEN = 0 then VALNAME = ''
     Else VALNAME = Storage(D2x(ECVTSYMT+4+VALOFF),VALLEN)
     NAMED = substr(SYMNAME, 2, max(0, length(SYMNAME) -2))
-    interpret NAMED||"="||VALNAME
+    interpret NAMED||'="'||VALNAME||'"'
     SAY " + " NAMED "=" VALNAME
 End  
 /* Now lets parse out these values. Starting with SYSPARM */

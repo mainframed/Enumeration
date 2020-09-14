@@ -314,6 +314,7 @@ else do
     if file then push d
     else say d
   end
+  total = j
 end
 say 'Total:' total
 if file then do
