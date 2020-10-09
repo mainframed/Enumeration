@@ -54,7 +54,7 @@
 |*     USS/OMVS user details list by Davide Girardi (@nogonosa)       *|
 |*                                                                    *|
 \*--------------------------------------------------------------------*/
-                                        
+
 
 
 PARSE SOURCE s1 s2 prg s3 name s4 s5 space .
@@ -119,10 +119,10 @@ SELECT
     say ''
     x = SVC()
     say '-----------------------------------------'
-    say '' 
+    say ''
     x = TSTA()
     say '-----------------------------------------'
-    say '' 
+    say ''
     call USSU
     say '-----------------------------------------'
     say ''
@@ -140,7 +140,7 @@ say "                _qQ$Qp_         .  .            WHO, TSTA"
 say "       .        $$$$$$$   . :  .:  ."
 say "   I$$$$$$$$$$L `?jlj7' j$l$l$$il$$I"
 say "   :$$$$$$$$$i$b.     .d$$$$$$$$$$$:"
-say "    ?$$$$$I$$%'~ `     ~*$$$$$$$$$7"               
+say "    ?$$$$$I$$%'~ `     ~*$$$$$$$$$7"
 say "     ?$$$$\'~ `.          ~#$$$$$7"
 say "      `7'~ `.   `            ~#7'"
 say "        `.                    ."
@@ -167,7 +167,7 @@ say "---z-o-s---e-n-u-m-e-r-a-t-i-o-n-------------------------------------"
     exit 8
   END
 END
-   
+
 return 0
 
 
@@ -183,10 +183,10 @@ return 0
 USERS:
 numeric digits 10
 
-cvt=ptr(16)                            /* Get CVT                    */ 
-asvt=ptr(cvt+556)+512                  /* Get asvt                   */ 
+cvt=ptr(16)                            /* Get CVT                    */
+asvt=ptr(cvt+556)+512                  /* Get asvt                   */
 
-tso_users.0 = 0 
+tso_users.0 = 0
 tasks.0 = 0
 tasks_users.0 = 0
 omvs.0 = 0
@@ -195,58 +195,58 @@ jobs.0 = 0
 jobs_users.0 = 0
 system.0 = 0
 
-asvtmaxu=ptr(asvt+4)                   /* Get max asvt entries       */ 
-Do a = 0 to asvtmaxu - 1                                                
-  ascb=stg(asvt+16+a*4,4)              /* Get ptr to ascb (Skip master) */   
-                
-  If bitand(ascb,'80000000'x) = '00000000'x Then /* If in use        */ 
-    Do                                                                  
-      ascb=c2d(ascb)                   /* Get ascb address           */ 
-      cscb=ptr(ascb+56)                /* Get CSCB address           */ 
-      chtrkid=stg(cscb+28,1)           /* Check addr space type      */ 
-      ascbjbni=ptr(ascb+172)           /* Get ascbjbni               */ 
-      ascbjbns=ptr(ascb+176)           /* Get ascbjbns               */ 
+asvtmaxu=ptr(asvt+4)                   /* Get max asvt entries       */
+Do a = 0 to asvtmaxu - 1
+  ascb=stg(asvt+16+a*4,4)              /* Get ptr to ascb (Skip master) */
+
+  If bitand(ascb,'80000000'x) = '00000000'x Then /* If in use        */
+    Do
+      ascb=c2d(ascb)                   /* Get ascb address           */
+      cscb=ptr(ascb+56)                /* Get CSCB address           */
+      chtrkid=stg(cscb+28,1)           /* Check addr space type      */
+      ascbjbni=ptr(ascb+172)           /* Get ascbjbni               */
+      ascbjbns=ptr(ascb+176)           /* Get ascbjbns               */
       asxb = ptr(ascb+108)
-      
-      acee = ptr(asxb+200)      
-      
+
+      acee = ptr(asxb+200)
+
       ftcb = ptr(asxb+4)
       ltcb = ptr(asxb+8)
-      
+
       ascboucb = ptr(ascb+144,4)
       oucbsubn = stg(ascboucb+176,4)
       oucbtrxn = stg(ascboucb+200,8) /* transaction name */
       oucbusrd = stg(ascboucb+208,8) /* userid */
-            
+
       If ascbjbns<>0 & chtrkid = '02'x Then  /* started task */
-        Do                                                             
+        Do
           assb = ptr(ascb+336)
           jsab = ptr(assb+168)
           if jsab = 0 then
             usid = ""
           else
             usid = stg(jsab+44,8)
-          
+
           tmp = tasks.0 + 1
           tasks.tmp = stg(ascbjbns,8)
           tasks_users.tmp = usid
-          tasks.0 = tmp   
-               
-          
+          tasks.0 = tmp
+
+
         End
       If ascbjbns<>0 & chtrkid = '01'x Then  /* TSO user */
-        Do                                                             
+        Do
           tmp = tso_users.0 + 1
           tso_users.tmp = stg(ascbjbns,8)
           tso_users.0 = tmp
-          
+
         End
       If ascbjbns<>0 & chtrkid = '04'x Then  /* System */
-        Do                                                             
+        Do
           tmp = system.0 + 1
           system.tmp = stg(ascbjbns,8)
           system.0 = tmp
-          
+
         End
       If strip(oucbsubn) = 'OMVS' Then /* OMVS user */
         Do
@@ -254,38 +254,38 @@ Do a = 0 to asvtmaxu - 1
           omvs.tmp = oucbtrxn
           omvs_users.tmp = oucbusrd
           omvs.0 = tmp
-        End                                                            
+        End
       If ascbjbni<>0 & chtrkid = '03'x Then  /* JOBS */
-        Do                                                             
+        Do
           If strip(oucbsubn) = 'OMVS' Then iterate
           assb = ptr(ascb+336)
           jsab = ptr(assb+168)
           usid = stg(jsab+44,8)
-          
+
           if jsab = 0 then
             usid = ""
           else
             usid = stg(jsab+44,8)
-            
+
           tmp = jobs.0 + 1
           jobs.tmp = stg(ascbjbni,8)
           jobs_users.tmp = usid
           jobs.0 = tmp
-        
-          
+
+
         End
-    End                                                                
+    End
 End
 
 say "**** Started Task - Owner *****"
 DO i = 1 to tasks.0
-   say tasks.i " - " tasks_users.i 
-END                                                       
+   say tasks.i " - " tasks_users.i
+END
 
 say ""
 say "**** TSO Users - Owner ****"
 DO i = 1 to tso_users.0
-   say tso_users.i " - " tso_users.i 
+   say tso_users.i " - " tso_users.i
 END
 
 say ""
@@ -297,10 +297,10 @@ END
 say ""
 say "**** Jobs - Owner ****"
 DO i = 1 to jobs.0
-   say jobs.i " - " jobs_users.i 
+   say jobs.i " - " jobs_users.i
 END
 
-return 0                          
+return 0
 
 SECURITY:
 say 'External Security Manager:'
@@ -309,11 +309,11 @@ say 'External Security Manager:'
 numeric digits 20
 CVT = C2D(STORAGE(10,4)) /* CVT Pointer */
 CVTRAC = C2D(STORAGE(D2X(CVT + 992),4))
-ID = STORAGE(D2X(CVTRAC),4) 
+ID = STORAGE(D2X(CVTRAC),4)
 If ID = 'RCVT' THEN DO /* RACF */
- RACFVRM  = Storage(D2x(CVTRAC + 616),4)         
+ RACFVRM  = Storage(D2x(CVTRAC + 616),4)
  RCVTDSDT = C2d(Storage(D2x(CVTRAC + 224),4))
- DSDTNUM = C2d(Storage(D2x(RCVTDSDT+4),4))             
+ DSDTNUM = C2d(Storage(D2x(RCVTDSDT+4),4))
  DSDTPRIM = STRIP(Storage(D2x(RCVTDSDT+177),44),'T')
  DSDTBACK = STRIP(Storage(D2x(RCVTDSDT+353),44),'T')
  SAY 'Product: RACF'
@@ -327,10 +327,10 @@ If ID = 'RCVT' THEN DO /* RACF */
   OFFSET = 0
   DB = ''
   DO i = 1 TO DSDTNUM
-   DSDTPRIM  = STRIP(Storage(D2x(RCVTDSDT+177+OFFSET),44),'T')       
+   DSDTPRIM  = STRIP(Storage(D2x(RCVTDSDT+177+OFFSET),44),'T')
    DSDTBACK  = STRIP(Storage(D2x(RCVTDSDT+353+OFFSET),44),'T')
    OFFSET = OFFSET + 352
-   SAY '  ('i') Primary:' DSDTPRIM 
+   SAY '  ('i') Primary:' DSDTPRIM
    SAY '  ('i') Backup: ' DSDTBACK
   END
  END
@@ -347,29 +347,29 @@ ELSE DO /* ACF2 */
  /* All credit to Mark */
  CVTJESCT = C2D(STORAGE(D2X(CVT + 296),4))
  SSCVT = C2D(STORAGE(D2X(CVTJESCT + 24),4))
- Do while SSCVT <> 0                                                           
-  SSCTSNAM = Storage(D2x(SSCVT+8),4)       /* subsystem name       */         
-  If SSCTSNAM = 'ACF2' then do                                                
-   ACCVT    = C2d(Storage(D2x(SSCVT + 20),4)) /* ACF2 CVT         */         
-   ACCPFXP  = C2d(Storage(D2x(ACCVT - 4),4))  /* ACCVT prefix     */         
-   ACCPIDL  = C2d(Storage(D2x(ACCPFXP + 8),2))  /* Len ident area */         
-   LEN_ID   = ACCPIDL-4 /* don't count ACCPIDL and ACCPIDO in len */         
-   ACCPIDS  = Strip(Storage(D2x(ACCPFXP + 12),LEN_ID)) /*sys ident*/         
-   ACF2DSNS = C2d(Storage(D2x(ACCVT + 252) ,4)) /* ACF2 DSNs      */         
-   ACF2DNUM = C2d(Storage(D2x(ACF2DSNS + 16),2)) /* # OF DSNs     */         
-   Leave                                                                     
-  End                                                                         
-  SSCVT    = C2d(Storage(D2x(SSCVT+4),4))    /* next sscvt or zero   */         
+ Do while SSCVT <> 0
+  SSCTSNAM = Storage(D2x(SSCVT+8),4)       /* subsystem name       */
+  If SSCTSNAM = 'ACF2' then do
+   ACCVT    = C2d(Storage(D2x(SSCVT + 20),4)) /* ACF2 CVT         */
+   ACCPFXP  = C2d(Storage(D2x(ACCVT - 4),4))  /* ACCVT prefix     */
+   ACCPIDL  = C2d(Storage(D2x(ACCPFXP + 8),2))  /* Len ident area */
+   LEN_ID   = ACCPIDL-4 /* don't count ACCPIDL and ACCPIDO in len */
+   ACCPIDS  = Strip(Storage(D2x(ACCPFXP + 12),LEN_ID)) /*sys ident*/
+   ACF2DSNS = C2d(Storage(D2x(ACCVT + 252) ,4)) /* ACF2 DSNs      */
+   ACF2DNUM = C2d(Storage(D2x(ACF2DSNS + 16),2)) /* # OF DSNs     */
+   Leave
+  End
+  SSCVT    = C2d(Storage(D2x(SSCVT+4),4))    /* next sscvt or zero   */
  End
  SAY 'Product: ACF2'
  SAY 'Version:' ACCPIDS
  SAY 'Dataset(s):'
- Do ADSNS = 1 to ACF2DNUM                                                    
-  ADSOFF   = ACF2DSNS + 24 + (ADSNS-1)*64                                   
-  ACF2TYPE = Storage(D2x(ADSOFF) , 8)                                       
-  ACF2DSN  = Storage(D2x(ADSOFF + 16),44)  
-  SAY '  ' ACF2TYPE '-' ACF2DSN                                 
- End 
+ Do ADSNS = 1 to ACF2DNUM
+  ADSOFF   = ACF2DSNS + 24 + (ADSNS-1)*64
+  ACF2TYPE = Storage(D2x(ADSOFF) , 8)
+  ACF2DSN  = Storage(D2x(ADSOFF + 16),44)
+  SAY '  ' ACF2TYPE '-' ACF2DSN
+ End
 END
 return 0
 
@@ -392,13 +392,13 @@ RETCODE = 0
 numeric digits 20 /* need this for D2X/C2D  */
 CVT = C2D(STORAGE(10,4)) /* CVT Pointer */
 CVTAUTHL = C2D(STORAGE(D2X(CVT + 484),4))
-IF CVTAUTHL = C2D('7FFFF001'x) THEN DO 
+IF CVTAUTHL = C2D('7FFFF001'x) THEN DO
  /* The APF Table is Dynamic, not Static */
  CVTECVT = C2D(STORAGE(D2X(CVT + 140),4))
  ECVTCSVT = C2D(STORAGE(D2X(CVTECVT + 228),4))
  APF_PTR = c2d(storage(d2x(ECVTCSVT+12),4))
- CUR = c2d(storage(d2x(APF_PTR+8),4))      
- LAST = c2d(storage(d2x(APF_PTR+12),4))    
+ CUR = c2d(storage(d2x(APF_PTR+8),4))
+ LAST = c2d(storage(d2x(APF_PTR+12),4))
  DO FOREVER
   DATASET = storage(d2x(CUR+24),44)
   MISSING = '  Yes '
@@ -427,21 +427,21 @@ IF CVTAUTHL = C2D('7FFFF001'x) THEN DO
         com.ibm.zos.v2r1.ikja300/ldsi.htm#ldsi__ldrs */
    END
    /* Here we list the found items */
-   SAY strip(VOLUME) "|" MISSING "|" STRIP(DATASET) 
+   SAY strip(VOLUME) "|" MISSING "|" STRIP(DATASET)
   END
   IF CUR = LAST THEN LEAVE
   ELSE CUR = C2D(STORAGE(D2X(CUR+8),4))
  END /* Do */
 END /* End of Dynamic */
 ELSE DO /* It's Static instead */
- NUMAPF = C2D(STORAGE(D2X(CVTAUTHL),2)) 
- LEN = C2D(STORAGE(D2X(CVTAUTHL+2),1)) 
- CUR = CVTAUTHL + 3          
- DO I = 1 TO NUMAPF                            
-  VOLUME = STORAGE(D2X(CUR),6)  
+ NUMAPF = C2D(STORAGE(D2X(CVTAUTHL),2))
+ LEN = C2D(STORAGE(D2X(CVTAUTHL+2),1))
+ CUR = CVTAUTHL + 3
+ DO I = 1 TO NUMAPF
+  VOLUME = STORAGE(D2X(CUR),6)
   DATASET = STORAGE(D2X(CUR + 7),LEN)
-  CUR = CUR + LEN + 1          
-  LEN = C2D(STORAGE(D2X(CUR-1),1)) 
+  CUR = CUR + LEN + 1
+  LEN = C2D(STORAGE(D2X(CUR-1),1))
   SAY STRIP(VOLUME) "|" STRIP(DATASET)
  END
 END
@@ -460,24 +460,24 @@ CVTVERID = STORAGE(D2X(CVT - 24),16)
 ECVT     = C2d(Storage(D2x(CVT + 140),4))
 /* OS */
 PRODNAME = Storage(D2x(CVT - 40),7)
-PRODNAM2 = Storage(D2x(ECVT+496),16)       /* point to product name*/         
-PRODNAM2 = Strip(PRODNAM2,'T')             /* del trailing blanks  */         
-VER      = Storage(D2x(ECVT+512),2)        /* point to version     */         
-REL      = Storage(D2x(ECVT+514),2)        /* point to release     */         
-MOD      = Storage(D2x(ECVT+516),2)        /* point to mod level   */         
-VRM      = VER'.'REL'.'MOD                                                    
-FMIDNUM  = Storage(D2x(CVT - 32),7)        /* point to fmid        */         
-SAY 'The OS version is 'PRODNAM2 VRM' - FMID' ,                             
-         FMIDNUM' ('PRODNAME').'         
+PRODNAM2 = Storage(D2x(ECVT+496),16)       /* point to product name*/
+PRODNAM2 = Strip(PRODNAM2,'T')             /* del trailing blanks  */
+VER      = Storage(D2x(ECVT+512),2)        /* point to version     */
+REL      = Storage(D2x(ECVT+514),2)        /* point to release     */
+MOD      = Storage(D2x(ECVT+516),2)        /* point to mod level   */
+VRM      = VER'.'REL'.'MOD
+FMIDNUM  = Storage(D2x(CVT - 32),7)        /* point to fmid        */
+SAY 'The OS version is 'PRODNAM2 VRM' - FMID' ,
+         FMIDNUM' ('PRODNAME').'
 
-/* Job Entry */ 
+/* Job Entry */
 JESSSCT = C2D(STORAGE(D2X(CVTJESCT + 24),4))
 JESPJESN = STORAGE(D2X(CVTJESCT + 28),4)
 SSCTSNAM = STORAGE(D2X(JESSSCT + 8),4)
 DO UNTIL JESSSCT = 0
  IF JESPJESN = SSCTSNAM THEN DO
-   SSCTSSVT = C2D(Storage(D2X(JESSSCT+16),4))         
-   SSCTSUSE = C2D(Storage(D2X(JESSSCT+20),4))         
+   SSCTSSVT = C2D(Storage(D2X(JESSSCT+16),4))
+   SSCTSUSE = C2D(Storage(D2X(JESSSCT+20),4))
    SSCTSUS2 = C2D(Storage(D2X(JESSSCT+28),4))
   LEAVE
  END
@@ -485,12 +485,12 @@ DO UNTIL JESSSCT = 0
 END
 
 IF JESPJESN = 'JES3' THEN DO
- JESVERS   = SYSVAR('SYSJES')                    
+ JESVERS   = SYSVAR('SYSJES')
  JESNODE  = SYSVAR('SYSNODE')
 END
 ELSE IF JESPJESN = 'JES2' THEN DO
  JESVERS = Strip(Storage(D2x(SSCTSUSE),8))
-  Select                                                               
+  Select
     When Substr(JESVERS,1,8) == 'z/OS 2.2' then , /* z/OS 2.2        */
       JESNODE  = Strip(Storage(D2x(SSCTSUS2+664),8)) /* JES2 NODE    */
     When Substr(JESVERS,1,8) == 'z/OS 2.1' | ,  /* z/OS 2.1          */
@@ -518,69 +518,69 @@ ELSE IF JESPJESN = 'JES2' THEN DO
       Substr(JESVERS,1,5) == 'OS 2.' then,   /*  through OS/390 2.9  */
       JESNODE  = Strip(Storage(D2x(SSCTSUS2+372),8)) /* JES2 NODE    */
     Otherwise ,                              /* Lower than ESA V5    */
-      If ENV = 'OMVS' then JESNODE = '*not_avail*'                     
+      If ENV = 'OMVS' then JESNODE = '*not_avail*'
       else JESNODE  = SYSVAR('SYSNODE')      /* TSO/E VAR for JESNODE*/
-  End  /* select */                                                    
+  End  /* select */
 END
 
 /* DF */
 /* From IPLINFO */
-CVTDFA   = C2d(Storage(D2x(CVT + 1216),4))         
+CVTDFA   = C2d(Storage(D2x(CVT + 1216),4))
 DFAPROD  = C2d(Storage(D2x(CVTDFA +16),1))
-If DFAPROD = 0 then do                       /* DFP not DF/SMS       */         
-  DFAREL   = C2x(Storage(D2x(CVTDFA+2),2))   /* point to DFP release */         
-  DFPVER   = Substr(DFAREL,1,1)              /* DFP Version          */         
-  DFPREL   = Substr(DFAREL,2,1)              /* DFP Release          */         
-  DFPMOD   = Substr(DFAREL,3,1)              /* DFP Mod Lvl          */         
-  DFPRD    = 'DFP'                           /* product is DFP       */         
-  DFLEV    = DFPVER || '.' || DFPREL || '.' || DFPMOD                           
-End                                                                             
-Else do                                      /* DFSMS not DFP        */         
-  DFARELS  = C2x(Storage(D2x(CVTDFA+16),4))  /* point to DF/SMS rel  */         
-  DFAVER   = X2d(Substr(DFARELS,3,2))        /* DF/SMS Version       */         
-  DFAREL   = X2d(Substr(DFARELS,5,2))        /* DF/SMS Release       */         
-  DFAMOD   = X2d(Substr(DFARELS,7,2))        /* DF/SMS Mod Lvl       */         
-  DFPRD    = 'DFSMS'                         /* product is DF/SMS    */         
-  DFLEV    = DFAVER || '.' || DFAREL || '.' || DFAMOD                           
-  If DFAPROD = 2 then DFLEV = 'OS/390' DFLEV                                    
-  If DFAPROD = 3 then do                                                        
-    DFLEV    = 'z/OS' DFLEV                                                     
-    /* Next section of code doesn't work because CRT is in key 5 */             
-       /*                                                                       
-    CVTCBSP  = C2d(Storage(D2x(CVT + 256),4))      /* point to AMCBS */         
-    CRT      = C2d(Storage(D2x(CVTCBSP + 124),4))  /* point to CRT   */         
-    CRTFMID  = Storage(D2x(CRT + 472),7)           /* DFSMS FMID     */         
-       */                                                                       
-  End /* if DFAPROD = 3 */                                                      
-End   
+If DFAPROD = 0 then do                       /* DFP not DF/SMS       */
+  DFAREL   = C2x(Storage(D2x(CVTDFA+2),2))   /* point to DFP release */
+  DFPVER   = Substr(DFAREL,1,1)              /* DFP Version          */
+  DFPREL   = Substr(DFAREL,2,1)              /* DFP Release          */
+  DFPMOD   = Substr(DFAREL,3,1)              /* DFP Mod Lvl          */
+  DFPRD    = 'DFP'                           /* product is DFP       */
+  DFLEV    = DFPVER || '.' || DFPREL || '.' || DFPMOD
+End
+Else do                                      /* DFSMS not DFP        */
+  DFARELS  = C2x(Storage(D2x(CVTDFA+16),4))  /* point to DF/SMS rel  */
+  DFAVER   = X2d(Substr(DFARELS,3,2))        /* DF/SMS Version       */
+  DFAREL   = X2d(Substr(DFARELS,5,2))        /* DF/SMS Release       */
+  DFAMOD   = X2d(Substr(DFARELS,7,2))        /* DF/SMS Mod Lvl       */
+  DFPRD    = 'DFSMS'                         /* product is DF/SMS    */
+  DFLEV    = DFAVER || '.' || DFAREL || '.' || DFAMOD
+  If DFAPROD = 2 then DFLEV = 'OS/390' DFLEV
+  If DFAPROD = 3 then do
+    DFLEV    = 'z/OS' DFLEV
+    /* Next section of code doesn't work because CRT is in key 5 */
+       /*
+    CVTCBSP  = C2d(Storage(D2x(CVT + 256),4))      /* point to AMCBS */
+    CRT      = C2d(Storage(D2x(CVTCBSP + 124),4))  /* point to CRT   */
+    CRTFMID  = Storage(D2x(CRT + 472),7)           /* DFSMS FMID     */
+       */
+  End /* if DFAPROD = 3 */
+End
 /* TSO */
-CVTTVT   = C2d(Storage(D2x(CVT + 156),4))    /* point to TSO vect tbl*/         
-TSVTLVER = Storage(D2x(CVTTVT+100),1)        /* point to TSO Version */         
-TSVTLREL = Storage(D2x(CVTTVT+101),2)        /* point to TSO Release */         
-TSVTLREL = Format(TSVTLREL)                  /* Remove leading 0     */         
-TSVTLMOD = Storage(D2x(CVTTVT+103),1)        /* point to TSO Mod Lvl */         
-TSOLEV   = TSVTLVER || '.' || TSVTLREL || '.' || TSVTLMOD             
+CVTTVT   = C2d(Storage(D2x(CVT + 156),4))    /* point to TSO vect tbl*/
+TSVTLVER = Storage(D2x(CVTTVT+100),1)        /* point to TSO Version */
+TSVTLREL = Storage(D2x(CVTTVT+101),2)        /* point to TSO Release */
+TSVTLREL = Format(TSVTLREL)                  /* Remove leading 0     */
+TSVTLMOD = Storage(D2x(CVTTVT+103),1)        /* point to TSO Mod Lvl */
+TSOLEV   = TSVTLVER || '.' || TSVTLREL || '.' || TSVTLMOD
 /* VTAM */
-CHKVTACT = Storage(D2x(CVTEXT2+64),1)        /* VTAM active flag     */         
-If bitand(CHKVTACT,'80'x) = '80'x then do      /* vtam is active     */         
-  CVTATCVT = C2d(Storage(D2x(CVTEXT2 + 65),3)) /* point to VTAM AVT  */         
-  ISTATCVT = C2d(Storage(D2x(CVTATCVT + 0),4)) /* point to VTAM CVT  */         
-  ATCVTLVL = Storage(D2x(ISTATCVT + 0),8)      /* VTAM Rel Lvl VOVRP */         
-  VTAMVER  = Substr(ATCVTLVL,3,1)              /* VTAM Version   V   */         
-  VTAMREL  = Substr(ATCVTLVL,4,1)              /* VTAM Release    R  */         
-  VTAMMOD  = Substr(ATCVTLVL,5,1)              /* VTAM Mod Lvl     P */         
-  If VTAMMOD = ' ' then VTAMLEV =  VTAMVER || '.' || VTAMREL                    
-    else VTAMLEV =  VTAMVER || '.' || VTAMREL || '.' || VTAMMOD                 
-/*                                                                   */         
-  ATCNETID = Strip(Storage(D2x(ISTATCVT + 2080),8))  /* VTAM NETID   */         
-  ATCNQNAM = Strip(Storage(D2x(ISTATCVT + 2412),17)) /* VTAM SSCPNAME*/         
-  VTAM_ACTIVE = 'YES'                                                           
-End /* if bitand (vtam is active) */                                            
-Else VTAM_ACTIVE = 'NO' 
+CHKVTACT = Storage(D2x(CVTEXT2+64),1)        /* VTAM active flag     */
+If bitand(CHKVTACT,'80'x) = '80'x then do      /* vtam is active     */
+  CVTATCVT = C2d(Storage(D2x(CVTEXT2 + 65),3)) /* point to VTAM AVT  */
+  ISTATCVT = C2d(Storage(D2x(CVTATCVT + 0),4)) /* point to VTAM CVT  */
+  ATCVTLVL = Storage(D2x(ISTATCVT + 0),8)      /* VTAM Rel Lvl VOVRP */
+  VTAMVER  = Substr(ATCVTLVL,3,1)              /* VTAM Version   V   */
+  VTAMREL  = Substr(ATCVTLVL,4,1)              /* VTAM Release    R  */
+  VTAMMOD  = Substr(ATCVTLVL,5,1)              /* VTAM Mod Lvl     P */
+  If VTAMMOD = ' ' then VTAMLEV =  VTAMVER || '.' || VTAMREL
+    else VTAMLEV =  VTAMVER || '.' || VTAMREL || '.' || VTAMMOD
+/*                                                                   */
+  ATCNETID = Strip(Storage(D2x(ISTATCVT + 2080),8))  /* VTAM NETID   */
+  ATCNQNAM = Strip(Storage(D2x(ISTATCVT + 2412),17)) /* VTAM SSCPNAME*/
+  VTAM_ACTIVE = 'YES'
+End /* if bitand (vtam is active) */
+Else VTAM_ACTIVE = 'NO'
 
 SAY 'TSO:' TSOLEV
 SAY 'JES:' JESPJESN JESVERS 'Node:' JESNODE
-IF VTAM_ACTIVE = 'YES' THEN 
+IF VTAM_ACTIVE = 'YES' THEN
   SAY 'VTAM:' VTAMLEV '(NETID:' ATCNETID') (SSCPNAME:' ATCNQNAM')'
 return 0
 
@@ -589,10 +589,10 @@ SVC:
 /* and #NUCLKUP */
 
 numeric digits 20 /* need this for D2X/C2D  */
-/* from: 
+/* from:
 https://groups.google.com/forum/#!topic/
 bit.listserv.ibm-main/XmgU5suwx9c
-CVT : CVTABEND ---> SCVTSECT : 
+CVT : CVTABEND ---> SCVTSECT :
                     SCVTSVCT ---> SVC table (mapped by IHASVC)
 */
 say 'Installed SVCs:'
@@ -630,7 +630,7 @@ Do i = 0 to 255
   ELSE APF = "N"
   IF BITAND(SVCTYPE,'04'x) = '04'x THEN ESR = 'Y'
   ELSE ESR = "N"
-  
+
   SAY C2X(STORAGE(D2X(SCVTSVCT+(i*8)),4)) "|",
       RIGHT(i,3,0) "|" RIGHT(D2X(i),2,0) "| ",
       TYPE "  | " APF " | " ESR
@@ -652,7 +652,7 @@ TCBTIO = C2D(STORAGE(D2X(PSALCCAV + 12), 4)) /* Points to TIOT PAGE 338 */
 TIOT = TCBTIO + 24
 TIOELNGH = 0
 DD = ''
-IF lvl < 1 THEN DO 
+IF lvl < 1 THEN DO
   say 'Non-Verbose. Only displaying SYSPROC/SYSEXEC'
   say 'DD       | DATASET Name'
   say '---------|-------------'
@@ -675,18 +675,18 @@ DO FOREVER
       SAY DD "|" DATASET
   END
   ELSE
-    SAY DD "|" VOLUME "|" DATASET 
+    SAY DD "|" VOLUME "|" DATASET
 END
-RETURN 0 
+RETURN 0
 
 CAT:
 /* Master Catalog routing from IPLINFO */
 CVT      = C2d(Storage(10,4))
 ECVT     = C2d(Storage(D2x(CVT + 140),4))
-ECVTIPA  = C2d(Storage(D2x(ECVT + 392),4)) /* point to IPA         */         
+ECVTIPA  = C2d(Storage(D2x(ECVT + 392),4)) /* point to IPA         */
 IPASCAT  = Storage(D2x(ECVTIPA + 224),63)
-MCATDSN  = Strip(Substr(IPASCAT,11,44))    /* master catalog dsn   */         
-MCATVOL  = Substr(IPASCAT,1,6) 
+MCATDSN  = Strip(Substr(IPASCAT,11,44))    /* master catalog dsn   */
+MCATVOL  = Substr(IPASCAT,1,6)
 say 'Master Catalog:' MCATDSN 'Volume:' MCATVOL
 return 0
 
@@ -1022,10 +1022,10 @@ END
 IF LENGTH(ARG(1)) // 8 /= 0 THEN
 SAY HEXOUT "|" SUBSTR(ARG(1),j,LENGTH(ARG(1)))
 RETURN 0
-/*-------------------------------------------------------------------*/ 
-ptr:  Return c2d(storage(d2x(Arg(1)),4))     /* Return a pointer */     
-/*-------------------------------------------------------------------*/ 
-stg:  Return storage(d2x(Arg(1)),Arg(2))     /* Return storage */       
+/*-------------------------------------------------------------------*/
+ptr:  Return c2d(storage(d2x(Arg(1)),4))     /* Return a pointer */
+/*-------------------------------------------------------------------*/
+stg:  Return storage(d2x(Arg(1)),Arg(2))     /* Return storage */
 
 USSU: PROCEDURE
   call syscalls 'ON'

@@ -28,22 +28,22 @@ IPL_MEMBER = LOAD || Substr(IPLPARM,5,2)
 DO I = 0 TO 9
   IF SYSDSN("'SYS"||I||".IPLPARM("|| IPL_MEMBER ||")'") == "OK" THEN DO
     IPL_DATASET = "SYS"||I||".IPLPARM"
-    LEAVE 
+    LEAVE
   END
 END
 IPL_DSN = IPL_DATASET ||"("||IPL_MEMBER||")"
 SAY " + IPL Dataset:" IPL_DSN
 SAY " + VOLUME:" IPL_VOLUME
 /* Step 2 Find SYSPARM, Symbols and concatenation */
-/* The system uses the definitions in all IEASYMxx members for which 
-   suffixes are specified. If the system finds duplicate definitions, the 
+/* The system uses the definitions in all IEASYMxx members for which
+   suffixes are specified. If the system finds duplicate definitions, the
    last definition overrides any previous definitions */
-ADDRESS TSO 
+ADDRESS TSO
 "ALLOC F(INFILE) DSN('"||IPL_DSN||"') SHR REU"
 "EXECIO * DISKR INFILE ( FINIS STEM IPLPARM."
 "FREE F(INFILE)"
 PARMNUM = 0
-DO I = 1 TO IPLPARM.0 
+DO I = 1 TO IPLPARM.0
     IF INDEX(IPLPARM.I,"SYSPARM") >0 THEN DO
         PARSE VAR IPLPARM.I . PARM .
         SPARM = strip(PARM)
@@ -64,7 +64,7 @@ DO I = 1 TO IPLPARM.0
         PARMLIB.PARMNUM = strip(PARM)
         SAY " + PARMLIB #"||PARMNUM "is" PARMLIB.PARMNUM
     END
-END 
+END
 PARMLIB.0 = PARMNUM
 /* Getting symbols, courtesy of IPLINFO */
 SAY "> System Symbols"
@@ -82,7 +82,7 @@ Do I = 1 to NUMSYMBS
     NAMED = substr(SYMNAME, 2, max(0, length(SYMNAME) -2))
     interpret NAMED||'="'||VALNAME||'"'
     SAY " + " NAMED "=" VALNAME
-End  
+End
 /* Now lets parse out these values. Starting with SYSPARM */
 /* We do this because SYM/SYS could look like */
 /* this: (00,21,56,L) but we've already removed the () */
@@ -122,7 +122,7 @@ END
 SAY " + ORDER | EXISTS | DATASET"
 DO i = 1 TO SYSPARM.0
   DO j = 1 to PARMLIB.0
-    IF SYSDSN("'"||PARMLIB.j||"(IEASYS"|| SYSPARM.i||")'") == "OK" THEN 
+    IF SYSDSN("'"||PARMLIB.j||"(IEASYS"|| SYSPARM.i||")'") == "OK" THEN
       SAY "     "|| right(j,2,0) || "  |  YES   | " ||,
           PARMLIB.j||"(IEASYS"|| SYSPARM.i||")"
     ELSE
@@ -146,7 +146,7 @@ END
 SAY " + ORDER | EXISTS | DATASET"
 DO i = 1 TO IEASYM.0
   DO j = 1 to PARMLIB.0
-    IF SYSDSN("'"||PARMLIB.j||"(IEASYM"|| IEASYM.i||")'") == "OK" THEN 
+    IF SYSDSN("'"||PARMLIB.j||"(IEASYM"|| IEASYM.i||")'") == "OK" THEN
       SAY "     "|| right(j,2,0) || "  |  YES   | " ||,
           PARMLIB.j||"(IEASYM"|| IEASYM.i||")"
     ELSE
@@ -159,7 +159,7 @@ END
 /* https://www.ibm.com/support/knowledgecenter/en/
    SSLTBW_2.3.0/com.ibm.zos.v2r3.ieae200/ieae200266.htm */
 SAY "> Parsing" SYSPARM
-ADDRESS TSO 
+ADDRESS TSO
 "ALLOC F(INFILE) DSN('"||IEASYSxx||"') SHR REU"
 "EXECIO * DISKR INFILE ( FINIS STEM IEASYS."
 "FREE F(INFILE)"
@@ -175,7 +175,7 @@ do ix = 1 While Length(SEARCH_ITEMS) > 0
   Parse Var SEARCH_ITEMS ITEMS.ix SEARCH_ITEMS
 end
 ITEMS.0 = ix - 1
-DO I = 1 TO IEASYS.0 
+DO I = 1 TO IEASYS.0
   DO J = 1 TO ITEMS.0
     IF INDEX(IEASYS.I,ITEMS.J||"=") == 1 THEN DO
         SAY " +" ITEMS.J "Found"
@@ -199,9 +199,9 @@ DO J = 1 to ITEMS.0
         /* So we change them here */
         IF ITEMS.j == "CMD" THEN
             DSN = "'"||PARMLIB.i||"(COMMND"||PDS||")'"
-        ELSE IF ITEMS.j == "OMVS" THEN 
+        ELSE IF ITEMS.j == "OMVS" THEN
             DSN = "'"||PARMLIB.i||"(BPXPRM"||PDS||")'"
-        ELSE IF ITEMS.j == "MSTRJCL" THEN 
+        ELSE IF ITEMS.j == "MSTRJCL" THEN
             DSN = "'"||PARMLIB.i||"(MSTJCL"||PDS||")'"
         ELSE IF ITEMS.j == "LPA" THEN
             DSN = "'"||PARMLIB.i||"(LPALST"||PDS||")'"
@@ -219,9 +219,9 @@ DO J = 1 to ITEMS.0
     END
 END
 
-Say "> Parsing MSTJCL (Master JCL File)" 
+Say "> Parsing MSTJCL (Master JCL File)"
 Say " + using:" MSTRJCL.dsn1
-ADDRESS TSO 
+ADDRESS TSO
 "ALLOC F(INFILE) DSN('"||MSTRJCL.dsn1||"') SHR REU"
 "EXECIO * DISKR INFILE ( FINIS STEM MSTJCL."
 "FREE F(INFILE)"
@@ -258,7 +258,7 @@ DO i = 1 TO procs.0
 END
 Say "> Parsing COMMNDxx (commands automatically issued at initialization)"
 Say " + Using:" CMD.dsn1
-ADDRESS TSO 
+ADDRESS TSO
 "ALLOC F(INFILE) DSN('"||CMD.dsn1||"') SHR REU"
 "EXECIO * DISKR INFILE ( FINIS STEM COMMND."
 "FREE F(INFILE)"
@@ -270,14 +270,14 @@ DO i = 1 to COMMND.0
     command = strip(COMMND.i)
     if substr(command,1,6) == "COM='S" THEN DO
         say ' + Parsing Command:' substr(command,5)
-        if pos(",",command,6) > 0 THEN 
+        if pos(",",command,6) > 0 THEN
             sproc = symbols(substr(command,8,pos(",",command,6)-8))
-        else 
+        else
             sproc = symbols(strip(substr(command,8),,"'"))
         say "  + Searching for proc:" sproc
         do j = 1 to procs.0
             IF SYSDSN("'"||procs.j ||"("sproc||")'") == "OK" THEN
-            say "     Found" procs.j ||"("sproc||")" 
+            say "     Found" procs.j ||"("sproc||")"
         end
     end
 end
@@ -287,7 +287,7 @@ do i = 1 to OMVS.0
         DSN = "'"||PARMLIB.j||"(BPXPRM"||OMVS.i||")'"
         if SYSDSN(DSN) == "OK" THEN DO
             SAY " + Dataset:" DSN
-            ADDRESS TSO 
+            ADDRESS TSO
             "ALLOC F(INFILE) DSN("||DSN||") SHR REU"
             "EXECIO * DISKR INFILE ( FINIS STEM BPXPRM."
             "FREE F(INFILE)"
@@ -330,7 +330,7 @@ return -1
 /* REPLACE SYMBOLS */
 /* Symbols look like &SYM */
 /* This function finds all symbols in a string and replaces them */
-SYMBOLS: 
+SYMBOLS:
 parse arg text
 totals = FINDALL(text)
 l = length(strip(text))
@@ -371,17 +371,17 @@ return count
 LISTMEMBERS: procedure
 parse arg pdsname
 say "+ Listing Members of:" pdsname
-X=OUTTRAP("RES.") 
-ADDRESS TSO "LISTDS ('"pdsname"') MEMBERS" 
-X=OUTTRAP("OFF") 
-DO I = 7 TO RES.0 
- RES.I = STRIP(RES.I) 
- DS = pdsname || "(" || RES.I || ")" 
+X=OUTTRAP("RES.")
+ADDRESS TSO "LISTDS ('"pdsname"') MEMBERS"
+X=OUTTRAP("OFF")
+DO I = 7 TO RES.0
+ RES.I = STRIP(RES.I)
+ DS = pdsname || "(" || RES.I || ")"
  SAY " + " DS
-END 
+END
 return
 
-smallest: procedure 
+smallest: procedure
     parse arg barf
     do i = 1 by 1 while barf <> ''
         parse var barf sortme.i ' ' barf
@@ -389,7 +389,7 @@ smallest: procedure
     sortme.0 = i-1
     tmp = 10000
     do i = 1 to sortme.0
-        if tmp > sortme.i & sortme.i /= 0 then 
+        if tmp > sortme.i & sortme.i /= 0 then
             tmp = sortme.i
     end
     if tmp == 10000 then tmp = 0

@@ -21,3 +21,6 @@
 #                                                              
 # Default DSORG and DCB info                                   
 * PO FB 80 32720                                               
+ASM PO FB 80 32720 
+C PO VB 255 32720 
+EXEC PO FB 80 27920 
