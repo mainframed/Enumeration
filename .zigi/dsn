@@ -1,0 +1,23 @@
+# ZIGI dsn-file                                                
+# This file needs to be here.                                  
+# Don't edit unless you know what you're doing :)              
+#                                                              
+# record format is (case insensitive):                         
+#                                                              
+# Position - description                                       
+#                                                              
+# 1 - directory name which will be prefixed by the             
+#     defined HLQ to create the z/OS dataset                   
+#     (* defines the default)                                  
+# 2 - PS or PO (dataset organization)                          
+#     PS for a flat file                                       
+#     PO for a directory and thus a partitioned dataset        
+# 3 - record format (FB or VB)                                 
+# 4 - lrecl                                                    
+# 5 - blksize                                                  
+#     0 is allowed if system determined blksize is enabled     
+# 6 - extension (optional - if used then no period)            
+#     file extension to be used for PDS members in USS         
+#                                                              
+# Default DSORG and DCB info                                   
+* PO FB 80 32720                                               
