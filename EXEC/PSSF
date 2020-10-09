@@ -134,7 +134,7 @@ DO FOREVER
   /*                                                                  */
   /* The status of a port if "filtered" by default                    */
   /* The next code detects the real status of a port                  */
-   
+
   /* Now we check the sockets */
   /* READ/WRITE means an open socket */
   /* Exception means closed */

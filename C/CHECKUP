@@ -3,25 +3,25 @@
    To use in TSO (after compile in Unix):
    /bin/tsocmd "ALLOCATE DATASET(PDSE) NEW VOLUME(DEV) SPACE(10,10) BLOCK(200) BLKSIZE(6144) RECFM(U) LRECL(0) DSNTYPE(LIBRARY) DSORG(PO)"
    cp -X ./checkp "//'<HLQ>.PDSE(CHECKP)'"
-
+ 
    in TSO: call '<HLQ>.PDSE(CHECKP)' '<port>/-a'
-
+ 
    License GPL
    Copyright Soldier of FORTRAN
-
+ 
    Purpose: If you don't have access to netstat
             this will print a list of potential open ports
 	    or checks on a single port.
 	    The output is comma sperated to be copied to Nmap.
-
+ 
 */
-
+ 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <stdio.h>
-
+ 
 int checkp(int);
 int checkp(int port)
 {
@@ -29,7 +29,7 @@ int checkp(int port)
     struct sockaddr_in server; /* server address information          */
     int s;                     /* socket for accepting connections    */
     int result = 0;            /* 1 open 0 closed */
-    if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)   
+    if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         printf("[!] ERROR Cannot open a socket! Are you sure you have permission?");
         exit(2);
@@ -40,18 +40,18 @@ int checkp(int port)
     if (bind(s, (struct sockaddr *)&server, sizeof(server)) < 0)
     {
         result = 1;
-    } 
+    }
     close(s);
     return result;
 }
-
+ 
 main(argc, argv)
 int argc;
 char **argv;
 {
     unsigned short port;       /* port server binds to */
     int results;               /* We got em            */
-    int i;                     /* for loop             */ 
+    int i;                     /* for loop             */
     char* logo = "\n"
 " _______ __               __        _______ \n"
 "|   _   |  |--.-----.----|  |--.   |   _   |\n"
@@ -60,16 +60,16 @@ char **argv;
 "|:  1   |                          |:  |    \n"
 "|::.. . |                          |::.|    \n"
 "`-------'                          `---'    \n\n";
-    printf("%s", logo);		                                                
-
+    printf("%s", logo);		
+ 
     if (argc != 2)
     {
         fprintf(stderr, "Usage:\n Check one port:  %s <port>\n Check all ports: %s -a\n\n", argv[0], argv[0]);
         exit(1);
     }
-
+ 
     /* First check the arguments */
-
+ 
      if (0 == strcmp(argv[1], "-a")) {
          printf("*** You're in the butter zone now baby!\n");
 	 printf("*** Checking ports 1 through 65535\n");
@@ -90,7 +90,7 @@ char **argv;
 		 printf("*** %d is not in use\n", port);
 	 }
      }
-
+ 
     printf("*** Done\n\n");
     exit(0);
 }
