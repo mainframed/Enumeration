@@ -11,7 +11,7 @@ CALL PATH
 
 exit
 
-PATH: 
+PATH:
 /* Identify DDNAME Allocated Datasets */
 /* from CBT FILE 496 */
 /* Like the $PATH in UNIX */
@@ -57,54 +57,66 @@ SYSEXEC.0 = 0
 DO i = 1 to j
   ACCESS = 'NONE'
   if racf.i == "GENERIC" THEN DO
-    OUTG = OUTTRAP('OUTG.') 
+    OUTG = OUTTRAP('OUTG.')
     "LD DA('"dsn.i"') GEN"
     IF OUTG.0>1 THEN DO
         ACCESS = WORD(OUTG.17,1)
     END
   end
   else if racf.i == 'DISCRETE' THEN DO
-    OUTG = OUTTRAP('OUTG.') 
+    OUTG = OUTTRAP('OUTG.')
     "LD DA('"dsn.i"')"
     IF OUTG.0>1 THEN DO
         ACCESS = WORD(OUTG.17,1)
     END
   end
-  if type.i == 'SYSPROC ' then do 
+  if type.i == 'SYSPROC ' then do
     SYSPROC.0 = SYSPROC.0 + 1
     x = SYSPROC.0
-    SYSPROC.x = "| "||LEFT(dsn.i,longest+1)||" | "||vol.i||" | "||center(create.i,12)||" | "||center(ref.i,14)||" | "||LEFT(ACCESS,7)||"|"
+    SYSPROC.x = "| "||LEFT(dsn.i,longest+1)||" | "||vol.i||" | " -
+    ||center(create.i,12)||" | "||center(ref.i,14)||" | " -
+    ||LEFT(ACCESS,7)||"|"
   end
   else do
     SYSEXEC.0 = SYSEXEC.0 + 1
     x = SYSEXEC.0
-    SYSEXEC.x = "| "||LEFT(dsn.i,longest+1)||" | "||vol.i||" | "||center(create.i,12)||" | "||center(ref.i,14)||" | "||LEFT(ACCESS,7)||"|"
+    SYSEXEC.x = "| "||LEFT(dsn.i,longest+1)||" | "||vol.i||" | " -
+    ||center(create.i,12)||" | "||center(ref.i,14)||" | " -
+    ||LEFT(ACCESS,7)||"|"
   end
-end 
+end
 Say 'SYSPROC:'
-say "+-"||left('',longest+1,'-')      ||"---------------------------------------------------+"
-SAY "|" LEFT("Sysproc DSN",longest+1) ||" | Volume | Created Date | Reference Date | Access |"
-say "|-"||left('',longest+1,'-')      ||"-|--------|--------------|----------------|--------|"
+say "+-"||left('',longest+1,'-') -
+||"---------------------------------------------------+"
+SAY "|" LEFT("Sysproc DSN",longest+1) -
+||" | Volume | Created Date | Reference Date | Access |"
+say "|-"||left('',longest+1,'-') -
+||"-|--------|--------------|----------------|--------|"
 do i = 1 to SYSPROC.0
   say SYSPROC.i
 end
-say "+-"||left('',longest+1,'-')      ||"---------------------------------------------------+"
+say "+-"||left('',longest+1,'-') -
+||"---------------------------------------------------+"
 SAY 'SYSEXEC:'
-say "+-"||left('',longest+1,'-')      ||"---------------------------------------------------+"
-SAY "|" LEFT("Sysexec DSN",longest+1) ||" | Volume | Created Date | Reference Date | Access |"
-say "|-"||left('',longest+1,'-')      ||"-|--------|--------------|----------------|--------|"
+say "+-"||left('',longest+1,'-') -
+ ||"---------------------------------------------------+"
+SAY "|" LEFT("Sysexec DSN",longest+1) -
+||" | Volume | Created Date | Reference Date | Access |"
+say "|-"||left('',longest+1,'-') -
+||"-|--------|--------------|----------------|--------|"
 do i = 1 to SYSEXEC.0
   say SYSEXEC.i
 end
-say "+-"||left('',longest+1,'-')      ||"---------------------------------------------------+"
+say "+-"||left('',longest+1,'-') -
+||"---------------------------------------------------+"
 
-RETURN 0 
+RETURN 0
 
 
 date_good:
   /* parses the date */
   parse arg YEAR '/' DAY
-return DATE('E',SUBSTR(YEAR,3,2)RIGHT(DAY,3,'0'),'J') 
+return DATE('E',SUBSTR(YEAR,3,2)RIGHT(DAY,3,'0'),'J')
 
 
 /*--------------------------------------------------------------------*\
