@@ -100,7 +100,7 @@ say "+-"||left('',longest+1,'-')||,
 SAY 'SYSEXEC:'
 say "+-"||left('',longest+1,'-')||,
 "---------------------------------------------------+"
-SAY "|" LEFT("Sysexec DSN",longest+1) -
+SAY "|" LEFT("Sysexec DSN",longest+1)||,
 " | Volume | Created Date | Reference Date | Access |"
 say "|-"||left('',longest+1,'-')||,
 "-|--------|--------------|----------------|--------|"
