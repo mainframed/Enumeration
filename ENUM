@@ -798,11 +798,24 @@ say ""
 RCVTSWPW = Strip(Storage(D2x(RCVT + 440),8))  /* rvary switch pw     */
 if c2x(RCVTSWPW) = "0000000000000000" then
  say "RVARY SWITCH password is set to default value of YES"
- else say "RVARY SWITCH password DES hash:" c2x(RCVTSWPW)
+ else do
+  FoundSWPW = 1
+  say "RVARY SWITCH password DES hash:" c2x(RCVTSWPW)
+ end
 RCVTINPW = Strip(Storage(D2x(RCVT + 448),8))  /* rvary status pw     */
 if c2x(RCVTINPW) = "0000000000000000" then
  say "RVARY STATUS password is set to default value of YES"
- else say "RVARY STATUS password DES hash:" c2x(RCVTINPW)
+ else do
+  FoundINPW = 1
+  say "RVARY STATUS password DES hash:" c2x(RCVTINPW)
+ end
+if FoundSWPW = 1 | FoundINPW = 1 then do
+ say "John the ripper RVARY cracking input:"
+ if FoundSWPW = 1 then
+  say "SWITCH:"||"$rvary$**"||c2x(RCVTSWPW)
+ if FoundINPW = 1 then
+  say "STATUS:"||"$rvary$**"||c2x(RCVTINPW)
+end
 say ""
 /* Get password and other related settings */
 RCVTPINV  = C2d(Storage(D2x(RCVT + 155),1))  /* point to RCVTPINV   */
