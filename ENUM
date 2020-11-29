@@ -812,9 +812,9 @@ if c2x(RCVTINPW) = "0000000000000000" then
 if FoundSWPW = 1 | FoundINPW = 1 then do
  say "John the ripper RVARY cracking input:"
  if FoundSWPW = 1 then
-  say "SWITCH:"||"$rvary$*"||c2x(RCVTSWPW)
+  say "SWITCH:"||"$rvary$"||c2x(RCVTSWPW)
  if FoundINPW = 1 then
-  say "STATUS:"||"$rvary$*"||c2x(RCVTINPW)
+  say "STATUS:"||"$rvary$"||c2x(RCVTINPW)
 end
 say ""
 /* Get password and other related settings */
