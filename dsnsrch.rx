@@ -1,0 +1,124 @@
+/* REXX */
+/* DSNSRCH = Dataset Search */
+/* Based on */
+/* https://github.com/ayoul3/Rexx_scripts/blob/master/REXX.SEARCH */
+
+/* Usage: Run CATMAP3 to get a list of datasets and your */
+/*        access to them */
+/* Extract the dataset names of all the dataset you have */
+/* READ or greater access to and place them in a dataset */
+/* Then call this script with the name of that dataset */
+/* Author: Phil Young - NetSPI */
+/* License: MIT */
+
+PARSE ARG INDD
+VERBOSE = 1
+skip_unformatted = 1
+Say "*** Opening list of datasets to search:" INDD
+
+address tso "alloc file(input) dataset('"INDD"') SHR"
+
+if RC \= 0 then do
+   say '*** ! Error allocating file' INDD
+   return
+end
+address tso "execio * diskr input (stem input. finis)"
+address tso "free file(input)"
+
+do i = 1 to input.0
+
+   X = SYSDNS("'"input.i"'")
+   if X \= 'OK' then interate
+   call listdsi "'"input.i"'"
+
+   if SYSRECFM = "U" then do
+      /* Skip Unformatted datasets, they're usually loadlib */
+      if skip_unformatted then iterate
+   end
+
+   say "*** Searching" input.i
+     if sysdsorg ="PO" then
+     do
+        call outtrap "mbrs."
+        address tso "LISTDS" "'"input.i"' members"
+        call outtrap 'off'
+        idx = 0
+        do j=1 to mbrs.0
+          if mbrs.j ="--MEMBERS--" then do
+             idx=1
+          end
+          if idx =1 & mbrs.j \= "--MEMBERS--" then do
+             tmp = input.i||"("||strip(mbrs.j,'B')||")"
+             call searchDS tmp,STRING
+          end
+        end
+
+     end
+
+     else if sysdsorg="VS" then do
+       call outtrap "entries."
+       address tso "LISTCAT ENTRY('"input.i"')"
+       call outtrap "off"
+       if word(entries.1,1) ="DATA" then do
+            call searchVS input.i,STRING,TYPE,REST
+        end
+       else if word(entries.1,1)="CLUSTER" then do
+            DT_DATA = word(entries.3,3)
+            parse var DT_DATA HLQ_D "." RRRR
+             if HLQ_D <> HLQ then do
+                call searchVS DT_DATA,STRING
+             end
+       end
+     end
+     else if sysdsorg ="PS" then do
+     call searchDS input.i,STRING
+     end
+end
+
+exit
+
+searchVS:
+procedure
+    DT_NAME = arg(1)
+    STRING = translate(arg(2))
+    call outtrap "lines."
+    address tso "PRINT INDATASET('"DT_NAME"')"
+    call outtrap "off"
+    if RC <>0 then  do
+       say "*** ! Error reading VSAM file " DT_NAME
+    end
+    do k=1 to lines.0
+      if (index(lines.k,STRING) > 0) then,
+      do
+        out=DT_NAME k lines.k
+        say "!!! Found -" out
+      end
+    end
+    return
+
+exit
+
+searchDS:
+procedure
+    DT_NAME =arg(1)
+    STRING = translate(arg(2))
+    DT_NAME = strip(DT_NAME,'B')
+    address tso "alloc file(input) dataset('"DT_NAME"') SHR"
+    if RC \= 0 then
+       do
+          say '*** ! Error allocating file' DT_NAME
+          return
+       end
+
+    address tso "execio * diskr input (stem input. finis)"
+    address tso "free file(input)"
+
+    do j=1 to input.0
+       input.j =translate(input.j)
+       if (index(input.j,STRING) > 0) then,
+         do
+            out = DT_NAME j input.j
+            say "!!! Found -" out
+         end
+    end
+    return
