@@ -4,7 +4,7 @@ import java.net.Socket;
 import java.net.InetAddress;
 
 // 
-// Decompiled by Procyon v0.5.36
+// Tool by Owen aka SirCICSAlot
 // 
 
 public class ps
