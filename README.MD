@@ -1,4 +1,56 @@
-# Z/OS System Enumeration Scripts
+# Z/OS System Enumeration Scripts and Tools
+
+## ACCESS
+
+A simple ASM progam to check your access to one dataset. Mostly used as an excercise to learn how to pass and read parms in HLASM in TSO. 
+
+To assemble you can use the following JCL:
+
+```jcl
+//ACCESS JOB (1),'ACCESS',CLASS=A,MSGCLASS=Y,
+//         NOTIFY=&SYSUID,MSGLEVEL=(1,1)
+//ASM      EXEC PROC=HLASMCL,PARM.L=(TEST),PARM.C=(TEST)
+//SYSIN    DD   DSN=SOME.SOURCE.PDS(ACCESS),DISP=(SHR)
+//L.SYSLMOD DD DSN=SOME.LINKLIB(ACCESS),DISP=(SHR)
+//L.SYSPRINT  DD SYSOUT=*
+```
+
+Making sure to change `SOME.SOURCE.PDS` to your source dataset (or you can replace that line with `//SYSIN DD *` and on the next lines put the source inline), and changing `SOME.LINKLIB` to a partitioned dataset formatted for binaries.
+
+Using: From **TSO** you can run the program with `call 'SOME.LINKLIB(ACCESS)' 'SOME.DATASET'`
+
+## APFCHECK
+
+A ASM program that uses racroute to check your access to APF authorized datasets, this file contains everything you need to run and check your access. 
+
+Change the load library (where the assembled program will go) from `FOO.LOAD.LIB` to a dataset you want the assembled tool to go, submit the JCL and read the output in SDSF or in TSO with `OUTPUT <jobname>`. 
+
+## checkp.c
+
+This is a C program written to check what ports are currently open. Sometimes users aren't allowed to run the `NETSTAT` command in TSO, or `netstat`/`onetstat` in UNIX. This C program attempts to open all ports and reports which ports are already reserved. 
+
+Compile in UNIX/OMVS with: `c89 -D _OE_SOCKETS -o checkp checkp.c`
+
+To use in TSO (after compiling in Unix) first create the PDS, change `<HLQ>` to your hlq:
+
+```bash
+/bin/tsocmd "ALLOCATE DATASET(PDSE) NEW VOLUME(DEV) SPACE(10,10) BLOCK(200) BLKSIZE(6144) RECFM(U) LRECL(0) DSNTYPE(LIBRARY) DSORG(PO)"
+cp -X ./checkp "//'<HLQ>.PDSE(CHECKP)'"
+```
+
+Then in TSO run it with: call `'<HLQ>.PDSE(CHECKP)' '<port>/-a'`
+
+Usage: either pass it a port or `-a` to check all ports. For example `./checkp -a` or `./checkp 12345`
+
+## DSNSRCH.rx
+
+This is a rexx script that takes a dataset which contains a list of datasets and then searches those datasets and all members for specific words. 
+
+Typically you'd run a tool like CATMAP3 to get a list of datasets, print out all the datasets you have READ or greater access to and put just the dataset names in a different dataset. 
+
+Usage: `EX DSNSRCH 'SOME.PDS.WITH(DATASETS) STRING TO SEARCH FOR' `
+
+e.g. `EX DSNSRCH 'SOF.PENTEST(DSNS) PASSWORD='`
 
 ## ENUM
 
@@ -100,6 +152,42 @@ Big thanks goes out to the following for information which I used to build this 
 * File # 221 EDP Auditor REXX tools updated from Lee Conyers: http://www.cbttape.org/ftp/cbt/CBT221.zip
 * File # 496 REXX exec to do LISTA (display allocations): http://www.cbttape.org/ftp/cbt/CBT496.zip
 
+
+## portscan.java
+
+This is essentially a SYN packet sprayer. By itself it can be used to check for openports on other hosts. But when paired with Egressbuster it allows us to find potentially open egress ports from the mainframe to our Linux machine. On the linux machine download and run https://github.com/trustedsec/egressbuster/blob/master/egress_listener.py with the following: `python egress_listener.py 0.0.0.0 enps60 0.0.0.0/0` where 0.0.0.0 is the IP address to listen on, enps60 is the interface (you can get both from `ip -c a`) and 0.0.0.0/0 is what IP address we accept, in this case all. 
+
+On the mainframe, in USS/OMVS run the following:
+
+1. `javac portscan.java`
+2. `java -cp . portscan host, start port, end port, [-t timeout] [-d debug]` where `-t timeout` is the timeout in miliseconds, 1000 is the default, and `-d` is optional debug messaging. 
+
+Observe for connections in the Linux terminal, there will be no confirmation in the mainframe terminal, unless the packets come back in a reasonable amount of time, if you used `-d` then you'll see the packets sent out. 
+
+## PSSF.rx
+
+The Port Scanning Service Facility. A REXX script that does port scanning, VERY slowly
+
+```
+USAGE:
+
+>>-PSSF-----host--+------------------------------------+---------+----->
+                  |-PORT--customport----------------|  '-VERBOSE-'      
+                  '-PFROM--firstport--PTO--lastport-'                   
+>---+-------+-><                                                        
+    '-DEBUG-'                                                           
+
+  host - the host to scan (mandatory)
+  PORT - a single port to scan mutually exclusive with the next options
+  PFROM PTO - scans a range of ports, mutually exclusive with PORT
+  VERBOSE - verbose mode
+  DEBUG - very informative debug messages
+```
+
+## SEARCHRX.rx
+
+A very simple rexx script to check for some common things in RACF, probably easier to type them out. 
+
 ## STARTMAP
 
 This REXX script was designed to map out mainframe startup (IPL) settings, files, proclibs, etc. Simply call the 
@@ -132,79 +220,6 @@ There's a lot of results to part here so recording your output might be a good i
   + PARMLIB #2 is FEU.Z22B.PARMLIB
   + PARMLIB #3 is ADCD.Z22B.PARMLIB
   + PARMLIB #4 is SYS1.PARMLIB
-```
-
-## CATMAP
-
-This tool was developed to help identify all (nonvsam) datasets (and their members) on z/OS. 
-
-
-```
-ex 'h4cked.catmap' '-h'
-
-Catalog            .'.
-   Mapper           : :
-                     : :
-                      | |
-                      | |
-    /:---/:   _,---._ | |
-   /:   :  :,'       :. ;
-  ( O   O   )           ;
-   :.=o=__,'            :
-     /         _,--.__   :
-    /  _ )   ,'   :-. :-. :
-   / ,' /  ,'        : : : :
-  / /  / ,'          (,_)(,_)
- (,;  (,,)                SoF
-
-CATMAP - A tool to walk the catalog and datasets
-
-Arguments:
- -h this help
- -b brutal mode (gets PDS/PDSE member listings)
- -verbose enables verbose mode
- -f <dataset name> saves output to a file
-     (-vol <volume>) Volume for dataset - optional
-      (-space <# cylinders>) size of dataset in cylinders
-                             100 cyls = 59 MB - optional
- 
- Defaults:
-  Verbose Mode: Disabled
-  Brutal Mode:  Disabled
-  Space:        59MB
-  Volume:       System Default
- 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!                                                     !!
-!! WARNING: Brutal mode may create thousands of access !!
-!!          violations. Use with caution.              !!
-!!                                                     !!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-```
-
-Examples usage:
-
-```
-ex 'h4cked.catmap' '-b'
-  
-  
-  
- Starting BRUTAL MODE
- ADCD.DYNISPF.ISPPLIB(IBMPRODS)
- ADCD.DYNISPF.ISPPLIB(IPC@PRIM)
- ADCD.DYNISPF.ISPPLIB(ISR@PRIM)
- ADCD.DYNISPF.ISPPLIB(ISRFPA)
- ADCD.DYNISPF.ISPPLIB(ISRFP01)
- ADCD.DYNISPF.ISPPLIB(ISRFP05)
- ADCD.DYNISPF.ISPPLIB(ISRJPA)
- ADCD.DYNISPF.ISPPLIB(ISRJPB)
- ADCD.DYNISPF.ISPPLIB(ISRJP01)
- ADCD.DYNISPF.ISPPLIB(ISRJP05)
- ADCD.DYNISPF.ISPPLIB(ISR40000)
- ADCD.DYNISPF.ISPPLIB(ISR41000)
- ADCD.DYNISPF.ISPPLIB(ISR41006)
- ADCD.DYNISPF.ISPPLIB(ISR50000)
- ADCD.DYNISPF.ISPPLIB(ISR51000)
 ```
 
 # SYS0WN
