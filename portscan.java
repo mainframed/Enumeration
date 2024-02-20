@@ -15,8 +15,8 @@ public class portscan
         int timeout = 1000;
         boolean debug = false;
         int exit = 1;
+        System.out.println("PortScan by SirCICSalot");
         if (args.length < 3 || args[0].toString() == "help") {
-            System.out.println("PortScan by SirCICSalot");
             System.out.println("Usage: java -cp . portscan host, start port, end port, [-t timeout] [-d debug]");
             System.out.println("-t timeout is in miliseconds, default is 1000");
             System.exit(exit);
