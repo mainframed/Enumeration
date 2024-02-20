@@ -11,7 +11,7 @@
 /* Author: Phil Young - NetSPI */
 /* License: MIT */
 
-PARSE ARG INDD
+PARSE ARG INDD STRING
 VERBOSE = 1
 skip_unformatted = 1
 Say "*** Opening list of datasets to search:" INDD
