@@ -14,11 +14,12 @@ public class portscan
         int portEnd = 0;
         int timeout = 1000;
         boolean debug = false;
+        int exit = 1;
         if (args.length < 3 || args[0].toString() == "help") {
             System.out.println("PortScan by SirCICSalot");
             System.out.println("Usage: java -cp . portscan host, start port, end port, [-t timeout] [-d debug]");
             System.out.println("-t timeout is in miliseconds, default is 1000");
-            System.exit(1);
+            System.exit(exit);
         }
         String host = args[0];
 
@@ -27,7 +28,7 @@ public class portscan
             portEnd = Integer.parseInt(args[2]);
         } catch (NumberFormatException e) {
             System.err.println("Invalid port format: " + e.getMessage());
-            System.exit(1);
+            System.exit(exit);
         }
         
         // Process optional arguments
@@ -38,13 +39,13 @@ public class portscan
                     timeout = Integer.parseInt(args[++i]);
                 } catch (NumberFormatException e) {
                     System.err.println("Invalid timeout format: " + e.getMessage());
-                    System.exit(1);
+                    System.exit(exit);
                 }
             } else if (arg.equals("-d")) {
                 debug = true;
             } else {
                 System.err.println("Unknown option: " + arg);
-                System.exit(1);
+                System.exit(exit);
             }
         }
 
@@ -67,8 +68,10 @@ public class portscan
                 socket.connect(new InetSocketAddress(host, port), timeout);
                 socket.close();
                 System.out.println("Port " + port + " is open");
+                exit = 0;
             }
             catch (Exception ex2) {}
         }
+    System.exit(exit);
     }
 }
