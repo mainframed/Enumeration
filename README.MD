@@ -188,7 +188,7 @@ USAGE:
 
 A very simple rexx script to check for some common things in RACF, probably easier to type them out. 
 
-## STARTMAP
+## STARTMAP.rx
 
 This REXX script was designed to map out mainframe startup (IPL) settings, files, proclibs, etc. Simply call the 
 program with `ex 'HLQ.STARTMAP'` or `ex 'HLQ.DATASET(STARTMAP)'` and read the results. 
@@ -222,7 +222,7 @@ There's a lot of results to part here so recording your output might be a good i
   + PARMLIB #4 is SYS1.PARMLIB
 ```
 
-# SYS0WN
+# SYS0WN.rx
 
 A rexx script to check on the permissions, create and reference dates for the SYSPROC and SYSEXEC datasets. SYSPROC (CLISTs) and SYSEXEC (REXX execs) are basically your `$PATH` variable in TSO. The order displayed is the search order in TSO. 
 
