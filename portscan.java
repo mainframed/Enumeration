@@ -10,7 +10,6 @@ import java.net.InetAddress;
 public class portscan
 {
     public static void main(final String[] args) {
-        String host = "";
         int portStart = 0;
         int portEnd = 0;
         int timeout = 1000;
