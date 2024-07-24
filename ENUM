@@ -725,9 +725,9 @@ DO I = 8 TO CTLT_SIZE - 5 BY 12
  ENTRIES = C2D(STORAGE(D2X(X2D(CTLT)+I+8),2))             
  LENGTH  = C2D(STORAGE(D2X(X2D(CTLT)+I+10),2))            
  NAME = STORAGE(TABLE,8)                                  
- SAY ;SAY NAME "ENTRIES:" ENTRIES; SAY                    
+ SAY ;SAY NAME "ENTRIES:" ENTRIES-1; SAY                    
  OUTPUT = ''                                              
- DO J = 1 TO ENTRIES                                      
+ DO J = 2 TO ENTRIES                                      
   ENT = STORAGE(D2X(X2D(TABLE) + (LENGTH*J)),LENGTH)
   IF ENT = ' PARMLIB' THEN ITERATE                  
   OUTPUT = OUTPUT ENT                               
