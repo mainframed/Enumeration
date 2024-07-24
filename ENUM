@@ -6,7 +6,7 @@
             `  ?$$$$$$$7                                              |
           '    .?$$$$$7              Arguments: ALL, APF, CAT, JOB,   |
    sof        '  "'`'"                          PATH, SEC, SVC, VERS, |
-                _qQ$Qp_         .  .            WHO, TSTA             |
+                _qQ$Qp_         .  .            WHO, TSTA, TSOT       |
        .        $$$$$$$   . :  .:  .                                  |
    I$$$$$$$$$$L `?jlj7' j$l$l$$il$$I Description: Enumerates z/OS sys |
    :$$$$$$$$$i$b.     .d$$$$$$$$$$$:              information for use |
@@ -38,6 +38,7 @@
 |*             WHO  - Who is currently logged on through TSO/OMVS     *|
 |*             TSTA - Display TESTAUTH authorization                  *|
 |*             USSU - Display USS/OMVS user list                      *|
+|*             TSOT - Display TSO AUTHCMD, AUTHPGM tables             *|
 |*                                                                    *|
 |*                                                                    *|
 |* Sources:                                                           *|
@@ -96,6 +97,9 @@ SELECT
     x = TSTA()
   WHEN type == 'USSU' THEN
     call USSU
+  WHEN type == 'TSOT' THEN
+    call TSOT
+
   WHEN type = 'ALL' THEN DO
     say 'z/OS System Enumeration'
     say ''
@@ -124,6 +128,9 @@ SELECT
     say '-----------------------------------------'
     say '' 
     call USSU
+    say '-----------------------------------------'
+    say '' 
+    call TSOT
     say '-----------------------------------------'
     say ''
     if space /== 'OMVS' THEN
@@ -158,6 +165,7 @@ say "---z-o-s---e-n-u-m-e-r-a-t-i-o-n-------------------------------------"
     say "'WHO'  Display Logged On TSO/OMVS Users"
     say "'TSTA' Display TESTAUTH authorization"
     say "'USSU' Display USS/OMVS user list"
+    say "'TSOT' Display TSO AUTHCMD, AUTHPGM tables"
     say ''
     say 'Example:'
     if space /== 'OMVS' then
@@ -703,6 +711,38 @@ IF OUT.0 = 0 THEN
 ELSE
   SAY OUT.1
 return 0
+
+TSOT:                                   
+CVT =  C2X(STORAGE(10,4))                                 
+TSVT = _STORAGE(CVT,9C)                                   
+TPVT = _STORAGE(TSVT,4C)                                  
+CTLT = _STORAGE(TPVT,14)                                  
+SAY CVT ": CVT" TSVT ": TSVT" TPVT ": TPVT" CTLT ": CTLT" 
+CTLT_SIZE = C2D(STORAGE(D2X(X2D(CTLT)+4),2))              
+DO I = 8 TO CTLT_SIZE - 5 BY 12                           
+ TABLE   = _STORAGE(CTLT,D2X(I))                          
+ SIZE    = C2D(STORAGE(D2X(X2D(CTLT)+I+6),2))             
+ ENTRIES = C2D(STORAGE(D2X(X2D(CTLT)+I+8),2))             
+ LENGTH  = C2D(STORAGE(D2X(X2D(CTLT)+I+10),2))            
+ NAME = STORAGE(TABLE,8)                                  
+ SAY ;SAY NAME "ENTRIES:" ENTRIES; SAY                    
+ OUTPUT = ''                                              
+ DO J = 1 TO ENTRIES                                      
+  ENT = STORAGE(D2X(X2D(TABLE) + (LENGTH*J)),LENGTH)
+  IF ENT = ' PARMLIB' THEN ITERATE                  
+  OUTPUT = OUTPUT ENT                               
+  IF LENGTH(OUTPUT) > 60 THEN DO                    
+   SAY OUTPUT                                       
+   OUTPUT = ''                                      
+  END                                               
+ END                                                
+ IF OUTPUT /= '' THEN SAY OUTPUT                    
+END                                                 
+RETURN                                              
+                                                    
+_STORAGE: procedure                                           
+ PARSE ARG ADDR, DISP                               
+ RETURN C2X(STORAGE(D2X(X2D(ADDR)+X2D(DISP)),4))     
 
 SETROPTS:
 /*********************************************************************/
