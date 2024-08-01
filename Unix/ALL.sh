@@ -5,9 +5,11 @@
 ##### tooling. 
 ######
 
+STDOUT="SYSOUT=*" # <--- Where you want the output from ENUM and OMVSENUM to go
+folder='/home/phil/tet/' # <--- Folder to run tools from Make sure you have the trailing /
+
 JAVAC='/usr/lpp/java/J8.0_64/bin/javac'
 JAVA='/usr/lpp/java/J8.0_64/bin/java'
-folder='/home/phil/tet/' # <--- Make sure you have the trailing /
 cat << EOF
 //OMVSENUM JOB (JOB),'JOB',CLASS=A,MSGCLASS=A,
 //         NOTIFY=&SYSUID,REGION=0M
@@ -77,20 +79,20 @@ cat << EOF
 //*********************************************************************
 //ENUM      EXEC PGM=BPXBATCH
 //STDIN     DD DUMMY
-//STDOUT    DD SYSOUT=*
+//STDOUT    DD $STDOUT
 //STDERR    DD SYSOUT=*     
 //STDPARM   DD *
 SH cd $folder;
- ./ENUM.rexx SEC > ENUM.out.txt; 
- ./ENUM.rexx SVC >> ENUM.out.txt; 
- ./ENUM.rexx APF >> ENUM.out.txt; 
- ./ENUM.rexx USSU >> ENUM.out.txt;
+ ./ENUM.rexx SEC; 
+ ./ENUM.rexx SVC; 
+ ./ENUM.rexx APF; 
+ ./ENUM.rexx USSU;
 //*********************************************************************
 //* Run OMVSENUM
 //*********************************************************************
 //ENUM      EXEC PGM=BPXBATCH
 //STDIN     DD DUMMY
-//STDOUT    DD SYSOUT=*
+//STDOUT    DD $STDOUT
 //STDERR    DD SYSOUT=*     
 //STDPARM   DD *
 SH cd $folder;
