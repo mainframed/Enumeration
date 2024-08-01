@@ -37,13 +37,23 @@ OPTIONS:\n\
 Running with no options = limited scans/no output file\n\
 ########################################################################"
 # useful binaries (thanks to https://gtfobins.github.io/)
-set binarylist = 'aria2c\|arp\|ash\|awk\|base64\|bash\|busybox\|cat\|chmod\|chown\|cp\|csh\|curl\|cut\|dash\|date\|dd\|diff\|dmsetup\|docker\|ed\|emacs\|env\|expand\|expect\|file\|find\|flock\|fmt\|fold\|ftp\|gawk\|gdb\|gimp\|git\|grep\|head\|ht\|iftop\|ionice\|ip$\|irb\|jjs\|jq\|jrunscript\|ksh\|ld.so\|ldconfig\|less\|logsave\|lua\|make\|man\|mawk\|more\|mv\|mysql\|nano\|nawk\|nc\|netcat\|nice\|nl\|nmap\|node\|od\|openssl\|perl\|pg\|php\|pic\|pico\|python\|readelf\|rlwrap\|rpm\|rpmquery\|rsync\|ruby\|run-parts\|rvim\|scp\|script\|sed\|setarch\|sftp\|sh\|shuf\|socat\|sort\|sqlite3\|ssh$\|start-stop-daemon\|stdbuf\|strace\|systemctl\|tail\|tar\|taskset\|tclsh\|tee\|telnet\|tftp\|time\|timeout\|ul\|unexpand\|uniq\|unshare\|vi\|vim\|watch\|wget\|wish\|xargs\|xxd\|zip\|zsh'
+set binarylist = 'aria2c\|arp\|ash\|awk\|base64\|bash\|busybox\|cat\|chmod\|\
+chown\|cp\|csh\|curl\|cut\|dash\|date\|dd\|diff\|dmsetup\|docker\|ed\|emacs\|\
+env\|expand\|expect\|file\|find\|flock\|fmt\|fold\|ftp\|gawk\|gdb\|gimp\|git\|\
+grep\|head\|ht\|iftop\|ionice\|ip$\|irb\|jjs\|jq\|jrunscript\|ksh\|ld.so\|\
+ldconfig\|less\|logsave\|lua\|make\|man\|mawk\|more\|mv\|mysql\|nano\|nawk\|\
+nc\|netcat\|nice\|nl\|nmap\|node\|od\|openssl\|perl\|pg\|php\|pic\|pico\|\
+python\|readelf\|rlwrap\|rpm\|rpmquery\|rsync\|ruby\|run-parts\|rvim\|scp\|\
+script\|sed\|setarch\|sftp\|sh\|shuf\|socat\|sort\|sqlite3\|ssh$\|\
+start-stop-daemon\|stdbuf\|strace\|systemctl\|tail\|tar\|taskset\|tclsh\|\
+tee\|telnet\|tftp\|time\|timeout\|ul\|unexpand\|uniq\|unshare\|vi\|vim\|\
+watch\|wget\|wish\|xargs\|xxd\|zip\|zsh'
 
 }
 
 header()
 {
-echo "\n########################################################################"
+echo "\n#######################################################################"
 echo "# Local Unix System Services Enumeration & Privilege Escalation Script #"
 echo "########################################################################"
 echo "#       Soldier of FORTRAN    #            @mainframed767              #"
@@ -55,7 +65,7 @@ echo "# Time: " `date`
 
 footer()
 {
-echo "\n#######  Scan complete #################################################"
+echo "\n#######  Scan complete ################################################"
 echo "# Time: " `date` "\n\n"
 }
 
@@ -64,21 +74,21 @@ debug_info()
 echo "[-] Debug Info" 
 
 if [ "$keyword" ]; then 
-	echo "[+] Searching for the keyword $keyword in conf, php, ini and log files" 
+  echo "[+] Searching for the keyword $keyword in conf, php, ini and log files" 
 fi
 
 if [ "$report" ]; then 
-	echo "[+] Report name = $report" 
+  echo "[+] Report name = $report" 
 fi
 
 if [ "$export" ]; then 
-	echo "[+] Export location = $export" 
+  echo "[+] Export location = $export" 
 fi
 
 if [ "$thorough" ]; then 
-	echo "[+] Thorough tests = Enabled" 
+  echo "[+] Thorough tests = Enabled" 
 else 
-	echo "[+] Thorough tests = Disabled" 
+  echo "[+] Thorough tests = Disabled" 
 fi
 
 sleep 2
@@ -95,7 +105,7 @@ who=`whoami` 2>/dev/null
 
 system_info()
 {
-echo "\n#######  System Info ###################################################\n"
+echo "\n#######  System Info ################################################\n"
 
 
 #basic kernel info
@@ -116,7 +126,8 @@ if [ "$sysname" ]; then
   echo "[-] LPAR Name: $sysname" 
 fi
 
-# The version, release, and modification level of the operating system software product
+# The version, release, and modification level of the operating system 
+# software product
 # Zxvvrrmm where
 #          Zx is the operating system (for example, Z1 is z/OS)
 #          vv is the version number from ECVTPVER (for example, 02)
@@ -150,7 +161,8 @@ if [ "$sysalvl" ]; then
   echo "[-] Architecture level of the system: $sysalvl" 
 fi
 
-# Shorthand notation for the name of the system; often used in fields that are limited to two characters.
+# Shorthand notation for the name of the system; often used in fields that are 
+# limited to two characters.
 sysclone=`sysvar SYSCLONE 2>/dev/null`
 if [ "$sysclone" ]; then
   echo "[-] Shorthand notation for the name of the system: $sysclone" 
@@ -181,7 +193,7 @@ fi
 
 user_info()
 {
-echo "\n#######  User/ Group ###################################################\n"
+echo "\n#######  User/ Group ################################################\n"
 
 #current user details
 currusr=`id 2>/dev/null`
@@ -217,7 +229,8 @@ usernum=`/bin/tsocmd lg 2>/dev/null|grep -ni "USER(S)="|cut -d":" -f1`
 if [ "$usernum" -ne "" ]; then
   total_lines=`/bin/tsocmd lg 2>/dev/null|wc|awk '{print $1}'`
   group_lines=`expr $total_lines - $usernum`
-  group_users=`/bin/tsocmd lg 2>/dev/null|tail -n $group_lines|grep -v CONNECT|grep -v REVOKE|awk '{print "\t"$1}'`
+  group_users=`/bin/tsocmd lg 2>/dev/null|tail -n $group_lines|\
+               grep -v CONNECT|grep -v REVOKE|awk '{print "\t"$1}'`
   echo "[-] Default RACF group users:\n$group_users" 
 fi
 
@@ -226,18 +239,21 @@ if [ "$usernum" ]; then
   sub_group=`/bin/tsocmd lg 2>/dev/null|grep -ni "SUBGROUP(S)="|cut -d":" -f1`
   tail_num=`expr $usernum - $sub_group`
   head_num=`expr $usernum - 1`
-  group_users=`/bin/tsocmd lg 2>/dev/null|head -n $head_num|tail -n $tail_num|sed 's/SUBGROUP(S)=/            /'`
+  group_users=`/bin/tsocmd lg 2>/dev/null|head -n $head_num|\
+               tail -n $tail_num|sed 's/SUBGROUP(S)=/            /'`
   if [ "$sub_group" ]; then
     echo "[-] Current RACF Subgroups:\n$group_users"
   fi
   if [ "$thorough" = "1" ]; then
     if [ "$sub_group" ]; then
       for i in $group_users; do
-        usernum=`/bin/tsocmd lg $i 2>/dev/null|grep -ni "USER(S)="|cut -d":" -f1`
+        usernum=`/bin/tsocmd lg $i 2>/dev/null|grep -ni "USER(S)="|\
+                 cut -d":" -f1`
         if [ "$usernum" ]; then
           total_lines=`/bin/tsocmd lg $i 2>/dev/null|wc|awk '{print $1}'`
           group_lines=`expr $total_lines - $usernum`
-          group_users=`/bin/tsocmd lg $i 2>/dev/null|tail -n $group_lines|grep -v CONNECT|grep -v REVOKE|awk '{print "\t"$1}'`
+          group_users=`/bin/tsocmd lg $i 2>/dev/null|tail -n $group_lines|\
+                       grep -v CONNECT|grep -v REVOKE|awk '{print "\t"$1}'`
           echo "[-] Sub group $i users:\n$group_users" 
         fi
       done
@@ -288,7 +304,8 @@ fi
 #looks for files we can write to that don't belong to us
 # Needs FIXING!
 if [ "$thorough" = "1" ]; then
-  grfilesall=`find / -writable ! -user \`whoami\` -type f -exec ls -al {} \; 2>/dev/null`
+  grfilesall=`find / -writable ! -user \`whoami\` -type f -exec ls \
+              -al {} \; 2>/dev/null`
   if [ "$grfilesall" ]; then
     echo "[-] Files not owned by user but writable by group:\n$grfilesall" 
     echo "\n"
@@ -313,49 +330,57 @@ if [ "$thorough" = "1" ]; then
   fi
 fi
 
-#looks for world-reabable files within /home - depending on number of /home dirs & files, this can take some time so is only 'activated' with thorough scanning switch
+# looks for world-reabable files within /u - depending on number of /u 
+# dirs & files, this can take some time so is only 'activated' with thorough 
+# scanning switch
 if [ "$thorough" = "1" ]; then
 wrfileshm=`find /u/ -perm -4 -type f -exec ls -al {} \; 2>/dev/null`
-	if [ "$wrfileshm" ]; then
-		echo "[-] World-readable files within /u:\n$wrfileshm" 
-		echo "\n"
-	fi
+  if [ "$wrfileshm" ]; then
+    echo "[-] World-readable files within /u:\n$wrfileshm" 
+    echo "\n"
+  fi
 fi
 
 if [ "$thorough" = "1" ]; then
-	if [ "$export" ] && [ "$wrfileshm" ]; then
-		mkdir $format/wr-files/ 2>/dev/null
-		for i in $wrfileshm; do cp --parents $i $format/wr-files/ ; done 2>/dev/null
-	fi
+  if [ "$export" ] && [ "$wrfileshm" ]; then
+   mkdir $format/wr-files/ 2>/dev/null
+   for i in $wrfileshm; do cp --parents $i $format/wr-files/ ; done 2>/dev/null
+  fi
 fi
 
-#lists current user's home directory contents
+# lists current user's home directory contents
 homedircontents=`ls -Alsk ~ 2>/dev/null`
 if [ "$homedircontents" ] ; then
-	echo "[-] Home directory contents:\n$homedircontents" 
-	echo "\n" 
+  echo "[-] Home directory contents:\n$homedircontents" 
+  echo "\n" 
 fi
 
-#checks for if various ssh files are accessible - this can take some time so is only 'activated' with thorough scanning switch
+# checks for if various ssh files are accessible - this can take some time so is
+# only 'activated' with thorough scanning switch
 if [ "$thorough" = "1" ]; then
-sshfiles=`find / \( -name "id_dsa*" -o -name "id_rsa*" -o -name "known_hosts" -o -name "authorized_hosts" -o -name "authorized_keys" \) -exec ls -la {} 2>/dev/null \;`
-	if [ "$sshfiles" ]; then
-		echo "[-] SSH keys/host information found in the following locations:\n$sshfiles" 
-		echo "\n"
-	fi
+sshfiles=`find / \( -name "id_dsa*" -o -name "id_rsa*" -o -name "known_hosts" \
+          -o -name "authorized_hosts" -o -name "authorized_keys" \) -exec ls \
+          -la {} 2>/dev/null \;`
+  if [ "$sshfiles" ]; then
+    echo "[-] SSH keys/host information found in the \
+following locations:\n$sshfiles" 
+    echo "\n"
+  fi
 fi
 
 if [ "$thorough" = "1" ]; then
-	if [ "$export" ] && [ "$sshfiles" ]; then
-		mkdir $format/ssh-files/ 2>/dev/null
-		for i in $sshfiles; do cp --parents $i $format/ssh-files/; done 2>/dev/null
-	fi
+  if [ "$export" ] && [ "$sshfiles" ]; then
+    mkdir $format/ssh-files/ 2>/dev/null
+    for i in $sshfiles; do cp --parents $i $format/ssh-files/; done 2>/dev/null
+  fi
 fi
 
 #is root permitted to login via ssh
-sshrootlogin=`grep "PermitRootLogin " /etc/ssh/sshd_config 2>/dev/null | grep -v "#" | awk '{print  $2}'`
+sshrootlogin=`grep "PermitRootLogin " /etc/ssh/sshd_config 2>/dev/null | \
+              grep -v "#" | awk '{print  $2}'`
 if [ "$sshrootlogin" = "yes" ]; then
-  echo "[-] Root is allowed to login via SSH:" ; grep "PermitRootLogin " /etc/ssh/sshd_config 2>/dev/null | grep -v "#" 
+  echo "[-] Root is allowed to login via SSH:" ; grep "PermitRootLogin " \
+  /etc/ssh/sshd_config 2>/dev/null | grep -v "#" 
   echo "\n"
 fi
 
@@ -380,7 +405,7 @@ fi
 environmental_info()
 {
 
-echo "\n#######  Environmental #################################################\n"
+echo "\n#######  Environmental ##############################################\n"
 
 #env information
 envinfo=`env 2>/dev/null | grep -v 'LS_COLORS' 2>/dev/null`
@@ -406,7 +431,7 @@ fi
 
 job_info()
 {
-echo "\n#######  Jobs/Tasks ####################################################\n"
+echo "\n#######  Jobs/Tasks #################################################\n"
 
 #are there any cron jobs configured
 cronjobs=`ls -la /etc/cron* 2>/dev/null`
@@ -416,7 +441,8 @@ if [ "$cronjobs" ]; then
 fi
 
 #can we manipulate these jobs in any way
-cronjobwwperms=`find /etc/cron* -perm -0002 -type f -exec ls -la {} \; -exec cat {} 2>/dev/null \;`
+cronjobwwperms=`find /etc/cron* -perm -0002 -type f -exec ls \
+                -la {} \; -exec cat {} 2>/dev/null \;`
 if [ "$cronjobwwperms" ]; then
   echo "[+] World-writable cron jobs and file contents:\n$cronjobwwperms" 
   echo "\n"
@@ -439,7 +465,7 @@ fi
 
 networking_info()
 {
-echo "\n#######  Networking ####################################################"
+echo "\n#######  Networking ###################################################"
 
 #nic information
 nicinfo=`netstat -h 2>/dev/null`
@@ -461,7 +487,7 @@ if [ "$DNSdomainname" ]; then
   echo "\n"
 fi
 
-dnsserver=`dnsdomainname|grep Server|sed 's/Server:		//' 2> /dev/null`
+dnsserver=`dnsdomainname|grep Server|sed 's/Server:    //' 2> /dev/null`
 if [ "$dnsserver" ]; then
   echo "[-] DNS Server:\n$dnsserver" 
   echo "\n"
@@ -508,7 +534,7 @@ fi
 services_info()
 {
 
-echo "\n#######  Services   ####################################################\n"
+echo "\n#######  Services   #################################################\n"
 
 #running processes
 # OMVS is more secure and only lets you list running processes
@@ -539,8 +565,10 @@ if [ "$export" ] && [ "$inetdread" ]; then
   cp /etc/inetd.conf $format/etc-export/inetd.conf 2>/dev/null
 fi
 
-#very 'rough' command to extract associated binaries from inetd.conf & show permisisons of each
-inetdbinperms=`awk '{print $6}' /etc/inetd.conf 2>/dev/null |xargs ls -laskL 2>/dev/null`
+# very 'rough' command to extract associated binaries from inetd.conf & 
+# show permisisons of each
+inetdbinperms=`awk '{print $6}' /etc/inetd.conf 2>/dev/null |\
+               xargs ls -laskL 2>/dev/null`
 if [ "$inetdbinperms" ]; then
   echo "[-] The related inetd binary permissions:\n$inetdbinperms" 
   echo "\n"
@@ -550,7 +578,7 @@ fi
 
 software_configs()
 {
-echo "\n#######  Sotfware   ####################################################\n"
+echo "\n#######  Sotfware   #################################################\n"
 
 #TODO: This needs to have more stuff added 
 # - zosmf?
@@ -567,19 +595,21 @@ else
   echo "[-] Not in thorough mode nothing to see here"
 fi
 
+#############################################
+### This is broken and needs fixing
 # CICS USSHOME
-USSHOME=`find /usr/lpp/cicsts/ -exec ls -laE {} 2>/dev/null \; 2>/dev/null`
-if [ "$USSHOME" ]; then
-    echo "[-] CICS Default File Permissions (/usr/lpp/cicsts)\n$USSHOME"
-    echo "\n"
-fi
-
+#USSHOME=`find /usr/lpp/cicsts/ -exec ls -laE {} 2>/dev/null \; 2>/dev/null`
+#if [ "$USSHOME" ]; then
+#    echo "[-] CICS Default File Permissions (/usr/lpp/cicsts)\n$USSHOME"
+#    echo "\n"
+#fi
+#############################################
 
 }
 
 interesting_files()
 {
-echo "\n#######  Interesting Files   ###########################################\n"
+echo "\n#######  Interesting Files   ########################################\n"
 
 #checks to see if various files are installed
 #useful programs
@@ -607,7 +637,8 @@ fi
 if [ "$thorough" = "1" ]; then
 # OMVS can be massive so we put this all in a thorough search
 #search for suid files
-  findsuidapf=`find / \( -perm -4000 -o -ext a \) -type f -exec ls -laE {} 2>/dev/null \;`
+  findsuidapf=`find / \( -perm -4000 -o -ext a \) -type f \
+               -exec ls -laE {} 2>/dev/null \;`
   if [ "$findsuidapf" ]; then
     echo "[-] SUID and APF files:\n$findsuidapf" 
     echo "\n"
@@ -619,7 +650,8 @@ if [ "$thorough" = "1" ]; then
   fi
 
   #list of 'interesting' suid files - feel free to make additions
-  intsuid=`find / -perm -4000 -type f -exec ls -la {} \; 2>/dev/null | grep -w $binarylist 2>/dev/null`
+  intsuid=`find / -perm -4000 -type f -exec ls -la {} \; 2>/dev/null |\
+           grep -w $binarylist 2>/dev/null`
   if [ "$intsuid" ]; then
     echo "[+] Possibly interesting SUID files:\n$intsuid" 
     echo "\n"
@@ -639,7 +671,8 @@ if [ "$thorough" = "1" ]; then
   fi
 
   #lists world-writable suid files owned by root
-  wwsuidrt=`find / -user $uidzero -perm -4002 -type f -exec ls -la {} 2>/dev/null \;`
+  wwsuidrt=`find / -user $uidzero -perm -4002 -type f -exec ls \
+            -la {} 2>/dev/null \;`
   if [ "$wwsuidrt" ]; then
     echo "[+] World-writable SUID files owned by $uidzero:\n$wwsuidrt" 
     echo "\n"
@@ -658,7 +691,8 @@ if [ "$thorough" = "1" ]; then
   fi
 
   #list of 'interesting' sgid files
-  #intsgid=`find / -perm -2000 -type f  -exec ls -la {} \; 2>/dev/null | grep -w $binarylist 2>/dev/null`
+  #intsgid=`find / -perm -2000 -type f  -exec ls -la {} \; 2>/dev/null | \
+  #         grep -w $binarylist 2>/dev/null`
   #if [ "$intsgid" ]; then
   #  echo "[+] Possibly interesting SGID files:\n$intsgid" 
   #  echo "\n"
@@ -672,44 +706,44 @@ if [ "$thorough" = "1" ]; then
   fi
 
   #lists world-writable sgid files owned by root
-  wwsgidrt=`find / -user $uidzero -perm -2002 -type f -exec ls -la {} 2>/dev/null \;`
+  wwsgidrt=`find / -user $uidzero -perm -2002 -type f -exec ls \
+           -la {} 2>/dev/null \;`
   if [ "$wwsgidrt" ]; then
     echo "[+] World-writable SGID files owned by root:\n$wwsgidrt" 
     echo "\n"
   fi
 fi
 
-
 #look for keys
 keyfiles=`find /u/ -type f -exec grep -l "PRIVATE KEY-----" {} 2> /dev/null \;`
-	if [ "$keyfiles" ]; then
-  		echo "[+] Secret keys found!:\n$keyfiles"
-  		echo "\n"
-	fi
+  if [ "$keyfiles" ]; then
+      echo "[+] Secret keys found!:\n$keyfiles"
+      echo "\n"
+  fi
 
 #look for git credential files - thanks djhohnstein
 if [ "$thorough" = "1" ]; then
 gitcredfiles=`find / -name ".git-credentials" 2>/dev/null`
-	if [ "$gitcredfiles" ]; then
-  		echo "[+] Git credentials saved on the machine!:\n$gitcredfiles"
-  		echo "\n"
-	fi
+  if [ "$gitcredfiles" ]; then
+      echo "[+] Git credentials saved on the machine!:\n$gitcredfiles"
+      echo "\n"
+  fi
 fi
 
 #list all world-writable files
 if [ "$thorough" = "1" ]; then
 wwfiles=`find / ! -perm -2 -type f -exec ls -la {} 2>/dev/null \;`
-	if [ "$wwfiles" ]; then
-		echo "[-] World-writable files:\n$wwfiles" 
-		echo "\n"
-	fi
+  if [ "$wwfiles" ]; then
+    echo "[-] World-writable files:\n$wwfiles" 
+    echo "\n"
+  fi
 fi
 
 if [ "$thorough" = "1" ]; then
-	if [ "$export" ] && [ "$wwfiles" ]; then
-		mkdir $format/ww-files/ 2>/dev/null
-		for i in $wwfiles; do cp --parents $i $format/ww-files/; done 2>/dev/null
-	fi
+  if [ "$export" ] && [ "$wwfiles" ]; then
+    mkdir $format/ww-files/ 2>/dev/null
+    for i in $wwfiles; do cp --parents $i $format/ww-files/; done 2>/dev/null
+  fi
 fi
 
 #are any .plan files accessible in /home (could contain useful information)
@@ -724,10 +758,12 @@ if [ "$export" ] && [ "$usrplan" ]; then
   for i in $usrplan; do cp --parents $i $format/plan_files/; done 2>/dev/null
 fi
 
-#are there any .rhosts files accessible - these may allow us to login as another user etc.
-rhostsusr=`find /u/ -name *.rhosts -exec ls -la {} 2>/dev/null \; -exec cat {} 2>/dev/null \;`
+# are there any .rhosts files accessible - these may allow us to login as 
+# another user etc.
+rhostsusr=`find /u/ -name *.rhosts -exec ls -la {} 2>/dev/null \; \
+           -exec cat {} 2>/dev/null \;`
 if [ "$rhostsusr" ]; then
-  echo "+] rhost config file(s) and file contents:\n$rhostsusr" 
+  echo "[+] rhost config file(s) and file contents:\n$rhostsusr" 
   echo "\n"
 fi
 
@@ -741,9 +777,10 @@ if [ "$export" ] && [ "$bsdrhostsusr" ]; then
   for i in $bsdrhostsusr; do cp --parents $i $format/rhosts/; done 2>/dev/null
 fi
 
-rhostssys=`find /etc -iname hosts.equiv -exec ls -la {} 2>/dev/null \; -exec cat {} 2>/dev/null \;`
+rhostssys=`find /etc -iname hosts.equiv -exec ls -la {} 2>/dev/null \; \
+           -exec cat {} 2>/dev/null \;`
 if [ "$rhostssys" ]; then
-  echo "+] Hosts.equiv file and contents: \n$rhostssys" 
+  echo "[+] Hosts.equiv file and contents: \n$rhostssys" 
   echo "\n"
 fi
 
@@ -760,18 +797,21 @@ if [ "$fstab" ]; then
   echo "\n"
 fi
 
-#use supplied keyword and cat *.conf files for potential matches - output will show line number within relevant file path where a match has been located
+# use supplied keyword and cat *.conf files for potential matches - output will 
+# show line number within relevant file path where a match has been located
 if [ "$keyword" = "" ]; then
   echo "[-] Can't search *.conf files as no keyword was entered\n" 
   else
-    confkey=`find / -name *.conf -type f -exec grep -ln $keyword {} \; 2>/dev/null`
+    confkey=`find / -name *.conf -type f -exec grep \
+             -ln $keyword {} \; 2>/dev/null`
     if [ "$confkey" ]; then
-      echo "[-] Find keyword ($keyword) in .conf files (output format filepath:identified line number where keyword appears):\n$confkey" 
+      echo "[-] Find keyword ($keyword) in .conf files (output format \
+filepath:identified line number where keyword appears):\n$confkey" 
       echo "\n" 
      else 
-	echo "[-] Find keyword ($keyword) in .conf files:" 
-	echo "'$keyword' not found in any .conf files" 
-	echo "\n" 
+  echo "[-] Find keyword ($keyword) in .conf files:" 
+  echo "'$keyword' not found in any .conf files" 
+  echo "\n" 
     fi
 fi
 
@@ -779,19 +819,24 @@ if [ "$keyword" = "" ]; then
   :
   else
     if [ "$export" ] && [ "$confkey" ]; then
-	  confkeyfile=`find / -maxdepth 4 -name *.conf -type f -exec grep -ln $keyword {} \; 2>/dev/null`
+    confkeyfile=`find / -maxdepth 4 -name *.conf -type f -exec \
+                 grep -ln $keyword {} \; 2>/dev/null`
       mkdir --parents $format/keyword_file_matches/config_files/ 2>/dev/null
-      for i in $confkeyfile; do cp --parents $i $format/keyword_file_matches/config_files/ ; done 2>/dev/null
+      for i in $confkeyfile; do cp --parents $i \
+      $format/keyword_file_matches/config_files/ ; done 2>/dev/null
   fi
 fi
 
-#use supplied keyword and cat *.php files for potential matches - output will show line number within relevant file path where a match has been located
+#use supplied keyword and cat *.php files for potential matches - output will 
+# show line number within relevant file path where a match has been located
 if [ "$keyword" = "" ]; then
   echo "[-] Can't search *.php files as no keyword was entered\n" 
   else
-    phpkey=`find / -name *.php -type f -exec grep -ln $keyword {} \; 2>/dev/null`
+    phpkey=`find / -name *.php -type f -exec grep \
+            -ln $keyword {} \; 2>/dev/null`
     if [ "$phpkey" ]; then
-      echo "[-] Find keyword ($keyword) in .php files (output format filepath:identified line number where keyword appears):\n$phpkey" 
+      echo "[-] Find keyword ($keyword) in .php files (output format \
+filepath:identified line number where keyword appears):\n$phpkey" 
       echo "\n" 
      else 
   echo "[-] Find keyword ($keyword) in .php files:" 
@@ -800,13 +845,16 @@ if [ "$keyword" = "" ]; then
     fi
 fi
 
-#use supplied keyword and cat *.class files for potential matches - output will show line number within relevant file path where a match has been located
+# use supplied keyword and cat *.class files for potential matches - output
+# will show line number within relevant file path where a match has been located
 if [ "$keyword" = "" ]; then
   echo "[-] Can't search *.class files as no keyword was entered\n" 
   else
-    classkey=`find / -name *.class -type f -exec grep -ln $keyword {} \; 2>/dev/null`
+    classkey=`find / -name *.class -type f -exec grep \
+              -ln $keyword {} \; 2>/dev/null`
     if [ "$classkey" ]; then
-      echo "[-] Find keyword ($keyword) in .class files (output format filepath:identified line number where keyword appears):\n$classkey" 
+      echo "[-] Find keyword ($keyword) in .class files (output format \
+filepath:identified line number where keyword appears):\n$classkey" 
       echo "\n" 
      else 
   echo "[-] Find keyword ($keyword) in .class files:" 
@@ -819,24 +867,29 @@ if [ "$keyword" = "" ]; then
   :
   else
     if [ "$export" ] && [ "$phpkey" ]; then
-    phpkeyfile=`find / -maxdepth 10 -name *.php -type f -exec grep -ln $keyword {} \; 2>/dev/null`
+    phpkeyfile=`find / -maxdepth 10 -name *.php -type f -exec grep \
+               -ln $keyword {} \; 2>/dev/null`
       mkdir --parents $format/keyword_file_matches/php_files/ 2>/dev/null
-      for i in $phpkeyfile; do cp --parents $i $format/keyword_file_matches/php_files/ ; done 2>/dev/null
+      for i in $phpkeyfile; do cp --parents $i \
+      $format/keyword_file_matches/php_files/ ; done 2>/dev/null
   fi
 fi
 
-#use supplied keyword and cat *.log files for potential matches - output will show line number within relevant file path where a match has been located
+# use supplied keyword and cat *.log files for potential matches - output will 
+# show line number within relevant file path where a match has been located
 if [ "$keyword" = "" ];then
   echo "[-] Can't search *.log files as no keyword was entered\n" 
   else
-    logkey=`find / -name *.log -type f -exec grep -ln $keyword {} \; 2>/dev/null`
+    logkey=`find / -name *.log -type f -exec grep \
+            -ln $keyword {} \; 2>/dev/null`
     if [ "$logkey" ]; then
-      echo "[-] Find keyword ($keyword) in .log files (output format filepath:identified line number where keyword appears):\n$logkey" 
+      echo "[-] Find keyword ($keyword) in .log files (output format \
+filepath:identified line number where keyword appears):\n$logkey" 
       echo "\n" 
      else 
-	echo "[-] Find keyword ($keyword) in .log files:" 
-	echo "'$keyword' not found in any .log files"
-	echo "\n" 
+  echo "[-] Find keyword ($keyword) in .log files:" 
+  echo "'$keyword' not found in any .log files"
+  echo "\n" 
     fi
 fi
 
@@ -844,24 +897,29 @@ if [ "$keyword" = "" ];then
   :
   else
     if [ "$export" ] && [ "$logkey" ]; then
-      logkeyfile=`find / -name *.log -type f -exec grep -ln $keyword {} \; 2>/dev/null`
-	  mkdir --parents $format/keyword_file_matches/log_files/ 2>/dev/null
-      for i in $logkeyfile; do cp --parents $i $format/keyword_file_matches/log_files/ ; done 2>/dev/null
+      logkeyfile=`find / -name *.log -type f -exec grep \
+                  -ln $keyword {} \; 2>/dev/null`
+    mkdir --parents $format/keyword_file_matches/log_files/ 2>/dev/null
+      for i in $logkeyfile; do cp --parents $i \
+      $format/keyword_file_matches/log_files/ ; done 2>/dev/null
   fi
 fi
 
-#use supplied keyword and cat *.ini files for potential matches - output will show line number within relevant file path where a match has been located
+#use supplied keyword and cat *.ini files for potential matches - output will 
+# show line number within relevant file path where a match has been located
 if [ "$keyword" = "" ];then
   echo "[-] Can't search *.ini files as no keyword was entered\n" 
   else
-    inikey=`find / -name *.ini -type f -exec grep -ln $keyword {} \; 2>/dev/null`
+    inikey=`find / -name *.ini -type f -exec grep \
+           -ln $keyword {} \; 2>/dev/null`
     if [ "$inikey" ]; then
-      echo "[-] Find keyword ($keyword) in .ini files (output format filepath:identified line number where keyword appears):\n$inikey" 
+      echo "[-] Find keyword ($keyword) in .ini files (output format \
+filepath:identified line number where keyword appears):\n$inikey" 
       echo "\n" 
      else 
-	echo "[-] Find keyword ($keyword) in .ini files:" 
-	echo "'$keyword' not found in any .ini files" 
-	echo "\n"
+  echo "[-] Find keyword ($keyword) in .ini files:" 
+  echo "'$keyword' not found in any .ini files" 
+  echo "\n"
     fi
 fi
 
@@ -869,9 +927,11 @@ if [ "$keyword" = "" ];then
   :
   else
     if [ "$export" ] && [ "$inikey" ]; then
-	  inikey=`find / -maxdepth 4 -name *.ini -type f -exec grep -lHn $keyword {} \; 2>/dev/null`
+    inikey=`find / -maxdepth 4 -name *.ini -type f -exec \
+            grep -lHn $keyword {} \; 2>/dev/null`
       mkdir --parents $format/keyword_file_matches/ini_files/ 2>/dev/null
-      for i in $inikey; do cp --parents $i $format/keyword_file_matches/ini_files/ ; done 2>/dev/null
+      for i in $inikey; do cp --parents $i \
+      $format/keyword_file_matches/ini_files/ ; done 2>/dev/null
   fi
 fi
 
@@ -895,8 +955,8 @@ if [ "$usrhist" ]; then
 fi
 
 if [ "$export" ] && [ "$usrhist" ]; then
-  mkdir $format/history_files/ 2>/dev/null
-  for i in $usrhist; do cp --parents $i $format/history_files/; done 2>/dev/null
+ mkdir $format/history_files/ 2>/dev/null
+ for i in $usrhist; do cp --parents $i $format/history_files/; done 2>/dev/null
 fi
 
 #can we read roots *_history files - could be passwords stored etc.
@@ -914,7 +974,8 @@ fi
 #all accessible .bash_history files in /home
 checkbashhist=`find /u/ -name .*history -print -exec cat {} 2>/dev/null \;`
 if [ "$checkbashhist" ]; then
-  echo "[-] Location and contents (if accessible) of .*history file(s):\n$checkbashhist"
+  echo "[-] Location and contents (if accessible) of \
+.*history file(s):\n$checkbashhist"
   echo "\n"
 fi
 
@@ -953,9 +1014,11 @@ if [ "$mounteddataset" ]; then
       if echo $listdsd|grep -q ICH35003I; then
         echo "\t UNPROTECTED \t $dataset"
       else
-        accessline=`/bin/tsocmd "listdsd dataset('$dataset') $generic" 2>/dev/null|grep -ni "YOUR ACCESS"|cut -d":" -f1`
+        accessline=`/bin/tsocmd "listdsd dataset('$dataset') $generic" \
+        2>/dev/null|grep -ni "YOUR ACCESS"|cut -d":" -f1`
         linnum=`expr $accessline + 2`
-        access=`/bin/tsocmd "listdsd dataset('$dataset') $generic" 2>/dev/null|head -n $linnum|tail -n 1|awk '{print $1}'`
+        access=`/bin/tsocmd "listdsd dataset('$dataset') $generic" \
+        2>/dev/null|head -n $linnum|tail -n 1|awk '{print $1}'`
         echo "\t $access \t\t $dataset"
       fi
     done
@@ -979,7 +1042,7 @@ deltmpfile=`rm /tmp/$tmpfilename.omvsenum`
 
 racf_searches()
 {
-echo "\n#######  RACF Searches   ###############################################\n"
+echo "\n#######  RACF Searches   ############################################\n"
 
 #Can we even issue the search command?
 
@@ -1010,7 +1073,7 @@ if [ "$searchcmd" ]; then
     echo "[+] Surrogate Access:\n$srchsgt"
     echo "\n"
   fi
-      srchsu=`/bin/tsocmd "SEARCH CLASS(SURROGAT) FILTER(BPX.SRV.ADMIN)" 2>/dev/null`
+srchsu=`/bin/tsocmd "SEARCH CLASS(SURROGAT) FILTER(BPX.SRV.ADMIN)" 2>/dev/null`
   if [ "$srchsu" ]; then
     echo "[+] su access without password:\n$srchsu"
     echo "\n"

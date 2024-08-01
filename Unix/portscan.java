@@ -17,8 +17,8 @@ public class portscan
         int exit = 1;
         System.out.println("PortScan by SirCICSalot");
         if (args.length < 3 || args[0].toString() == "help") {
-            System.out.println("Usage: java -cp . portscan host, start port, end port, [-t timeout] [-d debug]");
-            System.out.println("-t timeout is in miliseconds, default is 1000");
+System.out.println("Usage: java -cp . portscan host, start port, end port,");
+        System.out.println("       [-t timeout] [-d debug]");
             System.exit(exit);
         }
         String host = args[0];
@@ -38,7 +38,8 @@ public class portscan
                 try {
                     timeout = Integer.parseInt(args[++i]);
                 } catch (NumberFormatException e) {
-                    System.err.println("Invalid timeout format: " + e.getMessage());
+                    System.err.println("Invalid timeout format: " + 
+                                        e.getMessage());
                     System.exit(exit);
                 }
             } else if (arg.equals("-d")) {
