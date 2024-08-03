@@ -21,7 +21,7 @@ cat << EOF
 //*********************************************************************
 //* Delete the files if they exist
 //*********************************************************************
-//ENUM      EXEC PGM=BPXBATCH
+//REMOVE    EXEC PGM=BPXBATCH
 //STDIN     DD DUMMY
 //STDOUT    DD DUMMY
 //STDERR    DD DUMMY     
@@ -77,7 +77,7 @@ cat << EOF
 //*********************************************************************
 //* Run ENUM
 //*********************************************************************
-//ENUM      EXEC PGM=BPXBATCH
+//ENUMREXX  EXEC PGM=BPXBATCH
 //STDIN     DD DUMMY
 //STDOUT    DD $STDOUT
 //STDERR    DD SYSOUT=*     
@@ -90,7 +90,7 @@ SH cd $folder;
 //*********************************************************************
 //* Run OMVSENUM
 //*********************************************************************
-//ENUM      EXEC PGM=BPXBATCH
+//OMVSENUM  EXEC PGM=BPXBATCH
 //STDIN     DD DUMMY
 //STDOUT    DD $STDOUT
 //STDERR    DD SYSOUT=*     
