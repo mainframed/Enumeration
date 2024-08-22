@@ -15,6 +15,7 @@ public class portscan
         int timeout = 1000;
         boolean debug = false;
         int exit = 1;
+        String line = "";
         System.out.println("PortScan by SirCICSalot");
         if (args.length < 3 || args[0].toString() == "help") {
 System.out.println("Usage: java -cp . portscan host, start port, end port,");
@@ -61,8 +62,11 @@ System.out.println("Usage: java -cp . portscan host, start port, end port,");
             catch (Exception ex) {}
         }
         for (int port = portStart; port <= portEnd; ++port) {
+            line = "[Timeout: "+timeout+"] ["+host+"] Current Port: " + port;
             if (debug) {
-                System.out.println("Trying Port: " + port);
+                System.out.println(line);
+            } else if (port % 100 == 0){
+                System.out.println(line);
             }
             try {
                 final Socket socket = new Socket();
