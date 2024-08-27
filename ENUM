@@ -724,7 +724,19 @@ DO I = 8 TO CTLT_SIZE - 5 BY 12
  SIZE    = C2D(STORAGE(D2X(X2D(CTLT)+I+6),2))             
  ENTRIES = C2D(STORAGE(D2X(X2D(CTLT)+I+8),2))             
  LENGTH  = C2D(STORAGE(D2X(X2D(CTLT)+I+10),2))            
- NAME = STORAGE(TABLE,8)                                  
+ NAME = STORAGE(TABLE,8) 
+ select
+    when NAME = 'IKJEFTE2' then
+      NAME=NAME'/AUTHCMD'
+    when NAME = 'IKJEFTE8' then
+      NAME=NAME'/AUTHPGM'
+    when NAME = 'IKJEFTNS' then
+      NAME=NAME'/NOTBKGND'
+    when NAME = 'IKJEFTAP' then
+      NAME=NAME'/AUTHTSF'
+    otherwise
+      NAME=NAME'/UNKNOWN'
+  end                                
  SAY ;SAY NAME "ENTRIES:" ENTRIES-1; SAY                    
  OUTPUT = ''                                              
  DO J = 2 TO ENTRIES                                      
