@@ -1,15 +1,18 @@
-#!/bin/bash
+#!/bin/sh
 
 #######
 ##### This file will generate the JCL to submit a run the Unix Enumeration
 ##### tooling. 
 ######
 
+##### 
+##  Change the following 4 lines as required to run on your system 
+####
+
 STDOUT="SYSOUT=*" # <--- Where you want the output from ENUM and OMVSENUM to go
 folder='/home/phil/tet/' # <--- Folder to run tools from Make sure you have the trailing /
-
-JAVAC='/usr/lpp/java/J8.0_64/bin/javac'
-JAVA='/usr/lpp/java/J8.0_64/bin/java'
+JAVAC='/usr/lpp/java/J8.0_64/bin/javac' # <--- Must point to a valid javac
+JAVA='/usr/lpp/java/J8.0_64/bin/java' # <--- Must point to a valid java
 cat << EOF
 //OMVSENUM JOB (JOB),'JOB',CLASS=A,MSGCLASS=A,
 //         NOTIFY=&SYSUID,REGION=0M
