@@ -1011,10 +1011,16 @@ if [ "$mounteddataset" ]; then
         listdsd=`/bin/tsocmd "listdsd dataset('$dataset') GENERIC" 2>/dev/null`
         generic='GENERIC'
       fi
+      if echo "$dataset" | grep -q "/"; then
+        echo "\t NOT A DATASET \t $dataset"
+        continue
+      fi
+      if echo $listdsd|grep -q ICH35002I; then
+        echo "LISTDSD ACCESS DENIED \t $dataset"
+        continue
+      fi  
       if echo $listdsd|grep -q ICH35003I; then
         echo "\t UNPROTECTED \t $dataset"
-      elif echo $listdsd|grep -q ICH35002I; then
-        echo "LISTDSD ACCESS DENIED \t $dataset"
       else
         accessline=`/bin/tsocmd "listdsd dataset('$dataset') $generic" \
         2>/dev/null|grep -ni "YOUR ACCESS"|cut -d":" -f1`
