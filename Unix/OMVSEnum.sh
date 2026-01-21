@@ -1048,6 +1048,242 @@ deltmpfile=`rm /tmp/$tmpfilename.omvsenum`
 
 }
 
+hfs_permission_bypass()
+{
+echo "\n#######  HFS Permission Bypass Checks   #############################\n"
+
+echo "[-] Testing if RACF/ACF2/TSS dataset permissions bypass Unix file permissions"
+echo "\n"
+
+# Test 1: Check if we can read other users' files despite Unix permissions
+echo "[-] Searching for readable files in other users' home directories..."
+
+# Look for files in /u that we shouldn't be able to read based on Unix perms
+# Common targets: .profile, .ssh/*, .netrc, etc.
+targets=".profile .bash_profile .bashrc .netrc .ssh/id_rsa .ssh/id_dsa .ssh/authorized_keys"
+found_bypass=0
+
+for userdir in /u/*; do
+  if [ -d "$userdir" ]; then
+    username=`basename $userdir`
+    current_user=`whoami`
+
+    # Skip our own directory
+    if [ "$username" = "$current_user" ]; then
+      continue
+    fi
+
+    # Try to read common sensitive files
+    for target in $targets; do
+      filepath="$userdir/$target"
+      if [ -f "$filepath" ]; then
+        # Check Unix permissions - look for files we shouldn't be able to read
+        perms=`ls -l "$filepath" 2>/dev/null | awk '{print $1}'`
+
+        # Try to read the file
+        content=`head -1 "$filepath" 2>/dev/null`
+        read_result=$?
+        if [ "$read_result" -eq 0 ]; then
+          if [ -n "$content" ]; then
+            # We could read it - check if perms say we shouldn't
+            echo "$perms" | grep "^-rw-------" >/dev/null 2>&1
+            perm_check1=$?
+            echo "$perms" | grep "^-r--------" >/dev/null 2>&1
+            perm_check2=$?
+            if [ "$perm_check1" -eq 0 ] || [ "$perm_check2" -eq 0 ]; then
+              echo "[+] BYPASS DETECTED: Can read $filepath despite restrictive permissions ($perms)"
+              found_bypass=1
+            fi
+          fi
+        fi
+      fi
+    done
+  fi
+done
+
+if [ $found_bypass -eq 0 ]; then
+  echo "[-] No obvious permission bypasses detected in /u/*"
+fi
+echo "\n"
+
+# Test 2: Create our own test file with restrictive perms and verify we can still read it
+# This confirms the test methodology works
+echo "[-] Creating test file with restrictive permissions..."
+tmpfilename=`head -3 /dev/urandom | tr -cd '[a-zA-Z0-9]' | cut -c -5`
+tmpfile="/tmp/$tmpfilename.permtest"
+echo "secret_test_content_$$" > $tmpfile 2>/dev/null
+
+if [ -f "$tmpfile" ]; then
+  # Set to 000 (no permissions for anyone)
+  chmod 000 $tmpfile 2>/dev/null
+
+  # Try to read our own file with 000 permissions
+  content=`cat $tmpfile 2>/dev/null`
+  read_result=$?
+  if [ "$read_result" -eq 0 ]; then
+    if [ -n "$content" ]; then
+      echo "[+] Can read our own file even with 000 permissions!"
+      echo "[+] HFS Security permissions override Unix permissions"
+      echo "[-] File permissions: `ls -l $tmpfile 2>/dev/null | awk '{print $1}'`"
+    else
+      echo "[-] Cannot read own file with 000 permissions (expected behavior)"
+    fi
+  else
+    echo "[-] Cannot read own file with 000 permissions (expected behavior)"
+  fi
+
+  # Cleanup
+  chmod 600 $tmpfile 2>/dev/null
+  rm $tmpfile 2>/dev/null
+else
+  echo "[-] Could not create test file"
+fi
+
+echo "\n"
+
+# Test 3: Check if we can list directories we shouldn't have access to
+echo "[-] Testing directory access despite Unix permissions..."
+found_dir_bypass=0
+
+for userdir in /u/*; do
+  if [ -d "$userdir" ]; then
+    username=`basename $userdir`
+    current_user=`whoami`
+
+    # Skip our own directory
+    if [ "$username" = "$current_user" ]; then
+      continue
+    fi
+
+    # Check if directory has restrictive permissions
+    dirperms=`ls -ld "$userdir" 2>/dev/null | awk '{print $1}'`
+
+    # Try to list it
+    listing=`ls "$userdir" 2>/dev/null | head -1`
+    list_result=$?
+    if [ "$list_result" -eq 0 ]; then
+      if [ -n "$listing" ]; then
+        # Check if perms suggest we shouldn't be able to list
+        echo "$dirperms" | grep "^drwx------" >/dev/null 2>&1
+        dir_check1=$?
+        echo "$dirperms" | grep "^dr-x------" >/dev/null 2>&1
+        dir_check2=$?
+        if [ "$dir_check1" -eq 0 ] || [ "$dir_check2" -eq 0 ]; then
+          echo "[+] BYPASS DETECTED: Can list $userdir despite restrictive permissions ($dirperms)"
+          found_dir_bypass=1
+        fi
+      fi
+    fi
+  fi
+done
+
+if [ $found_dir_bypass -eq 0 ]; then
+  echo "[-] No directory permission bypasses detected"
+fi
+
+echo "\n"
+}
+
+chown_checks()
+{
+echo "\n#######  CHOWN Privilege Checks   ###################################\n"
+
+# Test for CHOWN_UNRESTRICTED and/or SUPERUSER.FILESYS.CHOWN
+# Create a temporary test file
+tmpfilename=`head -3 /dev/urandom | tr -cd '[a-zA-Z0-9]' | cut -c -5`
+tmpfile="/tmp/$tmpfilename.chowntest"
+touch $tmpfile 2>/dev/null
+
+if [ ! -f "$tmpfile" ]; then
+  echo "[-] Could not create test file for chown checks"
+  echo "\n"
+  return
+fi
+
+current_uid=`id -u`
+echo "[-] Testing chown capabilities (current UID: $current_uid)"
+echo "\n"
+
+# Test 1: Try to chown to UID 0
+echo "[-] Attempting to change ownership to UID 0..."
+chown 0 $tmpfile 2>/dev/null
+chown_result=$?
+if [ "$chown_result" -eq 0 ]; then
+  file_owner=`ls -ln $tmpfile | awk '{print $3}'`
+  if [ "$file_owner" = "0" ]; then
+    echo "[+] SUCCESS: Change to UID 0 worked! (CHOWN_UNRESTRICTED or SUPERUSER.FILESYS.CHOWN likely present)"
+
+    # Try to change it back to our UID
+    echo "[-] Attempting to change ownership back to UID $current_uid..."
+    chown $current_uid $tmpfile 2>/dev/null
+    chown_back_result=$?
+    if [ "$chown_back_result" -eq 0 ]; then
+      file_owner=`ls -ln $tmpfile | awk '{print $3}'`
+      if [ "$file_owner" = "$current_uid" ]; then
+        echo "[+] SUCCESS: Changed ownership back to our UID ($current_uid)"
+      else
+        echo "[-] FAILED: Could not verify ownership changed back (owner: $file_owner)"
+      fi
+    else
+      echo "[-] FAILED: Could not change ownership back to our UID"
+    fi
+  else
+    echo "[-] FAILED: File owner is $file_owner, not 0"
+  fi
+else
+  echo "[-] FAILED: Could not change ownership to UID 0"
+fi
+echo "\n"
+
+# Test 2: Find another UID from /u and test changing to that
+echo "[-] Finding another user's UID from /u directory..."
+other_uid=`ls -ln /u 2>/dev/null | awk '{print $3}' | grep -v "^$current_uid$" | grep -v "^0$" | head -1`
+
+if [ "$other_uid" != "" ]; then
+  echo "[-] Found UID: $other_uid"
+  echo "[-] Attempting to change ownership to UID $other_uid..."
+
+  # Reset file to our ownership first
+  chown $current_uid $tmpfile 2>/dev/null
+
+  # Try to change to other UID
+  chown $other_uid $tmpfile 2>/dev/null
+  chown_other_result=$?
+  if [ "$chown_other_result" -eq 0 ]; then
+    file_owner=`ls -ln $tmpfile | awk '{print $3}'`
+    if [ "$file_owner" = "$other_uid" ]; then
+      echo "[+] SUCCESS: Changed ownership to UID $other_uid"
+
+      # Try to change it back
+      echo "[-] Attempting to change ownership back to UID $current_uid..."
+      chown $current_uid $tmpfile 2>/dev/null
+      chown_back2_result=$?
+      if [ "$chown_back2_result" -eq 0 ]; then
+        file_owner=`ls -ln $tmpfile | awk '{print $3}'`
+        if [ "$file_owner" = "$current_uid" ]; then
+          echo "[+] SUCCESS: Changed ownership back to our UID ($current_uid)"
+          echo "[+] We have unrestricted chown capabilities!"
+        else
+          echo "[-] FAILED: Could not verify ownership changed back (owner: $file_owner)"
+        fi
+      else
+        echo "[-] FAILED: Could not change ownership back to our UID"
+      fi
+    else
+      echo "[-] FAILED: File owner is $file_owner, not $other_uid"
+    fi
+  else
+    echo "[-] FAILED: Could not change ownership to UID $other_uid"
+  fi
+else
+  echo "[-] Could not find another UID to test with"
+fi
+
+# Clean up
+rm $tmpfile 2>/dev/null
+echo "\n"
+}
+
 racf_searches()
 {
 echo "\n#######  RACF Searches   ############################################\n"
@@ -1101,6 +1337,8 @@ call_each()
   services_info
   software_configs
   interesting_files
+  hfs_permission_bypass
+  chown_checks
   racf_searches
   footer
 }

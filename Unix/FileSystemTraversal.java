@@ -9,15 +9,17 @@ import java.util.*;
 // This has been formatted to fit in an 80 column
 // dataset/pds, hence the weird indentation
 public class FileSystemTraversal {
- private static boolean includeDirs = false;
+ private static boolean includeDirs = true;
  private static boolean onlyExecutable = false;
- private static boolean onlyWritable = false;
+ private static boolean onlyWritable = true;
  private static boolean onlyReadable = false;
+ private static boolean flagsSpecified = false;
  private static PrintWriter output = null;
 
  public static void main(String[] args) {
-     if (args.length < 2) {
+     if (args.length < 1) {
 System.out.println("Usage: java FileSystemTraversal [flags] <directory_path>");
+System.out.println("Default: shows writable files and directories");
 System.out.println("Flags:");
 System.out.println("  -d (include directories)");
 System.out.println("  -x (only executable files)");
@@ -30,6 +32,21 @@ System.exit(1);
 
      List<String> argList = new ArrayList<>(Arrays.asList(args));
      String directoryPath = argList.remove(argList.size() - 1);
+
+     // If any filter flags are specified, reset defaults
+     for (String arg : argList) {
+      if (arg.equals("-d") || arg.equals("-x") || arg.equals("-w") ||
+          arg.equals("-r") || arg.equals("-a")) {
+          flagsSpecified = true;
+          break;
+      }
+     }
+     if (flagsSpecified) {
+      includeDirs = false;
+      onlyExecutable = false;
+      onlyWritable = false;
+      onlyReadable = false;
+     }
 
      for (int i = 0; i < argList.size(); i++) {
       String arg = argList.get(i);
