@@ -18,7 +18,8 @@ public class portscan
         String line = "";
         System.out.println("PortScan by SirCICSalot");
         if (args.length < 3 || args[0].toString() == "help") {
-System.out.println("Usage: java -cp . portscan host, start port, end port,");
+System.out.println("Usage: java -cp . portscan" +
+            " host, start port, end port,");
         System.out.println("       [-t timeout] [-d debug]");
             System.exit(exit);
         }
@@ -28,7 +29,8 @@ System.out.println("Usage: java -cp . portscan host, start port, end port,");
             portStart = Integer.parseInt(args[1]);
             portEnd = Integer.parseInt(args[2]);
         } catch (NumberFormatException e) {
-            System.err.println("Invalid port format: " + e.getMessage());
+            System.err.println(
+                "Invalid port format: " + e.getMessage());
             System.exit(exit);
         }
         
@@ -56,13 +58,15 @@ System.out.println("Usage: java -cp . portscan host, start port, end port,");
             try {
                 final InetAddress ia = InetAddress.getByName(host);
                 System.out.println(ia.getHostAddress());
-                System.out.println(InetAddress.getLocalHost().toString());
+                System.out.println(
+                    InetAddress.getLocalHost().toString());
                 System.out.println("Timeout: " + timeout);
             }
             catch (Exception ex) {}
         }
         for (int port = portStart; port <= portEnd; ++port) {
-            line = "[Timeout: "+timeout+"] ["+host+"] Current Port: " + port;
+            line = "[Timeout: " + timeout +
+                "] [" + host + "] Current Port: " + port;
             if (debug) {
                 System.out.println(line);
             } else if (port % 100 == 0){
@@ -70,7 +74,9 @@ System.out.println("Usage: java -cp . portscan host, start port, end port,");
             }
             try {
                 final Socket socket = new Socket();
-                socket.connect(new InetSocketAddress(host, port), timeout);
+                socket.connect(
+                    new InetSocketAddress(host, port),
+                    timeout);
                 socket.close();
                 System.out.println("Port " + port + " is open");
                 exit = 0;
