@@ -10,7 +10,7 @@
 ####
 
 STDOUT="SYSOUT=*" # <--- Where you want the output from ENUM and OMVSENUM to go
-folder='/home/phil/tet/' # <--- Folder to run tools from Make sure you have the trailing /
+folder='/u/mainframe' # <--- Folder to run tools from Make sure you have the trailing /
 JAVAC='/usr/lpp/java/J8.0_64/bin/javac' # <--- Must point to a valid javac
 JAVA='/usr/lpp/java/J8.0_64/bin/java' # <--- Must point to a valid java
 cat << EOF

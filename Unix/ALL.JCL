@@ -8,18 +8,18 @@
 //*********************************************************************
 //* Delete the files if they exist
 //*********************************************************************
-//ENUM      EXEC PGM=BPXBATCH
+//REMOVE    EXEC PGM=BPXBATCH
 //STDIN     DD DUMMY
 //STDOUT    DD DUMMY
 //STDERR    DD DUMMY     
 //STDPARM   DD *
-SH cd /home/phil/tet/;
+SH cd /u/mainframe;
  rm ENUM.rexx;
  rm OMVSEnum.sh;
  rm FileSystemTraversal.java;
  rm portscan.java;
 //*********************************************************************
-//PUTFILE  PROC FOLDER='/home/phil/tet/',FILENAME=''
+//PUTFILE  PROC FOLDER='/u/mainframe',FILENAME=''
 //*********************************************************************
 //**** Put the files in unix
 //*********************************************************************
@@ -38,1110 +38,2154 @@ SH cd /home/phil/tet/;
 //PUTFILE.SYSUT1 DD DATA,DLM='@@'
 /* REXX */
 
-/*            _,cyyyyyc,_
-  -------- . ?$$$$$$$$$$$7  ------------------------------------------\
-         .    %$$$$$$$$$7            z/OS System Enumeration Script   |
-            `  ?$$$$$$$7                                              |
-          '    .?$$$$$7              Arguments: ALL, APF, CAT, JOB,   |
-   sof        '  "'`'"                          PATH, SEC, SVC, VERS, |
-                _qQ$Qp_         .  .            WHO, TSTA, TSOT       |
-       .        $$$$$$$   . :  .:  .                                  |
-   I$$$$$$$$$$L `?jlj7' j$l$l$$il$$I Description: Enumerates z/OS sys |
-   :$$$$$$$$$i$b.     .d$$$$$$$$$$$:              information for use |
-    ?$$$$$I$$%"~ `     ~*$$$$$$$$$7               in penetration test |
-     ?$$$$\"~ `.          ~#$$$$$7                                    |
-      `7"~ `.   `            ~#7'    By: Philip Young                 |
-        `.                    .          Soldier of Fortran           |
-           .                             @mainframed767               |
----z-o-s---e-n-u-m-e-r-a-t-i-o-n-------------------------------------*/
+/*
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+$$$$$$$$$$$7'`         `'!$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+$$$$$$$7'                  `$$$$$$$$$       $     Y$$   $   $$$   $    YP    $$
+$$$$7'              $$$:.   :$$$$$$$$   $$$$$   L  ?$   $   $$$   $   s  s   $$
+$$$'                 '7$'    `$$$$$$$      $$   $L  ?   $   $$$   $   $$$$   $$
+$$          .4$$$a           :$$$$$$$   $$$$$   $$L     $   Y$P   $   $$$$   $$
+$        .4$$$$$$$    $$    .$$$$$$$$       $   $$$L    $L       J$   $$$$   $$
+:       :$$$$$$$$'   $$$$     ~'$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+!        '!:$$$7'                 '$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+                                   `+$$$$$$$$$$$P     Y$$$$$P       Y$$$$$$$$$$
+.                                    l$$$$$$$$$$  Y$P  $$$$$   $$$   $$$$$$$$$$
+::                                .4$$$$$$$$$$$$$$P  S$$$$$$   $$$   $$$$$$$$$$
+$$a.             .$             .4$$$$$$$$$$$$$$P  l$$$$$$$$   Y$P   $$$$$$$$$$
+$$$$b.          $$$$b.       .4$$$$$$$$$$$$$$$$$       $$  $L       J$$$$$$$$$$
+$$$$$$$$A.   .4$$$$$$$A.   .4$$$$$$$$$$$$$$$$$$$$$$$$$$$$ss$$$$$$$$$$$$$$$$$$$$
+$$$$$$$$$$$$$$$$$$$$$$$$$.$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+$$Y'                                                                       '?$$
+$$                    z/OS Enumeration Pentesting Tool                       $$
+$$                                                                           $$
+$$   Arguments: HELP, ALL, APF, CAT, JOB, PATH, SEC, SVC, TSTA, TSOT,        $$
+$$              USSU, VERS, WHO                                              $$
+$$b.                                                                       .d$$
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$SoF!
+*/
 
+/*------------------------------------------------------------------*\
+|* z/OS System Enumeration Tool                                     *|
+|*                                                                  *|
+|* Description: Enumerates z/OS system information for use in       *|
+|*              penetration testing and security assessments.       *|
+|*                                                                  *|
+|* Arguments:                                                       *|
+|*   ALL  - Display all information                                 *|
+|*   APF  - APF authorized datasets                                 *|
+|*   CAT  - Display master catalog                                  *|
+|*   JOB  - Display executing job name                              *|
+|*   PATH - Display dataset concatenations                          *|
+|*   SEC  - Security manager information                            *|
+|*   SVC  - Display SVC information                                 *|
+|*   TSTA - Display TESTAUTH authorization                          *|
+|*   TSOT - Display TSO AUTHCMD/AUTHPGM tables                      *|
+|*   USSU - Display USS/OMVS user list                              *|
+|*   VERS - Operating system version info                           *|
+|*   WHO  - Currently logged on users (TSO/OMVS)                    *|
+|*                                                                  *|
+|* Credits: Mark Zelden (IPLINFO), CBT Tape Files 221/496,          *|
+|*          Ayoub Elaassal, Jim Taylor, Davide Girardi              *|
+\*------------------------------------------------------------------*/
 
-/*--------------------------------------------------------------------*\
-|*                                                                    *|
-|* z/OS System Enumeration Script                                     *|
-|*                                                                    *|
-|* Description:  Enumerates system information for z/OS               *|
-|*               which might be useful for a penetration test.        *|
-|*                                                                    *|
-|* Arg: <TYPE> The type of enumeration to be conducted. Supports the  *|
-|*             following arguments:                                   *|
-|*             ALL  - Diplay all information                          *|
-|*             APF  - APF Authorized Datasets Information             *|
-|*             CAT  - Display Catalog                                 *|
-|*             JOB  - Display Executing Job Name                      *|
-|*             PATH - Display Dataset Concatenation Info              *|
-|*             SEC  - Security Manager Information                    *|
-|*             SVC  - Display SVC Information                         *|
-|*             VERS - Operating System Version Info                   *|
-|*             WHO  - Who is currently logged on through TSO/OMVS     *|
-|*             TSTA - Display TESTAUTH authorization                  *|
-|*             USSU - Display USS/OMVS user list                      *|
-|*             TSOT - Display TSO AUTHCMD, AUTHPGM tables             *|
-|*                                                                    *|
-|*                                                                    *|
-|* Sources:                                                           *|
-|*     Mark Zelden's IPLINFO Rexx:                                    *|
-|*        http://www.mzelden.com/mvsfiles/iplinfo.txt                 *|
-|*     File # 221 EDP Auditor REXX tools updated from Lee Conyers     *|
-|*        http://www.cbttape.org/ftp/cbt/CBT221.zip                   *|
-|*     Ayoub Elaassal's ELV.SELF                                      *|
-|*        https://github.com/ayoul3/Privesc                           *|
-|*     Jim Taylor's SETRRCVT                                          *|
-|*        https://github.com/jaytay79/zos                             *|
-|*     File # 496 REXX exec to do LISTA (display allocations)         *|
-|*        http://www.cbttape.org/ftp/cbt/CBT496.zip                   *|
-|*     USS/OMVS user details list by Davide Girardi (@nogonosa)       *|
-|*                                                                    *|
-\*--------------------------------------------------------------------*/
-                                        
+NUMERIC DIGITS 20
 
+/*==================================================================*/
+/* EBCDIC-SAFE BRACKET/BRACE PLACEHOLDERS                          */
+/*==================================================================*/
+/* These placeholders work across all EBCDIC code pages.            */
+/* After downloading output, use sed to replace with actual chars:  */
+/*                                                                  */
+/*   sed 's/<<LB>>/[/g; s/<<RB>>]/]/g; s/<<LC>>/{/g; s/<<RC>>}/}/g' */
+/*                                                                  */
+/* Or use any find/replace tool:                                    */
+/*   <<LB>> -> [    (left square bracket)                           */
+/*   <<RB>> -> ]    (right square bracket)                          */
+/*   <<LC>> -> {    (left curly brace)                              */
+/*   <<RC>> -> }    (right curly brace)                             */
+/*==================================================================*/
 
+/* Initialize global assessment variables */
+assessMode = 0
+findings.0 = 0
+findingtemplate.0 = 0
+verificationcaption.0 = 0
+verificationsteps.0 = 0
+
+/* Global variables for AddToArray */
+globalVars = 'tsoUsers. tasks. tasksUsers. omvs. omvsUsers.',
+  'jobs. jobsUsers. system.'
+
+/* Global variables for findings */
+findingsVars = 'assessMode findings. findingtemplate.',
+  'verificationcaption. verificationsteps. ipAddress smfid VSTEP_DELIM'
+
+/* Delimiter for verification steps */
+VSTEP_DELIM = '|~~|'
+
+ipAddress = ''
+smfid = ''
+
+/* Parse arguments and environment */
 PARSE SOURCE s1 s2 prg s3 name s4 s5 space .
-PARSE UPPER ARG type
+PARSE UPPER ARG type restArgs
 
-if space == 'ISPF' then do
-  say ''
-  say ''
-  say ''
-end
+/* Parse ASSESS subarguments if needed */
+IF type == 'ASSESS' THEN DO
+  PARSE VAR restArgs ipAddress
+  /* Initialize assessment mode */
+  assessMode = 1
+  findings.0 = 0
+  /* Get SMFID from system */
+  smfid = GetLparName()
+END
 
-if prg /== '?' & space /== 'OMVS' then
+/* Adjust for ISPF environment */
+IF space == 'ISPF' THEN DO
+  SAY ''
+  SAY ''
+  SAY ''
+END
+
+/* Show banner for non-ASSESS modes */
+IF type /== 'ASSESS' THEN CALL ShowBanner
+
+/* Set program name based on environment */
+IF prg /== '?' & space /== 'OMVS' THEN
   prgname = name||'('||prg||')'
-else
+ELSE
   prgname = name
 
+/* Main dispatch logic */
 SELECT
-  WHEN type == 'APF' THEN
-    x = APF()
-  WHEN type == 'VERS' THEN
-    x = VERSION()
-  WHEN type == 'SEC' THEN
-    x = SECURITY()
-  WHEN type == 'WHO' THEN
-    x = USERS()
-  WHEN type == 'SVC' THEN
-    x = SVC()
-  WHEN type == 'JOB' THEN
-    x = JOBNAME()
+  WHEN type == 'APF'  THEN CALL EnumApf
+  WHEN type == 'CAT'  THEN CALL EnumCatalog
+  WHEN type == 'JOB'  THEN CALL EnumJobname
   WHEN type == 'PATH' THEN DO
-    if space /== 'OMVS' THEN
-      x = PATH()
-    else
-      say 'DDNAME not supported in OMVS'
+    IF space /== 'OMVS' THEN CALL EnumPath
+    ELSE SAY 'DDNAME not supported in OMVS'
   END
-  WHEN type == 'CAT' THEN
-    x = CAT()
-  WHEN type == 'TSTA' THEN
-    x = TSTA()
-  WHEN type == 'USSU' THEN
-    call USSU
-  WHEN type == 'TSOT' THEN
-    call TSOT
+  WHEN type == 'SEC'  THEN CALL EnumSecurity
+  WHEN type == 'SVC'  THEN CALL EnumSvc
+  WHEN type == 'TSTA' THEN CALL EnumTestauth
+  WHEN type == 'TSOT' THEN CALL EnumTsoTables
+  WHEN type == 'USSU' THEN CALL EnumUssUsers
+  WHEN type == 'VERS' THEN CALL EnumVersion
+  WHEN type == 'WHO'  THEN CALL EnumUsers
 
-  WHEN type = 'ALL' THEN DO
-    say 'z/OS System Enumeration'
-    say ''
-    say 'Executing from:' prgname
-    say ''
-    say '-----------------------------------------'
-    x = VERSION()
-    say '-----------------------------------------'
-    say ''
-    x = SECURITY()
-    say '-----------------------------------------'
-    say ''
-    x = JOBNAME()
-    say '-----------------------------------------'
-    say ''
-    x = USERS()
-    say '-----------------------------------------'
-    say ''
-    x = APF()
-    say '-----------------------------------------'
-    say ''
-    x = SVC()
-    say '-----------------------------------------'
-    say '' 
-    x = TSTA()
-    say '-----------------------------------------'
-    say '' 
-    call USSU
-    say '-----------------------------------------'
-    say '' 
-    call TSOT
-    say '-----------------------------------------'
-    say ''
-    if space /== 'OMVS' THEN
-      x = PATH(1)
+  WHEN type == 'ALL'  THEN DO
+    CALL PrintBanner 'z/OS System Enumeration'
+    SAY 'Executing from:' prgname
+    SAY ''
+    CALL EnumVersion
+    CALL EnumSecurity
+    CALL EnumJobname
+    CALL EnumUsers
+    CALL EnumApf
+    CALL EnumSvc
+    CALL EnumTestauth
+    CALL EnumUssUsers
+    CALL EnumTsoTables
+    IF space /== 'OMVS' THEN DO
+      CALL EnumPath 1
+    END
   END
+
+  WHEN type == 'ASSESS' THEN DO
+    /* Run all enumeration functions normally */
+    CALL PrintSectionBanner 'z/OS System Enumeration (Assessment Mode)'
+    SAY 'Executing from:' prgname
+    SAY 'Target IP:' ipAddress
+    SAY 'SMFID:' smfid
+    SAY ''
+    CALL EnumVersion
+    CALL EnumSecurity
+    CALL EnumJobname
+    CALL EnumUsers
+    CALL EnumApf
+    CALL EnumSvc
+    CALL EnumTestauth
+    CALL EnumUssUsers
+    CALL EnumTsoTables
+    IF space /== 'OMVS' THEN DO
+      CALL EnumPath 1
+    END
+    /* Output JSON assessment results at the end */
+    CALL OutputAssessmentJSON
+  END
+
   OTHERWISE DO
-say "              _,cyyyyyc,_"
-say "  -------- . ?$$$$$$$$$$$7  -----------------------------------------"
-say "         .    %$$$$$$$$$7            z/OS System Enumeration Script  "
-say "            `  ?$$$$$$$7"
-say "          '    .?$$$$$7              Arguments: ALL, APF, CAT, JOB,"
-say "   sof        '  """'`'"""                        PATH, SEC, SVC, VERS,"
-say "                _qQ$Qp_         .  .            WHO, TSTA"
-say "       .        $$$$$$$   . :  .:  ."
-say "   I$$$$$$$$$$L `?jlj7' j$l$l$$il$$I"
-say "   :$$$$$$$$$i$b.     .d$$$$$$$$$$$:"
-say "    ?$$$$$I$$%'~ `     ~*$$$$$$$$$7"               
-say "     ?$$$$\'~ `.          ~#$$$$$7"
-say "      `7'~ `.   `            ~#7'"
-say "        `.                    ."
-say "           ."
-say "---z-o-s---e-n-u-m-e-r-a-t-i-o-n-------------------------------------"
-    say 'args:'
-    say "'ALL'  Display ALL Information"
-    say "'APF'  Display APF Authorized Datasets"
-    say "'CAT'  Display Catalogs (File Enumeration)"
-    say "'JOB'  Display Executing Job Name"
-    say "'PATH' Display Dataset Concatenation"
-    say "'SEC'  Display Security Manager Infomation"
-    say "'SVC'  Display All SVCs"
-    say "'VERS' Display System Information"
-    say "'WHO'  Display Logged On TSO/OMVS Users"
-    say "'TSTA' Display TESTAUTH authorization"
-    say "'USSU' Display USS/OMVS user list"
-    say "'TSOT' Display TSO AUTHCMD, AUTHPGM tables"
-    say ''
-    say 'Example:'
-    if space /== 'OMVS' then
-     say prgname "'WHO'"
-    else
-     say prgname 'WHO'
-    exit 8
+    CALL ShowUsage
+    EXIT 8
   END
 END
-   
-return 0
+
+EXIT 0
 
 
-JOBNAME:
-/* from: http://www.spgmbh.de/src/por_jobname_en.htm */
-CVT = STORAGE(10,4)      /* FLCCVT-PSA DATA AREA */
-TCBP = STORAGE(D2X(C2D(CVT)),4)       /* CVTTCBP */
-TCB = STORAGE(D2X(C2D(TCBP)+4),4)
-TIOT = STORAGE(D2X(C2D(TCB)+12),4)     /* TCBTIO */
-say 'Exec JOBNAME: 'STRIP(STORAGE(D2X(C2D(TIOT)),8)) /* TIOCNJOB */
-return 0
 
-USERS:
-numeric digits 10
+/*------------------------------------------------------------------*/
+/* Display usage information                                        */
+/*------------------------------------------------------------------*/
 
-cvt=ptr(16)                            /* Get CVT                    */ 
-asvt=ptr(cvt+556)+512                  /* Get asvt                   */ 
+ShowBanner: PROCEDURE
+/* credit to https://16colo.rs/pack/sae-006/FMB-SKLL.ASC */
+SAY "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"||,
+"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
+SAY "$$$$$$$$$$$7'`         `'!$$$$$$$$$$$$$"||,
+"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
+SAY "$$$$$$$7'                  `$$$$$$$$$  "||,
+"     $     Y$$   $   $$$   $    YP    $$"
+SAY "$$$$7'              $$$:.   :$$$$$$$$  "||,
+" $$$$$   L  ?$   $   $$$   $   s  s   $$"
+SAY "$$$'                 '7$'    `$$$$$$$  "||,
+"    $$   $L  ?   $   $$$   $   $$$$   $$"
+SAY "$$          .4$$$a           :$$$$$$$  "||,
+" $$$$$   $$L     $   Y$P   $   $$$$   $$"
+SAY "$        .4$$$$$$$    $$    .$$$$$$$$  "||,
+"     $   $$$L    $L       J$   $$$$   $$"
+SAY ":       :$$$$$$$$'   $$$$     ~'$$$$$$$"||,
+"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
+SAY "!        '!:$$$7'                 '$$$$"||,
+"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
+SAY "                                   `+$$"||,
+"$$$$$$$$$P     Y$$$$$P       Y$$$$$$$$$$"
+SAY ".                                    l$"||,
+"$$$$$$$$$  Y$P  $$$$$   $$$   $$$$$$$$$$"
+SAY "::                                .4$$$"||,
+"$$$$$$$$$$$P  S$$$$$$   $$$   $$$$$$$$$$"
+SAY "$$a.             .$             .4$$$$$"||,
+"$$$$$$$$$P  l$$$$$$$$   Y$P   $$$$$$$$$$"
+SAY "$$$$b.          $$$$b.       .4$$$$$$$$"||,
+"$$$$$$$$$       $$  $L       J$$$$$$$$$$"
+SAY "$$$$$$$$A.   .4$$$$$$$A.   .4$$$$$$$$$$"||,
+"$$$$$$$$$$$$$$$$$$ss$$$$$$$$$$$$$$$$$$$$"
+SAY "$$$$$$$$$$$$$$$$$$$$$$$$$.$$$$$$$$$$$$$"||,
+"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
+RETURN
 
-tso_users.0 = 0 
-tasks.0 = 0
-tasks_users.0 = 0
-omvs.0 = 0
-omvs_users.0 = 0
-jobs.0 = 0
-jobs_users.0 = 0
-system.0 = 0
+ShowUsage: PROCEDURE
 
-asvtmaxu=ptr(asvt+4)                   /* Get max asvt entries       */ 
-Do a = 0 to asvtmaxu - 1                                                
-  ascb=stg(asvt+16+a*4,4)              /* Get ptr to ascb (Skip master) */   
-                
-  If bitand(ascb,'80000000'x) = '00000000'x Then /* If in use        */ 
-    Do                                                                  
-      ascb=c2d(ascb)                   /* Get ascb address           */ 
-      cscb=ptr(ascb+56)                /* Get CSCB address           */ 
-      chtrkid=stg(cscb+28,1)           /* Check addr space type      */ 
-      ascbjbni=ptr(ascb+172)           /* Get ascbjbni               */ 
-      ascbjbns=ptr(ascb+176)           /* Get ascbjbns               */ 
-      asxb = ptr(ascb+108)
-      
-      acee = ptr(asxb+200)      
-      
-      ftcb = ptr(asxb+4)
-      ltcb = ptr(asxb+8)
-      
-      ascboucb = ptr(ascb+144,4)
-      oucbsubn = stg(ascboucb+176,4)
-      oucbtrxn = stg(ascboucb+200,8) /* transaction name */
-      oucbusrd = stg(ascboucb+208,8) /* userid */
-            
-      If ascbjbns<>0 & chtrkid = '02'x Then  /* started task */
-        Do                                                             
-          assb = ptr(ascb+336)
-          jsab = ptr(assb+168)
-          if jsab = 0 then
-            usid = ""
-          else
-            usid = stg(jsab+44,8)
-          
-          tmp = tasks.0 + 1
-          tasks.tmp = stg(ascbjbns,8)
-          tasks_users.tmp = usid
-          tasks.0 = tmp   
-               
-          
-        End
-      If ascbjbns<>0 & chtrkid = '01'x Then  /* TSO user */
-        Do                                                             
-          tmp = tso_users.0 + 1
-          tso_users.tmp = stg(ascbjbns,8)
-          tso_users.0 = tmp
-          
-        End
-      If ascbjbns<>0 & chtrkid = '04'x Then  /* System */
-        Do                                                             
-          tmp = system.0 + 1
-          system.tmp = stg(ascbjbns,8)
-          system.0 = tmp
-          
-        End
-      If strip(oucbsubn) = 'OMVS' Then /* OMVS user */
-        Do
-          tmp = omvs.0 + 1
-          omvs.tmp = oucbtrxn
-          omvs_users.tmp = oucbusrd
-          omvs.0 = tmp
-        End                                                            
-      If ascbjbni<>0 & chtrkid = '03'x Then  /* JOBS */
-        Do                                                             
-          If strip(oucbsubn) = 'OMVS' Then iterate
-          assb = ptr(ascb+336)
-          jsab = ptr(assb+168)
-          usid = stg(jsab+44,8)
-          
-          if jsab = 0 then
-            usid = ""
-          else
-            usid = stg(jsab+44,8)
-            
-          tmp = jobs.0 + 1
-          jobs.tmp = stg(ascbjbni,8)
-          jobs_users.tmp = usid
-          jobs.0 = tmp
-        
-          
-        End
-    End                                                                
-End
+SAY "$$Y'                                   "||,
+"                                    '?$$"
+SAY "$$                    z/OS Enumeration "||,
+"Pentesting Tool                       $$"
+SAY "$$                                     "||,
+"                                      $$"
+SAY "$$   Arguments: HELP, ALL, APF, CAT, JO"||,
+"B, PATH, SEC, SVC, TSTA, TSOT,        $$"
+SAY "$$              USSU, VERS, WHO        "||,
+"                                      $$"
+SAY "$$b.                                   "||,
+"                                    .d$$"
+SAY "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"||,
+"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$SoF!"
+RETURN
 
-say "**** Started Task - Owner *****"
-DO i = 1 to tasks.0
-   say tasks.i " - " tasks_users.i 
-END                                                       
 
-say ""
-say "**** TSO Users - Owner ****"
-DO i = 1 to tso_users.0
-   say tso_users.i " - " tso_users.i 
-END
+ShowHelp: PROCEDURE EXPOSE prgname space
+  SAY ''
+  SAY 'z/OS Enumeration tool by Soldier of FORTRAN'
+  SAY ''
+  SAY 'Arguments:'
+  SAY "  'HELP' - Display help information"
+  SAY "  'ALL'  - Display all information"
+  SAY "  'APF'  - Display APF authorized datasets"
+  SAY "  'CAT'  - Display master catalog"
+  SAY "  'JOB'  - Display executing job name"
+  SAY "  'PATH' - Display dataset concatenations"
+  SAY "  'SEC'  - Display security manager info"
+  SAY "  'SVC'  - Display all SVCs"
+  SAY "  'TSTA' - Display TESTAUTH authorization"
+  SAY "  'TSOT' - Display TSO AUTHCMD/AUTHPGM tables"
+  SAY "  'USSU' - Display USS/OMVS user list"
+  SAY "  'VERS' - Display system version information"
+  SAY "  'WHO'  - Display logged on TSO/OMVS users"
+  SAY "  'ASSESS' - Print the findings"
+  SAY ''
+  SAY 'Example:'
+  IF space /== 'OMVS' THEN SAY prgname "'WHO'"
+  ELSE SAY prgname 'WHO'
+RETURN
 
-say ""
-say "**** OMVS Users - Owner ****"
-DO i = 1 to omvs.0
-   say omvs.i " - " omvs_users.i
-END
+/*------------------------------------------------------------------*/
+/* Enumerate executing job name                                     */
+/*------------------------------------------------------------------*/
+EnumJobname: PROCEDURE
 
-say ""
-say "**** Jobs - Owner ****"
-DO i = 1 to jobs.0
-   say jobs.i " - " jobs_users.i 
-END
+  CALL PrintSectionBanner 'Job Information'
+  cvt = GetPtr(16)
+  tcbp = GetPtr(cvt)
+  tcb = GetPtr(tcbp+4)
+  tiot = GetPtr(tcb+12)
+  jobname = STRIP(GetStorage(tiot, 8))
+  SAY 'Executing Job Name:' jobname
+RETURN
 
-return 0                          
+/*------------------------------------------------------------------*/
+/* Enumerate logged on users (TSO/OMVS/Started Tasks/Jobs)         */
+/*------------------------------------------------------------------*/
+EnumUsers: PROCEDURE EXPOSE (globalvars)
 
-SECURITY:
-say 'External Security Manager:'
-/* Special thanks for IPLINFO for this information */
-/* Get JES Infomation */
-numeric digits 20
-CVT = C2D(STORAGE(10,4)) /* CVT Pointer */
-CVTRAC = C2D(STORAGE(D2X(CVT + 992),4))
-ID = STORAGE(D2X(CVTRAC),4) 
-If ID = 'RCVT' THEN DO /* RACF */
- RACFVRM  = Storage(D2x(CVTRAC + 616),4)         
- RCVTDSDT = C2d(Storage(D2x(CVTRAC + 224),4))
- DSDTNUM = C2d(Storage(D2x(RCVTDSDT+4),4))             
- DSDTPRIM = STRIP(Storage(D2x(RCVTDSDT+177),44),'T')
- DSDTBACK = STRIP(Storage(D2x(RCVTDSDT+353),44),'T')
- SAY 'Product: RACF'
- SAY 'Version: FMID HRF'RACFVRM
- SAY 'Datasets:'
- IF DSDTNUM = 1 THEN DO
-  SAY '  Primary:' DSDTPRIM
-  SAY '  Backup: ' DSDTBACK
- END
- ELSE DO /* It's a split RACF database */
-  OFFSET = 0
-  DB = ''
-  DO i = 1 TO DSDTNUM
-   DSDTPRIM  = STRIP(Storage(D2x(RCVTDSDT+177+OFFSET),44),'T')       
-   DSDTBACK  = STRIP(Storage(D2x(RCVTDSDT+353+OFFSET),44),'T')
-   OFFSET = OFFSET + 352
-   SAY '  ('i') Primary:' DSDTPRIM 
-   SAY '  ('i') Backup: ' DSDTBACK
+  CALL PrintSectionBanner 'Logged On Users'
+  cvt = GetPtr(16)
+  asvt = GetPtr(cvt+556) + 512
+  asvtMaxu = GetPtr(asvt+4)
+
+  /* Initialize arrays */
+  tsoUsers.0 = 0
+  tasks.0 = 0
+  tasksUsers.0 = 0
+  omvs.0 = 0
+  omvsUsers.0 = 0
+  jobs.0 = 0
+  jobsUsers.0 = 0
+  system.0 = 0
+
+  /* Iterate through address spaces */
+  DO i = 0 TO asvtMaxu - 1
+    ascb = GetStorage(asvt+16+(i*4), 4)
+
+    /* Check if address space is in use */
+    IF BITAND(ascb, '80000000'x) == '00000000'x THEN DO
+      ascb = C2D(ascb)
+      cscb = GetPtr(ascb+56)
+      chtrkid = GetStorage(cscb+28, 1)
+      ascbjbni = GetPtr(ascb+172)
+      ascbjbns = GetPtr(ascb+176)
+      asxb = GetPtr(ascb+108)
+      ascboucb = GetPtr(ascb+144)
+      oucbsubn = GetStorage(ascboucb+176, 4)
+      oucbtrxn = GetStorage(ascboucb+200, 8)
+      oucbusrd = GetStorage(ascboucb+208, 8)
+
+      /* Started task */
+      IF ascbjbns <> 0 & chtrkid == '02'x THEN DO
+        usid = GetUserid(ascb)
+        CALL AddToArray 'tasks', GetStorage(ascbjbns, 8)
+        CALL AddToArray 'tasksUsers', usid
+      END
+
+      /* TSO user */
+      IF ascbjbns <> 0 & chtrkid == '01'x THEN DO
+        CALL AddToArray 'tsoUsers', GetStorage(ascbjbns, 8)
+      END
+
+      /* System */
+      IF ascbjbns <> 0 & chtrkid == '04'x THEN DO
+        CALL AddToArray 'system', GetStorage(ascbjbns, 8)
+      END
+
+      /* OMVS user */
+      IF STRIP(oucbsubn) == 'OMVS' THEN DO
+        CALL AddToArray 'omvs', oucbtrxn
+        CALL AddToArray 'omvsUsers', oucbusrd
+      END
+
+      /* Batch job */
+      IF ascbjbni <> 0 & chtrkid == '03'x THEN DO
+        IF STRIP(oucbsubn) == 'OMVS' THEN ITERATE
+        usid = GetUserid(ascb)
+        CALL AddToArray 'jobs', GetStorage(ascbjbni, 8)
+        CALL AddToArray 'jobsUsers', usid
+      END
+    END
   END
- END
- RACFSTR = SETROPTS()
-END
-ELSE IF ID = 'RTSS' THEN DO /* Top Secret */
- RCVTDSN = Strip(Storage(D2x(CVTRAC + 56),44))
- SAY 'Product: Top Secret'
- SAY 'Dataset:' RCVTDSN
- /* I wish there was more here but for now this will do */
-END
-ELSE DO /* ACF2 */
- /* Straight from IPLINFO */
- /* All credit to Mark */
- CVTJESCT = C2D(STORAGE(D2X(CVT + 296),4))
- SSCVT = C2D(STORAGE(D2X(CVTJESCT + 24),4))
- Do while SSCVT <> 0                                                           
-  SSCTSNAM = Storage(D2x(SSCVT+8),4)       /* subsystem name       */         
-  If SSCTSNAM = 'ACF2' then do                                                
-   ACCVT    = C2d(Storage(D2x(SSCVT + 20),4)) /* ACF2 CVT         */         
-   ACCPFXP  = C2d(Storage(D2x(ACCVT - 4),4))  /* ACCVT prefix     */         
-   ACCPIDL  = C2d(Storage(D2x(ACCPFXP + 8),2))  /* Len ident area */         
-   LEN_ID   = ACCPIDL-4 /* don't count ACCPIDL and ACCPIDO in len */         
-   ACCPIDS  = Strip(Storage(D2x(ACCPFXP + 12),LEN_ID)) /*sys ident*/         
-   ACF2DSNS = C2d(Storage(D2x(ACCVT + 252) ,4)) /* ACF2 DSNs      */         
-   ACF2DNUM = C2d(Storage(D2x(ACF2DSNS + 16),2)) /* # OF DSNs     */         
-   Leave                                                                     
-  End                                                                         
-  SSCVT    = C2d(Storage(D2x(SSCVT+4),4))    /* next sscvt or zero   */         
- End
- SAY 'Product: ACF2'
- SAY 'Version:' ACCPIDS
- SAY 'Dataset(s):'
- Do ADSNS = 1 to ACF2DNUM                                                    
-  ADSOFF   = ACF2DSNS + 24 + (ADSNS-1)*64                                   
-  ACF2TYPE = Storage(D2x(ADSOFF) , 8)                                       
-  ACF2DSN  = Storage(D2x(ADSOFF + 16),44)  
-  SAY '  ' ACF2TYPE '-' ACF2DSN                                 
- End 
-END
-return 0
 
-APF:
-/* Thanks to FILE221 on CBT Tape for mapping this out */
-/* Lists APF Authorized datasets */
-say 'APF Authorized Libraries'
-say ''
-
-IF space == 'OMVS' THEN DO
- SAY '! APF Dataset Checking Not Supported in UNIX'
- MISSING = '******'
- SAY ''
-END
-
-say 'VOLUME | EXISTS | DATASET '
-say '-------|--------|---------'
-RETCODE = 0
-
-numeric digits 20 /* need this for D2X/C2D  */
-CVT = C2D(STORAGE(10,4)) /* CVT Pointer */
-CVTAUTHL = C2D(STORAGE(D2X(CVT + 484),4))
-IF CVTAUTHL = C2D('7FFFF001'x) THEN DO 
- /* The APF Table is Dynamic, not Static */
- CVTECVT = C2D(STORAGE(D2X(CVT + 140),4))
- ECVTCSVT = C2D(STORAGE(D2X(CVTECVT + 228),4))
- APF_PTR = c2d(storage(d2x(ECVTCSVT+12),4))
- CUR = c2d(storage(d2x(APF_PTR+8),4))      
- LAST = c2d(storage(d2x(APF_PTR+12),4))    
- DO FOREVER
-  DATASET = storage(d2x(CUR+24),44)
-  MISSING = '  Yes '
-  IF SUBSTR(DATASET,1,1) \= '00'x THEN DO /* Its not deleted */
-   VOL_SMS = storage(d2x(CUR+4),1)
-   IF bitand(VOL_SMS,'80'x) = '80'x THEN DO
-    VOLUME = 'SMS   '
-    /* Check to see if the dataset exists */
-    /* example code from http://mzelden.com/mvsfiles/apfver.txt */
-    IF space /== 'OMVS' THEN
-     RETCODE = Listdsi(''''STRIP(DATASET)''''  norecall)
-   END
-   ELSE DO
-    VOLUME = STORAGE(D2X(CUR+68),6)
-    IF space /== 'OMVS' THEN
-     RETCODE = Listdsi(''''STRIP(DATASET)'''',
-              'volume('STRIP(VOLUME)')'  norecall)
-   END
-   If RETCODE <> 0 then do
-    IF SYSREASON = 24 THEN
-     MISSING = '  No  '
-    ELSE
-     MISSING = SPACE(D2C(SYSREASON),8, ' ')
-     /* For Explanation of these codes visit:
-        https://www.ibm.com/support/knowledgecenter/SSLTBW_2.1.0/
-        com.ibm.zos.v2r1.ikja300/ldsi.htm#ldsi__ldrs */
-   END
-   /* Here we list the found items */
-   SAY strip(VOLUME) "|" MISSING "|" STRIP(DATASET) 
+  /* Display results */
+  SAY '**** Started Tasks - Owner ****'
+  DO i = 1 TO tasks.0
+    SAY tasks.i '-' tasksUsers.i
   END
-  IF CUR = LAST THEN LEAVE
-  ELSE CUR = C2D(STORAGE(D2X(CUR+8),4))
- END /* Do */
-END /* End of Dynamic */
-ELSE DO /* It's Static instead */
- NUMAPF = C2D(STORAGE(D2X(CVTAUTHL),2)) 
- LEN = C2D(STORAGE(D2X(CVTAUTHL+2),1)) 
- CUR = CVTAUTHL + 3          
- DO I = 1 TO NUMAPF                            
-  VOLUME = STORAGE(D2X(CUR),6)  
-  DATASET = STORAGE(D2X(CUR + 7),LEN)
-  CUR = CUR + LEN + 1          
-  LEN = C2D(STORAGE(D2X(CUR-1),1)) 
-  SAY STRIP(VOLUME) "|" STRIP(DATASET)
- END
-END
 
-RETURN 0
+  SAY ''
+  SAY '**** TSO Users - Owner ****'
+  DO i = 1 TO tsoUsers.0
+    SAY tsoUsers.i '-' tsoUsers.i
+  END
 
-VERSION:
-/* Special thanks for IPLINFO for this information */
-/* Get JES Infomation */
-say 'Operating System Information'
-numeric digits 20
-CVT = C2D(STORAGE(10,4)) /* CVT Pointer */
-CVTEXT2  = C2d(Storage(D2x(CVT + 328),4))
-CVTJESCT = C2D(STORAGE(D2X(CVT + 296),4))
-CVTVERID = STORAGE(D2X(CVT - 24),16)
-ECVT     = C2d(Storage(D2x(CVT + 140),4))
-/* OS */
-PRODNAME = Storage(D2x(CVT - 40),7)
-PRODNAM2 = Storage(D2x(ECVT+496),16)       /* point to product name*/         
-PRODNAM2 = Strip(PRODNAM2,'T')             /* del trailing blanks  */         
-VER      = Storage(D2x(ECVT+512),2)        /* point to version     */         
-REL      = Storage(D2x(ECVT+514),2)        /* point to release     */         
-MOD      = Storage(D2x(ECVT+516),2)        /* point to mod level   */         
-VRM      = VER'.'REL'.'MOD                                                    
-FMIDNUM  = Storage(D2x(CVT - 32),7)        /* point to fmid        */         
-SAY 'The OS version is 'PRODNAM2 VRM' - FMID' ,                             
-         FMIDNUM' ('PRODNAME').'         
+  SAY ''
+  SAY '**** OMVS Users - Owner ****'
+  DO i = 1 TO omvs.0
+    SAY omvs.i '-' omvsUsers.i
+  END
 
-/* Job Entry */ 
-JESSSCT = C2D(STORAGE(D2X(CVTJESCT + 24),4))
-JESPJESN = STORAGE(D2X(CVTJESCT + 28),4)
-SSCTSNAM = STORAGE(D2X(JESSSCT + 8),4)
-DO UNTIL JESSSCT = 0
- IF JESPJESN = SSCTSNAM THEN DO
-   SSCTSSVT = C2D(Storage(D2X(JESSSCT+16),4))         
-   SSCTSUSE = C2D(Storage(D2X(JESSSCT+20),4))         
-   SSCTSUS2 = C2D(Storage(D2X(JESSSCT+28),4))
-  LEAVE
- END
- JESSSCT = C2D(Storage(D2X(JESSSCT+4),4))
-END
+  SAY ''
+  SAY '**** Jobs - Owner ****'
+  DO i = 1 TO jobs.0
+    SAY jobs.i '-' jobsUsers.i
+  END
+RETURN
 
-IF JESPJESN = 'JES3' THEN DO
- JESVERS   = SYSVAR('SYSJES')                    
- JESNODE  = SYSVAR('SYSNODE')
-END
-ELSE IF JESPJESN = 'JES2' THEN DO
- JESVERS = Strip(Storage(D2x(SSCTSUSE),8))
-  Select                                                               
-    When Substr(JESVERS,1,8) == 'z/OS 2.2' then , /* z/OS 2.2        */
-      JESNODE  = Strip(Storage(D2x(SSCTSUS2+664),8)) /* JES2 NODE    */
-    When Substr(JESVERS,1,8) == 'z/OS 2.1' | ,  /* z/OS 2.1          */
-      Substr(JESVERS,1,8) == 'z/OS1.13'   | ,   /* z/OS 1.13         */
-      Substr(JESVERS,1,8) == 'z/OS1.12'   | ,   /* z/OS 1.12         */
-      Substr(JESVERS,1,8) == 'z/OS1.11' then,   /* z/OS 1.11         */
-      JESNODE  = Strip(Storage(D2x(SSCTSUS2+656),8)) /* JES2 NODE    */
-    When Substr(JESVERS,1,8) == 'z/OS1.10' | , /* z/OS 1.10          */
-      Substr(JESVERS,1,8) == 'z/OS 1.9' then,   /* z/OS 1.9          */
-      JESNODE  = Strip(Storage(D2x(SSCTSUS2+708),8)) /* JES2 NODE    */
-    When Substr(JESVERS,1,8) == 'z/OS 1.8' then, /* z/OS 1.8         */
-      JESNODE  = Strip(Storage(D2x(SSCTSUS2+620),8)) /* JES2 NODE    */
-    When Substr(JESVERS,1,8) == 'z/OS 1.7' then, /* z/OS 1.7         */
-      JESNODE  = Strip(Storage(D2x(SSCTSUS2+616),8)) /* JES2 NODE    */
-    When Substr(JESVERS,1,8) == 'z/OS 1.5' | , /* z/OS 1.5 & 1.6     */
-      Substr(JESVERS,1,8) == 'z/OS 1.4' then  /* z/OS 1.4            */
-      JESNODE  = Strip(Storage(D2x(SSCTSUS2+532),8)) /* JES2 NODE    */
-    When Substr(JESVERS,1,7) == 'OS 2.10' | , /* OS/390 2.10 and     */
-      Substr(JESVERS,1,8) == 'z/OS 1.2' then, /* z/OS 1.2            */
-      JESNODE  = Strip(Storage(D2x(SSCTSUS2+452),8)) /* JES2 NODE    */
-    When Substr(JESVERS,1,6) == 'OS 1.1' | , /* OS/390 1.1 or        */
-      Substr(JESVERS,1,4) == 'SP 5' then ,   /* ESA V5 JES2          */
-      JESNODE  = Strip(Storage(D2x(SSCTSUS2+336),8)) /*  JES2 NODE   */
-    When Substr(JESVERS,1,5) == 'OS 1.' | ,  /* OS/390 1.2           */
-      Substr(JESVERS,1,5) == 'OS 2.' then,   /*  through OS/390 2.9  */
-      JESNODE  = Strip(Storage(D2x(SSCTSUS2+372),8)) /* JES2 NODE    */
-    Otherwise ,                              /* Lower than ESA V5    */
-      If ENV = 'OMVS' then JESNODE = '*not_avail*'                     
-      else JESNODE  = SYSVAR('SYSNODE')      /* TSO/E VAR for JESNODE*/
-  End  /* select */                                                    
-END
+/*------------------------------------------------------------------*/
+/* Enumerate security manager (RACF/ACF2/Top Secret)               */
+/*------------------------------------------------------------------*/
+EnumSecurity: PROCEDURE EXPOSE (findingsVars)
 
-/* DF */
-/* From IPLINFO */
-CVTDFA   = C2d(Storage(D2x(CVT + 1216),4))         
-DFAPROD  = C2d(Storage(D2x(CVTDFA +16),1))
-If DFAPROD = 0 then do                       /* DFP not DF/SMS       */         
-  DFAREL   = C2x(Storage(D2x(CVTDFA+2),2))   /* point to DFP release */         
-  DFPVER   = Substr(DFAREL,1,1)              /* DFP Version          */         
-  DFPREL   = Substr(DFAREL,2,1)              /* DFP Release          */         
-  DFPMOD   = Substr(DFAREL,3,1)              /* DFP Mod Lvl          */         
-  DFPRD    = 'DFP'                           /* product is DFP       */         
-  DFLEV    = DFPVER || '.' || DFPREL || '.' || DFPMOD                           
-End                                                                             
-Else do                                      /* DFSMS not DFP        */         
-  DFARELS  = C2x(Storage(D2x(CVTDFA+16),4))  /* point to DF/SMS rel  */         
-  DFAVER   = X2d(Substr(DFARELS,3,2))        /* DF/SMS Version       */         
-  DFAREL   = X2d(Substr(DFARELS,5,2))        /* DF/SMS Release       */         
-  DFAMOD   = X2d(Substr(DFARELS,7,2))        /* DF/SMS Mod Lvl       */         
-  DFPRD    = 'DFSMS'                         /* product is DF/SMS    */         
-  DFLEV    = DFAVER || '.' || DFAREL || '.' || DFAMOD                           
-  If DFAPROD = 2 then DFLEV = 'OS/390' DFLEV                                    
-  If DFAPROD = 3 then do                                                        
-    DFLEV    = 'z/OS' DFLEV                                                     
-    /* Next section of code doesn't work because CRT is in key 5 */             
-       /*                                                                       
-    CVTCBSP  = C2d(Storage(D2x(CVT + 256),4))      /* point to AMCBS */         
-    CRT      = C2d(Storage(D2x(CVTCBSP + 124),4))  /* point to CRT   */         
-    CRTFMID  = Storage(D2x(CRT + 472),7)           /* DFSMS FMID     */         
-       */                                                                       
-  End /* if DFAPROD = 3 */                                                      
-End   
-/* TSO */
-CVTTVT   = C2d(Storage(D2x(CVT + 156),4))    /* point to TSO vect tbl*/         
-TSVTLVER = Storage(D2x(CVTTVT+100),1)        /* point to TSO Version */         
-TSVTLREL = Storage(D2x(CVTTVT+101),2)        /* point to TSO Release */         
-TSVTLREL = Format(TSVTLREL)                  /* Remove leading 0     */         
-TSVTLMOD = Storage(D2x(CVTTVT+103),1)        /* point to TSO Mod Lvl */         
-TSOLEV   = TSVTLVER || '.' || TSVTLREL || '.' || TSVTLMOD             
-/* VTAM */
-CHKVTACT = Storage(D2x(CVTEXT2+64),1)        /* VTAM active flag     */         
-If bitand(CHKVTACT,'80'x) = '80'x then do      /* vtam is active     */         
-  CVTATCVT = C2d(Storage(D2x(CVTEXT2 + 65),3)) /* point to VTAM AVT  */         
-  ISTATCVT = C2d(Storage(D2x(CVTATCVT + 0),4)) /* point to VTAM CVT  */         
-  ATCVTLVL = Storage(D2x(ISTATCVT + 0),8)      /* VTAM Rel Lvl VOVRP */         
-  VTAMVER  = Substr(ATCVTLVL,3,1)              /* VTAM Version   V   */         
-  VTAMREL  = Substr(ATCVTLVL,4,1)              /* VTAM Release    R  */         
-  VTAMMOD  = Substr(ATCVTLVL,5,1)              /* VTAM Mod Lvl     P */         
-  If VTAMMOD = ' ' then VTAMLEV =  VTAMVER || '.' || VTAMREL                    
-    else VTAMLEV =  VTAMVER || '.' || VTAMREL || '.' || VTAMMOD                 
-/*                                                                   */         
-  ATCNETID = Strip(Storage(D2x(ISTATCVT + 2080),8))  /* VTAM NETID   */         
-  ATCNQNAM = Strip(Storage(D2x(ISTATCVT + 2412),17)) /* VTAM SSCPNAME*/         
-  VTAM_ACTIVE = 'YES'                                                           
-End /* if bitand (vtam is active) */                                            
-Else VTAM_ACTIVE = 'NO' 
+  CALL PrintSectionBanner 'Security Settings'
 
-SAY 'TSO:' TSOLEV
-SAY 'JES:' JESPJESN JESVERS 'Node:' JESNODE
-IF VTAM_ACTIVE = 'YES' THEN 
-  SAY 'VTAM:' VTAMLEV '(NETID:' ATCNETID') (SSCPNAME:' ATCNQNAM')'
-return 0
+  IF assessMode == 0 THEN SAY 'External Security Manager:'
+  ELSE SAY 'External Security Manager:'
 
-SVC:
-/* File 221 ListSVCT */
-/* and #NUCLKUP */
+  cvt = GetPtr(16)
+  cvtrac = GetPtr(cvt+992)
+  id = GetStorage(cvtrac, 4)
 
-numeric digits 20 /* need this for D2X/C2D  */
-/* from: 
-https://groups.google.com/forum/#!topic/
-bit.listserv.ibm-main/XmgU5suwx9c
-CVT : CVTABEND ---> SCVTSECT : 
-                    SCVTSVCT ---> SVC table (mapped by IHASVC)
-*/
-say 'Installed SVCs:'
-/* SVCEP = SVC ENTRY POINT ADDRESS */
-say 'SVCEP    | SVC | HX | TYPE | APF | ESR'
-say '---------|-----|----|------|-----|----'
+  SELECT
+    WHEN id == 'RCVT' THEN CALL EnumRacf cvtrac
+    WHEN id == 'RTSS' THEN CALL EnumTopSecret cvtrac
+    OTHERWISE CALL EnumAcf2 cvt
+  END
+RETURN
 
-CVT = C2D(STORAGE(10,4)) /* CVT Pointer */
-CVTABEND = C2D(STORAGE(D2X(CVT + 200),4))
-SCVTSVCT = C2D(STORAGE(D2X(CVTABEND + 132),4))
-CVTNUCMP = C2D(STORAGE(D2X(CVT + 1200),4))
-NUCMADDR = C2D(STORAGE(D2X(CVTNUCMP + 8),4))
+/*------------------------------------------------------------------*/
+/* Enumerate RACF configuration                                     */
+/*------------------------------------------------------------------*/
+EnumRacf: PROCEDURE EXPOSE (findingsVars) warningDatasets,
+  excessiveUaccDatasets excessiveAccessDatasets
+  PARSE ARG rcvt
 
-NUCMAP = CVTNUCMP + 16
-DO WHILE NUCMAP <= NUCMADDR
- IF STORAGE(D2X(NUCMAP),8) = 'IGCERROR' THEN DO
-  IGCERROR = STORAGE(D2X(NUCMAP + 8),4)
-  LEAVE
- END
- NUCMAP = NUCMAP + 16
-END
+  racfVrm = GetStorage(rcvt+616, 4)
+  rcvtDsdt = GetPtr(rcvt+224)
+  dsdtNum = GetPtr(rcvtDsdt+4)
+  dsdtPrim = STRIP(GetStorage(rcvtDsdt+177, 44), 'T')
+  dsdtBack = STRIP(GetStorage(rcvtDsdt+353, 44), 'T')
 
-Do i = 0 to 255
- ADDR = BITAND(STORAGE(D2X(SCVTSVCT+(i*8)),4),'7FFFFFFF'x)
- IF IGCERROR /= ADDR THEN DO
-  SVCTYPE = STORAGE(D2X(SCVTSVCT+(i*8)+4),1)
-  /* Determine Type */
-  IF BITAND(SVCTYPE,'80'x) = '80'x THEN TYPE = '2'
-  ELSE IF BITAND(SVCTYPE,'C0'x) = 'C0'x THEN TYPE = '3/4'
-  ELSE IF BITAND(SVCTYPE,'20'x) = '20'x THEN TYPE = '6'
-  ELSE IF BITAND(SVCTYPE,'F0'x) = '00'x THEN TYPE = '1'
-  ELSE TYPE = '?'
-  /* Is APF? */
-  IF BITAND(SVCTYPE,'08'x) = '08'x THEN APF = 'Y'
-  ELSE APF = "N"
-  IF BITAND(SVCTYPE,'04'x) = '04'x THEN ESR = 'Y'
-  ELSE ESR = "N"
+  SAY 'Product: RACF'
+  SAY 'Version: FMID HRF'racfVrm
+  SAY 'Datasets:'
+  SAY ''
+
+  /* Always show access since we're on RACF */
+  SAY 'UACC | WARN | ACCESS | DATASET'
+  SAY '-----|------|--------|' || COPIES('-', 44)
+
+  IF dsdtNum == 1 THEN DO
+    /* Check access for primary and backup - READ access is a finding */
+    /* Pass empty strings for volume/missing to get simple format */
+    outputprim = CheckAndReportDatasetAccess(dsdtPrim, '', '', 1)
+    SAY outputprim
+    outputback = CheckAndReportDatasetAccess(dsdtBack, '', '', 1)
+    SAY outputback
+  END
+  ELSE DO
+    offset = 0
+    DO i = 1 TO dsdtNum
+      prim = STRIP(GetStorage(rcvtDsdt+177+offset, 44), 'T')
+      back = STRIP(GetStorage(rcvtDsdt+353+offset, 44), 'T')
+      offset = offset + 352
+      /* Check access for primary and backup - READ access is a finding */
+      /* Pass empty strings for volume/missing to get simple format */
+      outputprim = CheckAndReportDatasetAccess(prim, '', '', 1)
+      SAY outputprim
+      outputback = CheckAndReportDatasetAccess(back, '', '', 1)
+      SAY outputback
+    END
+  END
+
+  /* Check if we need to add findings for RACF dataset security */
+  /* Parse all fields from the output: UACC | WARN | ACCESS | DATASET */
+  PARSE VAR outputprim primuacc '|' primwarn '|' primaccess '|' .
+  PARSE VAR outputback backuacc '|' backwarn '|' backaccess '|' .
+  primuacc = STRIP(primuacc)
+  primwarn = STRIP(primwarn)
+  primaccess = STRIP(primaccess)
+  backuacc = STRIP(backuacc)
+  backwarn = STRIP(backwarn)
+  backaccess = STRIP(backaccess)
+
+  IF assessMode == 1 THEN DO
+    /* Check for user access to RACF datasets */
+    IF primaccess \== 'NONE' | backaccess \== 'NONE' THEN DO
+      CALL AddFinding 'RACF-DATASET-ACCESS'
+      CALL AddVerificationCaption 'Run the REXX script ENUM with the',
+        'SEC argument and observe that the testing account has READ or',
+        'greater access to the RACF datasets.'
+      CALL AddVerificationContent 'UACC | WARN | ACCESS | DATASET'||,
+        ' -----|------|--------|---------------------------------'||,
+        ' '||outputprim||' '||outputback
+    END
+
+    /* Check for excessive UACC on RACF datasets */
+    IF primuacc \== 'NONE' | backuacc \== 'NONE' THEN DO
+      CALL AddFinding 'RACF-DATASET-EXCESSIVE-UACC'
+      CALL AddVerificationCaption 'Run the REXX script ENUM with the',
+        'SEC argument and observe that the RACF datasets have a UACC',
+        'of READ or greater.'
+      CALL AddVerificationContent 'UACC | WARN | ACCESS | DATASET'||,
+        ' -----|------|--------|---------------------------------'||,
+        ' '||outputprim||' '||outputback
+    END
+
+    /* Check for WARNING mode on RACF datasets */
+    IF primwarn == 'YES' | backwarn == 'YES' THEN DO
+      CALL AddFinding 'RACF-DATASET-WARNING-MODE'
+      CALL AddVerificationCaption 'Run the REXX script ENUM with the',
+        'SEC argument and observe that the RACF datasets are configured',
+        'with WARNING mode enabled.'
+      CALL AddVerificationContent 'UACC | WARN | ACCESS | DATASET'||,
+        ' -----|------|--------|---------------------------------'||,
+        ' '||outputprim||' '||outputback
+    END
+  END
+
+  SAY ''
+  CALL EnumSetropts rcvt
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate Top Secret configuration                              */
+/*------------------------------------------------------------------*/
+EnumTopSecret: PROCEDURE EXPOSE (findingsVars) warningDatasets,
+  excessiveUaccDatasets excessiveAccessDatasets
+  PARSE ARG cvtrac
+
+  rcvtDsn = STRIP(GetStorage(cvtrac+56, 44))
+  SAY 'Product: Top Secret'
+  SAY 'Dataset:' rcvtDsn
+  SAY ''
+  SAY 'Note: Access checking for Top Secret datasets requires'
+  SAY '      Top Secret-specific commands (not yet implemented)'
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate ACF2 configuration                                     */
+/*------------------------------------------------------------------*/
+EnumAcf2: PROCEDURE EXPOSE (findingsVars) warningDatasets,
+  excessiveUaccDatasets excessiveAccessDatasets
+  PARSE ARG cvt
+
+  cvtJesct = GetPtr(cvt+296)
+  sscvt = GetPtr(cvtJesct+24)
+
+  DO WHILE sscvt <> 0
+    ssctsNam = GetStorage(sscvt+8, 4)
+
+    IF ssctsNam == 'ACF2' THEN DO
+      accvt = GetPtr(sscvt+20)
+      accpfxp = GetPtr(accvt-4)
+      accpidl = C2D(GetStorage(accpfxp+8, 2))
+      lenId = accpidl - 4
+      accpids = STRIP(GetStorage(accpfxp+12, lenId))
+      acf2Dsns = GetPtr(accvt+252)
+      acf2Dnum = C2D(GetStorage(acf2Dsns+16, 2))
+
+      SAY 'Product: ACF2'
+      SAY 'Version:' accpids
+      SAY 'Dataset(s):'
+
+      DO i = 1 TO acf2Dnum
+        adsOff = acf2Dsns + 24 + ((i-1)*64)
+        acf2Type = GetStorage(adsOff, 8)
+        acf2Dsn = GetStorage(adsOff+16, 44)
+        SAY ' ' acf2Type '-' acf2Dsn
+      END
+
+      SAY ''
+      SAY 'Note: Access checking for ACF2 datasets requires'
+      SAY '      ACF2-specific commands (not yet implemented)'
+
+      LEAVE
+    END
+
+    sscvt = GetPtr(sscvt+4)
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate APF authorized libraries                              */
+/*------------------------------------------------------------------*/
+EnumApf: PROCEDURE EXPOSE space (findingsVars)
+
+  CALL PrintSectionBanner 'APF Authorized Datasets/Libraries'
+
+  IF space == 'OMVS' THEN DO
+    SAY '! APF Dataset Checking Not Supported in UNIX'
+    missing = '******'
+    SAY ''
+  END
+
+  /* Check if we're on RACF to determine if we show access columns */
+  cvt = GetPtr(16)
+  cvtrac = GetPtr(cvt+992)
+  id = GetStorage(cvtrac, 4)
+  showAccess = (id == 'RCVT')
+
+  /* Initialize finding tracking arrays */
+  warningDatasets = ''
+  excessiveUaccDatasets = ''
+  excessiveAccessDatasets = ''
+
+  IF showAccess THEN DO
+    SAY 'VOLUME | EXISTS | UACC | WARN | ACCESS | DATASET'
+    SAY '-------|--------|------|------|--------|' || COPIES('-', 20)
+  END
+  ELSE DO
+    SAY 'VOLUME | EXISTS | DATASET'
+    SAY '-------|--------|' || COPIES('-', 44)
+  END
+
+  cvtAuthl = GetPtr(cvt+484)
+
+  /* Check if APF table is dynamic or static */
+  IF cvtAuthl == C2D('7FFFF001'x) THEN DO
+    CALL EnumDynamicApf cvt, showAccess
+  END
+  ELSE DO
+    CALL EnumStaticApf cvtAuthl, showAccess
+  END
+
+  /* Add findings if any issues were found */
+  IF showAccess & assessMode == 1 THEN DO
+    IF warningDatasets \== '' THEN DO
+      CALL AddFinding 'APF-WARNING-MODE-ENABLED'
+      CALL AddVerificationCaption 'Run the REXX script ENUM and observe',
+        'that the following datasets were configured with WARNING mode',
+        'enabled:'
+      CALL AddVerificationContent warningDatasets
+    END
+
+    IF excessiveUaccDatasets \== '' THEN DO
+      CALL AddFinding 'APF-EXCESSIVE-UACC'
+      CALL AddVerificationCaption 'Run the REXX script ENUM and observe',
+        'that the following datasets were configured with a UACC of',
+        'UPDATE, CONTROL, or ALTER:'
+      CALL AddVerificationContent excessiveUaccDatasets
+    END
+
+    IF excessiveAccessDatasets \== '' THEN DO
+      CALL AddFinding 'APF-EXCESSIVE-USER-ACCESS'
+      CALL AddVerificationCaption 'Run the REXX script ENUM and observe',
+        'that the testing account had UPDATE, CONTROL, or ALTER access',
+        'to the following datasets:'
+      CALL AddVerificationContent excessiveAccessDatasets
+    END
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate dynamic APF table                                      */
+/*------------------------------------------------------------------*/
+EnumDynamicApf: PROCEDURE EXPOSE space warningDatasets,
+  excessiveUaccDatasets excessiveAccessDatasets
+  PARSE ARG cvt, showAccess
+
+  cvtEcvt = GetPtr(cvt+140)
+  ecvtCsvt = GetPtr(cvtEcvt+228)
+  apfPtr = GetPtr(ecvtCsvt+12)
+  cur = GetPtr(apfPtr+8)
+  last = GetPtr(apfPtr+12)
+
+  DO FOREVER
+    dataset = GetStorage(cur+24, 44)
+    missing = '  Yes '
+
+    IF SUBSTR(dataset, 1, 1) \== '00'x THEN DO
+      volSms = GetStorage(cur+4, 1)
+
+      IF BITAND(volSms, '80'x) == '80'x THEN DO
+        volume = 'SMS   '
+        IF space /== 'OMVS' THEN
+          retcode = LISTDSI("'"STRIP(dataset)"'" norecall)
+      END
+      ELSE DO
+        volume = GetStorage(cur+68, 6)
+        IF space /== 'OMVS' THEN
+          retcode = LISTDSI("'"STRIP(dataset)"'",
+            'volume('STRIP(volume)')' norecall)
+      END
+
+      IF retcode <> 0 THEN DO
+        IF SYSREASON == 24 THEN missing = '  No  '
+        ELSE missing = SPACE(D2C(SYSREASON), 8, ' ')
+      END
+
+      /* Check dataset access if on RACF */
+      IF showAccess THEN DO
+        output = CheckAndReportDatasetAccess(dataset, volume, missing)
+        SAY output
+      END
+      ELSE DO
+        SAY LEFT(STRIP(volume),6) '|' STRIP(LEFT(missing,6)),
+           '|' STRIP(dataset)
+      END
+    END
+
+    IF cur == last THEN LEAVE
+    cur = GetPtr(cur+8)
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate static APF table                                       */
+/*------------------------------------------------------------------*/
+EnumStaticApf: PROCEDURE EXPOSE warningDatasets,
+  excessiveUaccDatasets excessiveAccessDatasets
+  PARSE ARG cvtAuthl, showAccess
+
+  numApf = C2D(GetStorage(cvtAuthl, 2))
+  len = C2D(GetStorage(cvtAuthl+2, 1))
+  cur = cvtAuthl + 3
+
+  DO i = 1 TO numApf
+    volume = GetStorage(cur, 6)
+    dataset = GetStorage(cur+7, len)
+    missing = '  N/A  '
+
+    /* Check dataset access if on RACF */
+    IF showAccess THEN DO
+      output = CheckAndReportDatasetAccess(dataset, volume, missing)
+      SAY output
+    END
+    ELSE DO
+      SAY STRIP(volume) '|' STRIP(dataset)
+    END
+
+    cur = cur + len + 1
+    len = C2D(GetStorage(cur-1, 1))
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate operating system version information                  */
+/*------------------------------------------------------------------*/
+EnumVersion: PROCEDURE
+
+  CALL PrintSectionBanner 'Operating System Version'
+
+  cvt = GetPtr(16)
+  cvtExt2 = GetPtr(cvt+328)
+  cvtJesct = GetPtr(cvt+296)
+  ecvt = GetPtr(cvt+140)
+
+  /* OS version */
+  prodName = GetStorage(cvt-40, 7)
+  prodName2 = STRIP(GetStorage(ecvt+496, 16), 'T')
+  ver = GetStorage(ecvt+512, 2)
+  rel = GetStorage(ecvt+514, 2)
+  mod = GetStorage(ecvt+516, 2)
+  vrm = ver'.'rel'.'mod
+  fmidNum = GetStorage(cvt-32, 7)
+
+  SAY 'The OS version is' prodName2 vrm '- FMID' fmidNum,
+    '('prodName').'
+
+  /* LPAR and Processor information */
+  csd = GetPtr(cvt+660)
+  ecvtHdnm = GetStorage(ecvt+336, 8)  /* Hardware name */
+  ecvtLpnm = GetStorage(ecvt+344, 8)  /* LPAR name */
+
+  IF ecvtHdnm \== '        ' & ecvtLpnm \== '        ' THEN DO
+    csdPlpn = C2D(GetStorage(csd+252, 1))  /* LPAR number */
+    SAY 'The Processor name is' STRIP(ecvtHdnm)'.',
+      'The LPAR SMFID is' STRIP(ecvtLpnm) '(LPAR #'csdPlpn').'
+  END
+
+  /* TSO version */
+  cvtTvt = GetPtr(cvt+156)
+  tsvtLver = GetStorage(cvtTvt+100, 1)
+  tsvtLrel = GetStorage(cvtTvt+101, 2)
+  tsvtLrel = FORMAT(tsvtLrel)
+  tsvtLmod = GetStorage(cvtTvt+103, 1)
+  tsoLev = tsvtLver'.'tsvtLrel'.'tsvtLmod
+  SAY 'TSO:' tsoLev
+
+  /* JES version */
+  CALL EnumJes cvtJesct
+
+  /* VTAM version */
+  CALL EnumVtam cvtExt2
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate JES information                                        */
+/*------------------------------------------------------------------*/
+EnumJes: PROCEDURE
+  PARSE ARG cvtJesct
+
+  jesSsct = GetPtr(cvtJesct+24)
+  jesPjesn = GetStorage(cvtJesct+28, 4)
+  ssctsNam = GetStorage(jesSsct+8, 4)
+
+  DO UNTIL jesSsct == 0
+    IF jesPjesn == ssctsNam THEN DO
+      ssctSsvt = GetPtr(jesSsct+16)
+      ssctSuse = GetPtr(jesSsct+20)
+      ssctSus2 = GetPtr(jesSsct+28)
+      LEAVE
+    END
+    jesSsct = GetPtr(jesSsct+4)
+  END
+
+  IF jesPjesn == 'JES3' THEN DO
+    jesVers = SYSVAR('SYSJES')
+    jesNode = SYSVAR('SYSNODE')
+  END
+  ELSE IF jesPjesn == 'JES2' THEN DO
+    jesVers = STRIP(GetStorage(ssctSuse, 8))
+    jesNode = GetJes2Node(jesVers, ssctSus2)
+  END
+
+  SAY 'JES:' jesPjesn jesVers 'Node:' jesNode
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Get JES2 node name based on version                             */
+/*------------------------------------------------------------------*/
+GetJes2Node: PROCEDURE
+  PARSE ARG jesVers, ssctSus2
+
+  prefix = SUBSTR(jesVers, 1, 8)
+
+  SELECT
+    WHEN prefix == 'z/OS 2.2' THEN
+      jesNode = STRIP(GetStorage(ssctSus2+664, 8))
+    WHEN prefix == 'z/OS 2.1' | prefix == 'z/OS1.13' |,
+         prefix == 'z/OS1.12' | prefix == 'z/OS1.11' THEN
+      jesNode = STRIP(GetStorage(ssctSus2+656, 8))
+    WHEN prefix == 'z/OS1.10' | prefix == 'z/OS 1.9' THEN
+      jesNode = STRIP(GetStorage(ssctSus2+708, 8))
+    WHEN prefix == 'z/OS 1.8' THEN
+      jesNode = STRIP(GetStorage(ssctSus2+620, 8))
+    WHEN prefix == 'z/OS 1.7' THEN
+      jesNode = STRIP(GetStorage(ssctSus2+616, 8))
+    WHEN prefix == 'z/OS 1.5' | prefix == 'z/OS 1.4' THEN
+      jesNode = STRIP(GetStorage(ssctSus2+532, 8))
+    WHEN SUBSTR(jesVers,1,7) == 'OS 2.10' |,
+         prefix == 'z/OS 1.2' THEN
+      jesNode = STRIP(GetStorage(ssctSus2+452, 8))
+    WHEN SUBSTR(jesVers,1,6) == 'OS 1.1' |,
+         SUBSTR(jesVers,1,4) == 'SP 5' THEN
+      jesNode = STRIP(GetStorage(ssctSus2+336, 8))
+    WHEN SUBSTR(jesVers,1,5) == 'OS 1.' |,
+         SUBSTR(jesVers,1,5) == 'OS 2.' THEN
+      jesNode = STRIP(GetStorage(ssctSus2+372, 8))
+    OTHERWISE
+      jesNode = SYSVAR('SYSNODE')
+  END
+
+RETURN jesNode
+
+/*------------------------------------------------------------------*/
+/* Enumerate VTAM information                                       */
+/*------------------------------------------------------------------*/
+EnumVtam: PROCEDURE
+  PARSE ARG cvtExt2
+
+  chkVtAct = GetStorage(cvtExt2+64, 1)
+
+  IF BITAND(chkVtAct, '80'x) == '80'x THEN DO
+    cvtAtcvt = C2D(GetStorage(cvtExt2+65, 3))
+    istAtcvt = GetPtr(cvtAtcvt)
+    atcvtLvl = GetStorage(istAtcvt, 8)
+    vtamVer = SUBSTR(atcvtLvl, 3, 1)
+    vtamRel = SUBSTR(atcvtLvl, 4, 1)
+    vtamMod = SUBSTR(atcvtLvl, 5, 1)
+
+    IF vtamMod == ' ' THEN vtamLev = vtamVer'.'vtamRel
+    ELSE vtamLev = vtamVer'.'vtamRel'.'vtamMod
+
+    atcNetid = STRIP(GetStorage(istAtcvt+2080, 8))
+    atcNqnam = STRIP(GetStorage(istAtcvt+2412, 17))
+
+    SAY 'VTAM:' vtamLev '(NETID:' atcNetid')',
+      '(SSCPNAME:' atcNqnam')'
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate SVC table                                              */
+/*------------------------------------------------------------------*/
+EnumSvc: PROCEDURE EXPOSE (findingsVars)
+
+  CALL PrintSectionBanner 'SVC Table'
+  IF assessMode == 0 THEN DO
+    SAY 'Installed SVCs (APF authorized only):'
+  END
+  ELSE DO
+    SAY 'Installed SVCs:'
+  END
+  SAY 'SVCEP    | SVC | HX | TYPE | APF | ESR'
+  SAY '---------|-----|----|------|-----|----'
+
+  cvt = GetPtr(16)
+  cvtAbend = GetPtr(cvt+200)
+  scvtSvct = GetPtr(cvtAbend+132)
+  cvtNucmp = GetPtr(cvt+1200)
+  nucmAddr = GetPtr(cvtNucmp+8)
+
+  /* Find IGCERROR address */
+  nucmap = cvtNucmp + 16
+  DO WHILE nucmap <= nucmAddr
+    IF GetStorage(nucmap, 8) == 'IGCERROR' THEN DO
+      igcError = GetStorage(nucmap+8, 4)
+      LEAVE
+    END
+    nucmap = nucmap + 16
+  END
+
+  /* Iterate through SVC table */
+  DO i = 0 TO 255
+    addr = BITAND(GetStorage(scvtSvct+(i*8), 4), '7FFFFFFF'x)
+
+    IF igcError \== addr THEN DO
+      svcType = GetStorage(scvtSvct+(i*8)+4, 1)
+
+      /* Determine type */
+      SELECT
+        WHEN BITAND(svcType, '80'x) == '80'x THEN type = '2'
+        WHEN BITAND(svcType, 'C0'x) == 'C0'x THEN type = '3/4'
+        WHEN BITAND(svcType, '20'x) == '20'x THEN type = '6'
+        WHEN BITAND(svcType, 'F0'x) == '00'x THEN type = '1'
+        OTHERWISE type = '?'
+      END
+
+      /* Check APF and ESR flags */
+      IF BITAND(svcType, '08'x) == '08'x THEN apf = 'Y'
+      ELSE apf = 'N'
+
+      IF BITAND(svcType, '04'x) == '04'x THEN esr = 'Y'
+      ELSE esr = 'N'
+
+      /* If not in assess mode, only show APF authorized SVCs */
+      IF assessMode == 0 THEN DO
+        IF apf == 'Y' THEN DO
+          SAY C2X(GetStorage(scvtSvct+(i*8), 4)) '|',
+            RIGHT(i, 3, 0) '|' RIGHT(D2X(i), 2, 0) '|',
+            type '  |' apf '|' esr
+        END
+      END
+      ELSE DO
+        /* In assess mode, show all SVCs */
+        SAY C2X(GetStorage(scvtSvct+(i*8), 4)) '|',
+          RIGHT(i, 3, 0) '|' RIGHT(D2X(i), 2, 0) '|',
+          type '  |' apf '|' esr
+      END
+    END
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate dataset concatenations (PATH)                         */
+/*------------------------------------------------------------------*/
+EnumPath: PROCEDURE EXPOSE (globalvars)
+  PARSE ARG lvl
   
-  SAY C2X(STORAGE(D2X(SCVTSVCT+(i*8)),4)) "|",
-      RIGHT(i,3,0) "|" RIGHT(D2X(i),2,0) "| ",
-      TYPE "  | " APF " | " ESR
-  /* CALL HEXDUMP(STORAGE(D2X(SCVTSVCT+(i*8)),8)) */
- END
-END
-RETURN 0
+  CALL PrintSectionBanner 'DDNAME Concatenations'
 
-PATH: PROCEDURE
-/* Identify DDNAME Allocated Datasets */
-/* from CBT FILE 496 */
-/* Like the $PATH in UNIX */
-say 'DDNAME Allocated Datasets'
-lvl = C2D(ARG(1))
-Numeric Digits 10
-/*address TSO*/
-PSALCCAV = C2D(STORAGE(21C, 4))
-TCBTIO = C2D(STORAGE(D2X(PSALCCAV + 12), 4)) /* Points to TIOT PAGE 338 */
-TIOT = TCBTIO + 24
-TIOELNGH = 0
-DD = ''
-IF lvl < 1 THEN DO 
-  say 'Non-Verbose. Only displaying SYSPROC/SYSEXEC'
-  say 'DD       | DATASET Name'
-  say '---------|-------------'
-end
-else DO
-  say 'DD       | VOLUME | DATASET Name'
-  say '---------|--------|-------------'
-END
-DO FOREVER
- TIOT = TIOT + TIOELNGH
- TIOELNGH = C2D(STORAGE(D2X(TIOT))) /* STORAGE returns one byte by default */
- IF TIOELNGH = 0 THEN LEAVE /* We've hit the end */
- TIOEDDNM = STORAGE(D2X(TIOT+4),8)
- IF TIOEDDNM \= '        ' THEN DD = TIOEDDNM
- DSNADDR = D2X(SWAREQ(Storage(d2x(TIOT + 12),3)))
- DATASET = STRIP(STORAGE(DSNADDR, 44))
- VOLUME = STORAGE(D2X(X2D(DSNADDR)+118),6)
+  IF lvl < 1 THEN lvl = 0
+
+  psAlccav = C2D(STORAGE('21C', 4))
+  tcbTio = GetPtr(psAlccav+12)
+  tiot = tcbTio + 24
+  tioElngh = 0
+  dd = ''
+
   IF lvl < 1 THEN DO
-    IF DD ='SYSPROC ' | DD ='SYSEXEC ' THEN
-      SAY DD "|" DATASET
+    SAY 'Only displaying SYSPROC/SYSEXEC'
+    SAY ''
+    SAY 'DD       | DATASET Name'
+    SAY '---------|' || COPIES('-', 44)
+  END
+  ELSE DO
+    SAY 'DD       | VOLUME | DATASET Name'
+    SAY '---------|--------|' || COPIES('-', 44)
+  END
+
+  DO FOREVER
+    tiot = tiot + tioElngh
+    tioElngh = C2D(GetStorage(tiot, 1))
+    IF tioElngh == 0 THEN LEAVE
+
+    tioEddnm = GetStorage(tiot+4, 8)
+    IF tioEddnm \== '        ' THEN dd = tioEddnm
+
+    dsnAddr = Swareq(GetStorage(tiot+12, 3))
+    dataset = STRIP(GetStorage(dsnAddr, 44))
+    volume = GetStorage(X2D(dsnAddr)+118, 6)
+
+    IF lvl < 1 THEN DO
+      IF dd == 'SYSPROC ' | dd == 'SYSEXEC ' THEN
+        SAY dd '|' dataset
+    END
+    ELSE SAY dd '|' volume '|' dataset
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate master catalog                                         */
+/*------------------------------------------------------------------*/
+EnumCatalog: PROCEDURE
+  cvt = GetPtr(16)
+  ecvt = GetPtr(cvt+140)
+  ecvtIpa = GetPtr(ecvt+392)
+  ipaScat = GetStorage(ecvtIpa+224, 63)
+  mcatDsn = STRIP(SUBSTR(ipaScat, 11, 44))
+  mcatVol = SUBSTR(ipaScat, 1, 6)
+
+  SAY 'Master Catalog:' mcatDsn 'Volume:' mcatVol
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Test TESTAUTH authorization                                      */
+/*------------------------------------------------------------------*/
+EnumTestauth: PROCEDURE
+
+  CALL PrintSectionBanner 'TESTAUTH Authorization'
+  ADDRESS 'TSO' 'NEWSTACK'
+  QUEUE 'END'
+  rc = OUTTRAP('out.')
+  ADDRESS 'TSO' "TESTAUTH 'SYS1.LINKLIB(ICEPRML)'"
+  rc = OUTTRAP('OFF')
+  ADDRESS 'TSO' 'DELSTACK'
+
+  IF out.0 == 0 THEN
+    SAY 'You ARE authorized to use TESTAUTH <-'
+  ELSE
+    SAY out.1
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate TSO authorized command/program tables                 */
+/*------------------------------------------------------------------*/
+EnumTsoTables: PROCEDURE EXPOSE (findingsVars)
+
+  CALL PrintSectionBanner 'TSO Authorization Tables'
+  cvt = C2X(GetStorage(16, 4))
+  tsvt = GetStorageHex(cvt, '9C')
+  tpvt = GetStorageHex(tsvt, '4C')
+  ctlt = GetStorageHex(tpvt, '14')
+
+  SAY cvt': CVT' tsvt': TSVT' tpvt': TPVT' ctlt': CTLT'
+
+  ctltSize = C2D(GetStorage(X2D(ctlt)+4, 2))
+
+  DO i = 8 TO ctltSize - 5 BY 12
+    table = GetStorageHex(ctlt, D2X(i))
+    size = C2D(GetStorage(X2D(ctlt)+i+6, 2))
+    entries = C2D(GetStorage(X2D(ctlt)+i+8, 2))
+    length = C2D(GetStorage(X2D(ctlt)+i+10, 2))
+    name = GetStorage(X2D(table), 8)
+
+    SELECT
+      WHEN name == 'IKJEFTE2' THEN name = name'/AUTHCMD'
+      WHEN name == 'IKJEFTE8' THEN name = name'/AUTHPGM'
+      WHEN name == 'IKJEFTNS' THEN name = name'/NOTBKGND'
+      WHEN name == 'IKJEFTAP' THEN name = name'/AUTHTSF'
+      OTHERWISE name = name'/UNKNOWN'
+    END
+
+    /* Determine if we should show this table */
+    showTable = 1
+    IF assessMode == 0 THEN DO
+      /* Not in assess mode - only show AUTHCMD and AUTHTSF (if IDCAMS present) */
+      IF POS('AUTHCMD', name) == 0 & POS('AUTHTSF', name) == 0 THEN DO
+        showTable = 0
+      END
+      /* For AUTHTSF, check if IDCAMS is present before showing */
+      ELSE IF POS('AUTHTSF', name) > 0 THEN DO
+        hasIdcams = 0
+        DO j = 2 TO entries
+          ent = GetStorage(X2D(table)+(length*j), length)
+          IF POS('IDCAMS', ent) > 0 THEN DO
+            hasIdcams = 1
+            LEAVE
+          END
+        END
+        IF hasIdcams == 0 THEN showTable = 0
+      END
+    END
+
+    IF showTable == 1 THEN DO
+      SAY ''
+      SAY name 'ENTRIES:' entries-1
+      SAY ''
+
+      output = ''
+      idcamsFound = 0
+      DO j = 2 TO entries
+        ent = GetStorage(X2D(table)+(length*j), length)
+        IF ent == ' PARMLIB' THEN ITERATE
+
+        /* Check for IDCAMS in AUTHTSF table */
+        IF POS('AUTHTSF', name) > 0 & POS('IDCAMS', ent) > 0 THEN DO
+          idcamsFound = 1
+        END
+
+        output = output ent
+
+        IF LENGTH(output) > 60 THEN DO
+          SAY output
+          output = ''
+        END
+      END
+
+      IF output \== '' THEN SAY output
+
+      /* Add finding if IDCAMS found in AUTHTSF */
+      IF idcamsFound == 1 & assessMode == 1 THEN DO
+        CALL AddFinding 'TSO-IDCAMS-IN-AUTHTSF'
+        CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+          'available at http://github.com/mainframed/ and observe that',
+          'IDCAMS is present in the IKJEFTAP/AUTHTSF table.'
+        CALL AddVerificationContent '(TRUNCATED)/n',
+          'IKJEFTAP/AUTHTSF contains IDCAMS/n(TRUNCATED)'
+      END
+    END
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate USS/OMVS users                                         */
+/*------------------------------------------------------------------*/
+EnumUssUsers: PROCEDURE
+
+  CALL PrintSectionBanner 'z/OS UNIX Users'
+  CALL syscalls 'ON'
+  ADDRESS syscall
+
+  ucount = 0
+
+  DO FOREVER
+    'getpwent pw.'
+    IF retval == 0 | retval == -1 THEN LEAVE
+
+    name = STRIP(pw.pw_name)
+    uid = STRIP(pw.pw_uid)
+    gid = STRIP(pw.pw_gid)
+    home = STRIP(pw.pw_dir)
+    ucount = ucount + 1
+    usr.ucount = LEFT(name, 8) LEFT(gid, 10),
+      LEFT(uid, 10) LEFT(home, 48)
+    usr.0 = ucount
+  END
+
+  SAY 'USS/OMVS user details:'
+  SAY COPIES('-', 41)
+  SAY LEFT('USER ID', 8) LEFT('GID', 10),
+    LEFT('UID', 10) LEFT('HOME', 10)
+
+  DO i = 1 TO usr.0
+    SAY usr.i
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate RACF SETROPTS settings                                */
+/*------------------------------------------------------------------*/
+EnumSetropts: PROCEDURE EXPOSE (findingsVars) warningDatasets,
+  excessiveUaccDatasets excessiveAccessDatasets
+  PARSE ARG rcvt
+
+  cvt = GetPtr(16)
+  rcvx = GetPtr(cvt+X2D('3E0'))
+
+  SAY ''
+  SAY 'SETROPTS Info:'
+
+  /* UADS dataset */
+  rcvtUads = STRIP(GetStorage(rcvt+100, 44))
+  SAY ''
+  SAY 'UADS Dataset:'
+  SAY 'UACC | WARN | ACCESS | DATASET'
+  SAY '-----|------|--------|' || COPIES('-', 44)
+
+  /* Check access for UADS dataset - READ access is a finding */
+  outputUads = CheckAndReportDatasetAccess(rcvtUads, '', '', 1)
+  SAY outputUads
+
+  /* Parse fields for findings */
+  PARSE VAR outputUads uadsUacc '|' uadsWarn '|' uadsAccess '|' .
+  uadsUacc = STRIP(uadsUacc)
+  uadsWarn = STRIP(uadsWarn)
+  uadsAccess = STRIP(uadsAccess)
+
+  /* Add findings for UADS dataset */
+  IF assessMode == 1 THEN DO
+    /* Check for user access to UADS dataset */
+    IF uadsAccess \== 'NONE' THEN DO
+      CALL AddFinding 'RACF-UADS-DATASET-ACCESS'
+      CALL AddVerificationCaption 'Run the REXX script ENUM with the',
+        'SEC argument and observe that the testing account has READ or',
+        'greater access to the UADS dataset.'
+      CALL AddVerificationContent 'UACC | WARN | ACCESS | DATASET'||,
+        ' -----|------|--------|---------------------------------'||,
+        ' '||outputUads
+    END
+
+    /* Check for excessive UACC on UADS dataset */
+    IF uadsUacc \== 'NONE' THEN DO
+      CALL AddFinding 'RACF-UADS-EXCESSIVE-UACC'
+      CALL AddVerificationCaption 'Run the REXX script ENUM with the',
+        'SEC argument and observe that the UADS dataset has a UACC',
+        'of READ or greater.'
+      CALL AddVerificationContent 'UACC | WARN | ACCESS | DATASET'||,
+        ' -----|------|--------|---------------------------------'||,
+        ' '||outputUads
+    END
+
+    /* Check for WARNING mode on UADS dataset */
+    IF uadsWarn == 'YES' THEN DO
+      CALL AddFinding 'RACF-UADS-WARNING-MODE'
+      CALL AddVerificationCaption 'Run the REXX script ENUM with the',
+        'SEC argument and observe that the UADS dataset is configured',
+        'with WARNING mode enabled.'
+      CALL AddVerificationContent 'UACC | WARN | ACCESS | DATASET'||,
+        ' -----|------|--------|---------------------------------'||,
+        ' '||outputUads
+    END
+  END
+  SAY ''
+
+  /* Get bit flags */
+  rcvtPro = rcvx + 393
+  rcvtErop = rcvx + 154
+  rcvtAuop = rcvx + 151
+  rcvtProx = X2B(C2X(GetStorage(rcvtPro, 4)))
+  rcvtErox = X2B(C2X(GetStorage(rcvtErop, 4)))
+  rcvtAuox = X2B(C2X(GetStorage(rcvtAuop, 8)))
+
+  /* Command violations */
+  IF SUBSTR(rcvtErox, 3, 1) == 0 THEN
+    SAY 'RACF Command violations are logged'
+  ELSE DO
+    SAY 'RACF Command violations are not logged'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-COMMAND-VIOLATIONS-NOT-LOGGED'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that RACF command violations are not logged.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'RACF Command violations are not logged/n(TRUNCATED)'
+    END
+  END
+
+  /* PROTECT-ALL */
+  IF SUBSTR(rcvtProx, 1, 1) == 1 THEN DO
+    SAY 'PROTECT-ALL is on'
+    IF SUBSTR(rcvtProx, 2, 1) == 1 THEN DO
+      SAY ' PROTECT-ALL WARNING mode'
+      IF assessMode == 1 THEN DO
+        CALL AddFinding 'RACF-PROTECT-ALL-WARNING-MODE'
+        CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+          'available at http://github.com/mainframed/ with the argument',
+          'SEC and observe that PROTECT-ALL is in WARNING mode.'
+        CALL AddVerificationContent '(TRUNCATED)/n',
+          'PROTECT-ALL is on/n PROTECT-ALL WARNING mode/n(TRUNCATED)'
+      END
+    END
+    ELSE
+      SAY ' PROTECT-ALL FAILURE mode'
+  END
+  ELSE DO
+    SAY 'PROTECT-ALL is off'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-PROTECT-ALL-DISABLED'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that PROTECT-ALL is disabled.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'PROTECT-ALL is off/n(TRUNCATED)'
+    END
+  END
+
+  /* ERASE-ON-SCRATCH */
+  IF SUBSTR(rcvtProx, 3, 1) == 1 THEN DO
+    SAY 'ERASE-ON-SCRATCH is active, current options:'
+    IF SUBSTR(rcvtProx, 4, 1) == 1 THEN
+      SAY ' ERASE-ON-SCRATCH BY SECLEVEL is on'
+    ELSE
+      SAY ' ERASE-ON-SCRATCH BY SECLEVEL is off'
+    IF SUBSTR(rcvtProx, 5, 1) == 1 THEN
+      SAY ' ERASE-ON-SCRATCH for all datasets is on'
+    ELSE
+      SAY ' ERASE-ON-SCRATCH for all datasets is off'
+  END
+  ELSE DO
+    SAY 'ERASE-ON-SCRATCH is off'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-ERASE-ON-SCRATCH-DISABLED'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that ERASE-ON-SCRATCH is disabled.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'ERASE-ON-SCRATCH is off/n(TRUNCATED)'
+    END
+  END
+
+  /* Audit settings */
+  CALL EnumAuditSettings rcvtAuox, rcvtErox
+
+  /* Password settings */
+  CALL EnumPasswordSettings rcvt
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate RACF audit settings                                    */
+/*------------------------------------------------------------------*/
+EnumAuditSettings: PROCEDURE EXPOSE (findingsVars)
+  PARSE ARG rcvtAuox, rcvtErox
+
+  IF SUBSTR(rcvtAuox, 2, 1) == 1 THEN
+    SAY 'GROUP changes are audited'
+  ELSE DO
+    SAY 'GROUP changes are not audited'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-GROUP-CHANGES-NOT-AUDITED'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that RACF GROUP changes are not audited.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'GROUP changes are not audited/n(TRUNCATED)'
+    END
+  END
+
+  IF SUBSTR(rcvtAuox, 3, 1) == 1 THEN
+    SAY 'USER changes are audited'
+  ELSE DO
+    SAY 'USER changes are not audited'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-USER-CHANGES-NOT-AUDITED'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that RACF USER changes are not audited.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'USER changes are not audited/n(TRUNCATED)'
+    END
+  END
+
+  IF SUBSTR(rcvtAuox, 4, 1) == 1 THEN
+    SAY 'DATASET changes are audited'
+  ELSE DO
+    SAY 'DATASET changes are not audited'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-DATASET-CHANGES-NOT-AUDITED'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that RACF DATASET changes are not audited.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'DATASET changes are not audited/n(TRUNCATED)'
+    END
+  END
+
+  IF SUBSTR(rcvtAuox, 5, 1) == 1 THEN
+    SAY 'DASDVOL changes are audited'
+  ELSE DO
+    SAY 'DASDVOL changes are not audited'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-DASDVOL-CHANGES-NOT-AUDITED'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that RACF DASDVOL changes are not audited.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'DASDVOL changes are not audited/n(TRUNCATED)'
+    END
+  END
+
+  IF SUBSTR(rcvtAuox, 6, 1) == 1 THEN
+    SAY 'TAPEVOL changes are audited'
+  ELSE DO
+    SAY 'TAPEVOL changes are not audited'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-TAPEVOL-CHANGES-NOT-AUDITED'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that RACF TAPEVOL changes are not audited.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'TAPEVOL changes are not audited/n(TRUNCATED)'
+    END
+  END
+
+  IF SUBSTR(rcvtAuox, 7, 1) == 1 THEN
+    SAY 'TERMINAL changes are audited'
+  ELSE DO
+    SAY 'TERMINAL changes are not audited'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-TERMINAL-CHANGES-NOT-AUDITED'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that RACF TERMINAL changes are not audited.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'TERMINAL changes are not audited/n(TRUNCATED)'
+    END
+  END
+
+  IF SUBSTR(rcvtErox, 4, 1) == 0 THEN
+    SAY 'SPECIAL users are audited'
+  ELSE DO
+    SAY 'SPECIAL users are not audited'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-SPECIAL-USERS-NOT-AUDITED'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that RACF SPECIAL users are not audited.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'SPECIAL users are not audited/n(TRUNCATED)'
+    END
+  END
+
+  IF SUBSTR(rcvtAuox, 8, 1) == 1 THEN
+    SAY 'OPERATIONS users are audited'
+  ELSE DO
+    SAY 'OPERATIONS users are NOT audited'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-OPERATIONS-USERS-NOT-AUDITED'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that RACF OPERATIONS users are not audited.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'OPERATIONS users are NOT audited/n(TRUNCATED)'
+    END
+  END
+
+  SAY ''
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate RACF password settings                                */
+/*------------------------------------------------------------------*/
+EnumPasswordSettings: PROCEDURE EXPOSE (findingsVars)
+  PARSE ARG rcvt
+
+  cvt = GetPtr(16)
+  rcvx = GetPtr(cvt+X2D('3E0'))
+
+  /* RVARY passwords */
+  rcvtSwpw = STRIP(GetStorage(rcvt+440, 8))
+  foundSwpw = 0
+  foundInpw = 0
+
+  IF C2X(rcvtSwpw) == '0000000000000000' THEN
+    SAY 'RVARY SWITCH password is set to default value of YES'
+  ELSE DO
+    foundSwpw = 1
+    SAY 'RVARY SWITCH password DES hash:' C2X(rcvtSwpw)
+  END
+
+  rcvtInpw = STRIP(GetStorage(rcvt+448, 8))
+  IF C2X(rcvtInpw) == '0000000000000000' THEN
+    SAY 'RVARY STATUS password is set to default value of YES'
+  ELSE DO
+    foundInpw = 1
+    SAY 'RVARY STATUS password DES hash:' C2X(rcvtInpw)
+  END
+
+  IF foundSwpw == 1 | foundInpw == 1 THEN DO
+    SAY 'John the ripper RVARY cracking input:'
+    IF foundSwpw == 1 THEN
+      SAY 'SWITCH:'||'$rvary$'||C2X(rcvtSwpw)
+    IF foundInpw == 1 THEN
+      SAY 'STATUS:'||'$rvary$'||C2X(rcvtInpw)
+  END
+  SAY ''
+
+  /* Password intervals */
+  rcvtPinv = C2D(GetStorage(rcvt+155, 1))
+  SAY 'Global password change interval:' rcvtPinv 'days'
+
+  rcvtPmin = C2D(GetStorage(rcvt+634, 1))
+  SAY 'Minimum password change interval:' rcvtPmin 'days'
+  IF rcvtPmin < 1 & assessMode == 1 THEN DO
+    CALL AddFinding 'RACF-MIN-PASSWORD-CHANGE-INTERVAL-WEAK'
+    CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+      'available at http://github.com/mainframed/ with the argument',
+      'SEC and observe that the minimum password change interval is less',
+      'than 1 day.'
+    CALL AddVerificationContent '(TRUNCATED)/n',
+      'Minimum password change interval:' rcvtPmin 'days/n(TRUNCATED)'
+  END
+
+  /* Password syntax rules */
+  CALL EnumPasswordRules rcvt
+
+  /* Password constraints */
+  rcvtSlen = C2D(STRIP(GetStorage(rcvt+244, 1)))
+  IF rcvtSlen == 0 THEN rcvtSlen = 1
+  SAY 'Minimum possible password length:' rcvtSlen
+  IF rcvtSlen < 8 & assessMode == 1 THEN DO
+    CALL AddFinding 'RACF-MIN-PASSWORD-LENGTH-WEAK'
+    CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+      'available at http://github.com/mainframed/ with the argument',
+      'SEC and observe that the minimum possible password length is less',
+      'than 8 characters.'
+    CALL AddVerificationContent '(TRUNCATED)/n',
+      'Minimum possible password length:' rcvtSlen'/n(TRUNCATED)'
+  END
+
+  rcvtElen = C2D(STRIP(GetStorage(rcvt+245, 1)))
+  IF rcvtElen == 0 THEN rcvtElen = 8
+  SAY 'Maximum possible password length:' rcvtElen
+
+  rcvtRvok = C2D(STRIP(GetStorage(rcvt+241, 1)))
+  rcvtRvokNum = rcvtRvok  /* Keep numeric value for comparison */
+  IF rcvtRvok == 0 THEN rcvtRvok = 'unlimited'
+  SAY 'Invalid logon attempts allowed:' rcvtRvok
+  IF (rcvtRvokNum > 5 | rcvtRvokNum == 0) & assessMode == 1 THEN DO
+    CALL AddFinding 'RACF-INVALID-LOGON-ATTEMPTS-EXCESSIVE'
+    CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+      'available at http://github.com/mainframed/ with the argument',
+      'SEC and observe that the invalid logon attempts allowed is greater',
+      'than 5 or unlimited.'
+    CALL AddVerificationContent '(TRUNCATED)/n',
+      'Invalid logon attempts allowed:' rcvtRvok'/n(TRUNCATED)'
+  END
+
+  rcvtInac = C2D(STRIP(GetStorage(rcvt+243, 1)))
+  IF rcvtInac == '0' THEN DO
+    SAY 'No inactive interval'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-NO-INACTIVE-INTERVAL'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that no inactive interval is configured.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'No inactive interval/n(TRUNCATED)'
+    END
+  END
+  ELSE SAY 'Inactive interval:' rcvtInac 'days'
+
+  rcvtHist = C2D(STRIP(GetStorage(rcvt+240, 1)))
+  IF rcvtHist == '0' THEN DO
+    SAY 'No password history in use'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-NO-PASSWORD-HISTORY'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that no password history is configured.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'No password history in use/n(TRUNCATED)'
+    END
+  END
+  ELSE SAY 'Password history:' rcvtHist 'generations'
+
+  /* Password options */
+  CALL EnumPasswordOptions rcvx, rcvt
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate RACF password syntax rules                            */
+/*------------------------------------------------------------------*/
+EnumPasswordRules: PROCEDURE EXPOSE (findingsVars)
+  PARSE ARG rcvt
+
+  SAY 'Password syntax rules:'
+
+  hasRules = 0
+  DO i = 1 TO 8
+    offset = 244 + ((i-1) * 10)
+    minLen = GetStorage(rcvt+offset, 1)
+    maxLen = GetStorage(rcvt+offset+1, 1)
+    rule = STRIP(GetStorage(rcvt+offset+2, 8))
+
+    IF C2X(maxLen) \== '00' THEN DO
+      hasRules = 1
+      IF C2X(rule) == '0000000000000000' THEN rule = '********'
+      SAY ' Rule' i':' rule
+      SAY '    Min length:' C2X(minLen)
+      SAY '    Max length:' C2X(maxLen)
+    END
+  END
+
+  IF hasRules == 0 THEN DO
+    SAY ' ** No password rules defined! **'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-NO-PASSWORD-RULES'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that no password syntax rules are defined.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'Password syntax rules:/n ** No password rules defined! **/n(TRUNCATED)'
+    END
   END
   ELSE
-    SAY DD "|" VOLUME "|" DATASET 
-END
-RETURN 0 
-
-CAT:
-/* Master Catalog routing from IPLINFO */
-CVT      = C2d(Storage(10,4))
-ECVT     = C2d(Storage(D2x(CVT + 140),4))
-ECVTIPA  = C2d(Storage(D2x(ECVT + 392),4)) /* point to IPA         */         
-IPASCAT  = Storage(D2x(ECVTIPA + 224),63)
-MCATDSN  = Strip(Substr(IPASCAT,11,44))    /* master catalog dsn   */         
-MCATVOL  = Substr(IPASCAT,1,6) 
-say 'Master Catalog:' MCATDSN 'Volume:' MCATVOL
-return 0
-
-TSTA:
-/* Try to use TESTAUTH, failures are not logged (RACROUTE with LOG=NONE) */
-ADDRESS 'TSO' 'NEWSTACK'
-QUEUE "END"
-RC = OUTTRAP('OUT.')
-ADDRESS 'TSO' "TESTAUTH 'SYS1.LINKLIB(ICEPRML)'"
-RC = OUTTRAP('OFF')
-ADDRESS 'TSO' 'DELSTACK'
-IF OUT.0 = 0 THEN
-  SAY 'You ARE authorized to use TESTAUTH <-'
-ELSE
-  SAY OUT.1
-return 0
-
-TSOT:                                   
-CVT =  C2X(STORAGE(10,4))                                 
-TSVT = _STORAGE(CVT,9C)                                   
-TPVT = _STORAGE(TSVT,4C)                                  
-CTLT = _STORAGE(TPVT,14)                                  
-SAY CVT ": CVT" TSVT ": TSVT" TPVT ": TPVT" CTLT ": CTLT" 
-CTLT_SIZE = C2D(STORAGE(D2X(X2D(CTLT)+4),2))              
-DO I = 8 TO CTLT_SIZE - 5 BY 12                           
- TABLE   = _STORAGE(CTLT,D2X(I))                          
- SIZE    = C2D(STORAGE(D2X(X2D(CTLT)+I+6),2))             
- ENTRIES = C2D(STORAGE(D2X(X2D(CTLT)+I+8),2))             
- LENGTH  = C2D(STORAGE(D2X(X2D(CTLT)+I+10),2))            
- NAME = STORAGE(TABLE,8)                                  
- SAY ;SAY NAME "ENTRIES:" ENTRIES-1; SAY                    
- OUTPUT = ''                                              
- DO J = 2 TO ENTRIES                                      
-  ENT = STORAGE(D2X(X2D(TABLE) + (LENGTH*J)),LENGTH)
-  IF ENT = ' PARMLIB' THEN ITERATE                  
-  OUTPUT = OUTPUT ENT                               
-  IF LENGTH(OUTPUT) > 60 THEN DO                    
-   SAY OUTPUT                                       
-   OUTPUT = ''                                      
-  END                                               
- END                                                
- IF OUTPUT /= '' THEN SAY OUTPUT                    
-END                                                 
-RETURN                                              
-                                                    
-_STORAGE: procedure                                           
- PARSE ARG ADDR, DISP                               
- RETURN C2X(STORAGE(D2X(X2D(ADDR)+X2D(DISP)),4))     
-
-SETROPTS:
-/*********************************************************************/
-/* Rexx to pull out all useful SETROPTS info from storage.           */
-/* No SPECIAL or AUDITOR needed!                                     */
-/*                                                                   */
-/* Author:  Jim Taylor                                               */
-/*            https://github.com/jaytay79/zos                        */
-/*                                                                   */
-/* Sources: Mark Zelden's IPLINFO Rexx:                              */
-/*            http://www.mzelden.com/mvsfiles/iplinfo.txt            */
-/*          Mark Wilson's "RACF for Systems Programmers" course:     */
-/*            http://www.rsm.co.uk                                   */
-/*          z/OS Security Server RACF Data Areas manual:             */
-/*            http://publibz.boulder.ibm.com/epubs/pdf/ich2c400.pdf  */
-/*          Bruce Wells' XSETRPWD                                    */
-/*            ftp://public.dhe.ibm.com/s390/zos/racf/irrxutil/       */
-/*********************************************************************/
-numeric digits 20
-say ""
-say 'SETROPTS Info:'
-/* Get info from storage, most of this section is a straight lift    */
-/* from IPLINFO!                                                     */
-CVT      = C2d(Storage(10,4))                /* point to CVT         */
-CVTVERID = Storage(D2x(CVT - 24),16)         /* "user" software vers.*/
-PRODNAME = Storage(D2x(CVT - 40),7)          /* point to mvs version */
-CVTRAC   = C2d(Storage(D2x(CVT + 992),4))    /* point to RACF CVT    */
-RCVT     = CVTRAC                            /* use RCVT name        */
-RCVx     = C2D(STORAGE(D2X(CVT+X2D('3E0')),4)) /* ugly mess for bits */
-RCVTID   = Storage(D2x(RCVT),4)              /* point to RCVTID      */
-If RCVTID = 'RCVT' then SECNAM = 'RACF'      /* RCVT is RACF         */
-RACFVRM  = Storage(D2x(RCVT + 616),4)        /* RACF Ver/Rel/Mod     */
-RACFVER  = Substr(RACFVRM,1,1)               /* RACF Version         */
-RACFREL  = Substr(RACFVRM,2,2)               /* RACF Release         */
-If Bitand(CVTOSLV2,'01'x) <> '01'x then ,    /* below OS/390 R10     */
-  RACFREL  = Format(RACFREL)                 /* Remove leading 0     */
-RACFMOD  = Substr(RACFVRM,4,1)               /* RACF MOD level       */
-RACFLEV  = RACFVER || '.' || RACFREL || '.' || RACFMOD
-RCVTDSN = Strip(Storage(D2x(RCVT + 56),44))  /* RACF prim dsn        */
-
-  RCVTDSDT  = C2d(Storage(D2x(RCVT + 224),4))  /* point to RACFDSDT  */
-  DSDTNUM   = C2d(Storage(D2x(RCVTDSDT+4),4))  /* num RACF dsns      */
-  DSDTPRIM  = Storage(D2x(RCVTDSDT+177),44)    /* point to prim ds   */
-  DSDTPRIM  = Strip(DSDTPRIM,'T')              /* del trail blanks   */
-  DSDTBACK  = Storage(D2x(RCVTDSDT+353),44)    /* point to back ds   */
-  DSDTBACK  = Strip(DSDTBACK,'T')              /* del trail blanks   */
-  RCVTUADS = Strip(Storage(D2x(RCVT + 100),44)) /* UADS dsn          */
-  say  '  The UADS dataset is' RCVTUADS'.'
-say ""
-/* Below section pulls in bit string values for various settings     */
-RCVTPRO  = RCVx + 393                          /* point to RCVTPRO   */
-RCVTEROP = RCVx + 154                          /* point to RCVTEROP  */
-RCVTAUOP = RCVx + 151                          /* point to RCVTAUOP  */
-RCVTPROX = X2B(C2X(STORAGE(D2X(RCVTPRO),4)))   /* get the bits       */
-RCVTEROX = X2B(C2X(STORAGE(D2X(RCVTEROP),4)))  /* get the bits       */
-RCVTAUOX = X2B(C2X(STORAGE(D2X(RCVTAUOP),8)))  /* get the bits       */
-if substr(RCVTEROX,3,1) = 0 then
- say "RACF Command violations are logged"
- else say "RACF Command violations are not logged"
-if SUBSTR(RCVTPROX,1,1) = 1 then do
-  say "PROTECT-ALL is on"
-  if SUBSTR(RCVTPROX,2,1) = 1 then say " PROTECT-ALL WARNING mode"
-    else say " PROTECT-ALL FAILURE mode"
-  end
- else say "PROTECT-ALL is off"
-if SUBSTR(RCVTPROX,3,1) = 1 then do
-  say "ERASE-ON-SCRATCH is active, current options:"
-  if SUBSTR(RCVTPROX,4,1) = 1 then say " ERASE-ON-SCRATCH BY SECLEVEL is on"
-    else say " ERASE-ON-SCRATCH BY SECLEVEL is off"
-  if SUBSTR(RCVTPROX,5,1) = 1 then say " ERASE-ON-SCRATCH for all",
-     "datasets is on"
-    else say " ERASE-ON-SCRATCH for all datasets is off"
- end
- else say "ERASE-ON-SCRATCH is off"
-if SUBSTR(RCVTAUOX,2,1) = 1 then say "GROUP changes are audited"
- else say "GROUP changes are not audited"
-if SUBSTR(RCVTAUOX,3,1) = 1 then say "USER changes are audited"
- else say "USER changes are not audited"
-if SUBSTR(RCVTAUOX,4,1) = 1 then say "DATASET changes are audited"
- else say "DATASET changes are not audited"
-if SUBSTR(RCVTAUOX,5,1) = 1 then say "DASDVOL changes are audited"
- else say "DASDVOL changes are not audited"
-if SUBSTR(RCVTAUOX,6,1) = 1 then say "TAPEVOL changes are audited"
- else say "TAPEVOL changes are not audited"
-if SUBSTR(RCVTAUOX,7,1) = 1 then say "TERMINAL changes are audited"
- else say "TERMINAL changes are not audited"
-if substr(RCVTEROX,4,1) = 0 then say "SPECIAL users are audited"
- else say "SPECIAL users are not audited"
-if SUBSTR(RCVTAUOX,8,1) = 1 then say "OPERATIONS users are audited"
- else say "OPERATIONS users are NOT audited"
-say ""
-/* Get the RVARY password info */
-RCVTSWPW = Strip(Storage(D2x(RCVT + 440),8))  /* rvary switch pw     */
-if c2x(RCVTSWPW) = "0000000000000000" then
- say "RVARY SWITCH password is set to default value of YES"
- else do
-  FoundSWPW = 1
-  say "RVARY SWITCH password DES hash:" c2x(RCVTSWPW)
- end
-RCVTINPW = Strip(Storage(D2x(RCVT + 448),8))  /* rvary status pw     */
-if c2x(RCVTINPW) = "0000000000000000" then
- say "RVARY STATUS password is set to default value of YES"
- else do
-  FoundINPW = 1
-  say "RVARY STATUS password DES hash:" c2x(RCVTINPW)
- end
-if FoundSWPW = 1 | FoundINPW = 1 then do
- say "John the ripper RVARY cracking input:"
- if FoundSWPW = 1 then
-  say "SWITCH:"||"$rvary$"||c2x(RCVTSWPW)
- if FoundINPW = 1 then
-  say "STATUS:"||"$rvary$"||c2x(RCVTINPW)
-end
-say ""
-/* Get password and other related settings */
-RCVTPINV  = C2d(Storage(D2x(RCVT + 155),1))  /* point to RCVTPINV   */
-say "Global password change interval:" RCVTPINV "days"
-RCVTPMIN  = C2d(Storage(D2x(RCVT + 634),1))  /* point to RCVTPMIN   */
-say "Minimum password change interval:" RCVTPMIN "days"
-/* Note that if a rule is set to 8 "*"s then it defaults to "0"s    */
-/* which means the rule appears blank.                              */
-/* Workaround for this is to look at the max length of each rule to */
-/* see if it is truly a blank rule line or not!                     */
-RCVTSNT1 = Strip(Storage(D2x(RCVT + 246),8))  /* PW syntax rule 1    */
-RCVTSNT1S = Strip(Storage(D2x(RCVT + 244),1)) /* rule 1 min          */
-RCVTSNT1E = Strip(Storage(D2x(RCVT + 245),1)) /* rule 1 max          */
- RCVTSNT1 = pwcheck(RCVTSNT1,RCVTSNT1E)       /* check rule 1        */
-RCVTSNT2 = Strip(Storage(D2x(RCVT + 256),8))  /* PW syntax rule 2    */
-RCVTSNT2S = Strip(Storage(D2x(RCVT + 254),1)) /* rule 2 min          */
-RCVTSNT2E = Strip(Storage(D2x(RCVT + 255),1)) /* rule 2 max          */
- RCVTSNT2 = pwcheck(RCVTSNT2,RCVTSNT2E)       /* check rule 2        */
-RCVTSNT3 = Strip(Storage(D2x(RCVT + 266),8))  /* PW syntax rule 3    */
-RCVTSNT3S = Strip(Storage(D2x(RCVT + 264),1)) /* rule 3 min          */
-RCVTSNT3E = Strip(Storage(D2x(RCVT + 265),1)) /* rule 3 max          */
- RCVTSNT3 = pwcheck(RCVTSNT3,RCVTSNT3E)       /* check rule 3        */
-RCVTSNT4 = Strip(Storage(D2x(RCVT + 276),8))  /* PW syntax rule 4    */
-RCVTSNT4S = Strip(Storage(D2x(RCVT + 274),1)) /* rule 4 min          */
-RCVTSNT4E = Strip(Storage(D2x(RCVT + 275),1)) /* rule 4 max          */
- RCVTSNT4 = pwcheck(RCVTSNT4,RCVTSNT4E)       /* check rule 4        */
-RCVTSNT5 = Strip(Storage(D2x(RCVT + 286),8))  /* PW syntax rule 5    */
-RCVTSNT5S = Strip(Storage(D2x(RCVT + 284),1)) /* rule 5 min          */
-RCVTSNT5E = Strip(Storage(D2x(RCVT + 285),1)) /* rule 5 max          */
- RCVTSNT5 = pwcheck(RCVTSNT5,RCVTSNT5E)       /* check rule 5        */
-RCVTSNT6 = Strip(Storage(D2x(RCVT + 296),8))  /* PW syntax rule 6    */
-RCVTSNT6S = Strip(Storage(D2x(RCVT + 294),1)) /* rule 6 min          */
-RCVTSNT6E = Strip(Storage(D2x(RCVT + 295),1)) /* rule 6 max          */
- RCVTSNT6 = pwcheck(RCVTSNT6,RCVTSNT6E)       /* check rule 6        */
-RCVTSNT7 = Strip(Storage(D2x(RCVT + 306),8))  /* PW syntax rule 7    */
-RCVTSNT7S = Strip(Storage(D2x(RCVT + 304),1)) /* rule 7 min          */
-RCVTSNT7E = Strip(Storage(D2x(RCVT + 305),1)) /* rule 7 max          */
- RCVTSNT7 = pwcheck(RCVTSNT7,RCVTSNT7E)       /* check rule 7        */
-RCVTSNT8 = Strip(Storage(D2x(RCVT + 316),8))  /* PW syntax rule 8    */
-RCVTSNT8S = Strip(Storage(D2x(RCVT + 314),1)) /* rule 8 min          */
-RCVTSNT8E = Strip(Storage(D2x(RCVT + 315),1)) /* rule 8 max          */
- RCVTSNT8 = pwcheck(RCVTSNT8,RCVTSNT8E)       /* check rule 8        */
-say "Password syntax rules:"
-if c2x(RCVTSNT1E) <> "00" then do
-  say " Rule 1:" RCVTSNT1
-  Say "    Min length:" c2x(RCVTSNT1S)
-  Say "    Max length:" c2x(RCVTSNT1E)
-  end
-if c2x(RCVTSNT2E) <> "00" then do
-  say " Rule 2:" RCVTSNT2
-  Say "    Min length:" c2x(RCVTSNT2S)
-  Say "    Max length:" c2x(RCVTSNT2E)
-  end
-if c2x(RCVTSNT3E) <> "00" then do
-  say " Rule 3:" RCVTSNT3
-  Say "    Min length:" c2x(RCVTSNT3S)
-  Say "    Max length:" c2x(RCVTSNT3E)
-  end
-if c2x(RCVTSNT4E) <> "00" then do
-  say " Rule 4:" RCVTSNT4
-  Say "    Min length:" c2x(RCVTSNT4S)
-  Say "    Max length:" c2x(RCVTSNT4E)
-  end
-if c2x(RCVTSNT5E) <> "00" then do
-  say " Rule 5:" RCVTSNT5
-  Say "    Min length:" c2x(RCVTSNT5S)
-  Say "    Max length:" c2x(RCVTSNT5E)
-  end
-if c2x(RCVTSNT6E) <> "00" then do
-  say " Rule 6:" RCVTSNT6
-  Say "    Min length:" c2x(RCVTSNT6S)
-  Say "    Max length:" c2x(RCVTSNT6E)
-  end
-if c2x(RCVTSNT7E) <> "00" then do
-  say " Rule 7:" RCVTSNT7
-  Say "    Min length:" c2x(RCVTSNT7S)
-  Say "    Max length:" c2x(RCVTSNT7E)
-  end
-if c2x(RCVTSNT8E) <> "00" then do
-  say " Rule 8:" RCVTSNT8
-  Say "    Min length:" c2x(RCVTSNT8S)
-  Say "    Max length:" c2x(RCVTSNT8E)
-  end
-if c2x(RCVTSNT1E) = "00" & c2x(RCVTSNT2E) = "00",
-   & c2x(RCVTSNT3E) = "00" & c2x(RCVTSNT4E) = "00",
-   & c2x(RCVTSNT5E) = "00" & c2x(RCVTSNT6E) = "00",
-   & c2x(RCVTSNT7E) = "00" & c2x(RCVTSNT8E) = "00",
-   then  say " ** No password rules defined! **"
-else say " LEGEND:",
-    "A-ALPHA C-CONSONANT L-ALPHANUM N-NUMERIC V-VOWEL W-NOVOWEL" ,
-    "*-ANYTHING  c-MIXED CONSONANT m-MIXED NUMERIC v-MIXED VOWEL",
-    "$-NATIONAL s-SPECIAL"
-RCVTSLEN = C2D(Strip(Storage(D2x(RCVT + 244),1))) /* min possible    */
-if RCVTSLEN = 0 then RCVTSLEN = 1                 /* password length */
-Say "Minimum possible password length:" RCVTSLEN
-RCVTELEN = C2D(Strip(Storage(D2x(RCVT + 245),1))) /* max possible    */
-if RCVTELEN = 0 then RCVTELEN = 8                 /* password length */
-Say "Maximum possible password length:" RCVTELEN
-RCVTRVOK = C2D(Strip(Storage(D2x(RCVT + 241),1))) /* logon attempts  */
-if RCVTRVOK = 0 then RCVTRVOK = "unlimited"
-Say "Invalid logon attempts allowed:" RCVTRVOK
-RCVTINAC = C2D(Strip(Storage(D2x(RCVT + 243),1))) /* inactive intvl  */
-if RCVTINAC = "0" then
- say "No inactive interval"
- else say "Inactive interval:" RCVTINAC "days"
-RCVTHIST = C2D(Strip(Storage(D2x(RCVT + 240),1))) /* pw generations  */
-if RCVTHIST = "0" then
- say "No password history in use"
- else say "Password history:" RCVTHIST "generations"
-/* Misc password related bit string flags */
-RCVTFLG3 = RCVx + 633                          /* point to RCVTFLG3  */
-RCVTFLGX = X2B(C2X(STORAGE(D2X(RCVTFLG3),8)))  /* get the bits       */
-if SUBSTR(RCVTFLGX,2,1) = 1 then say "Mixed case passwords enabled"
- else say "Mixed case passwords disabled"
-if SUBSTR(RCVTFLGX,5,1) = 1 then
- say "Special characters are allowed in passwords"
- else say "Special characters are not allowed in passwords"
-if SUBSTR(RCVTFLGX,6,1) = 1 then
- say "Enhanced password options under OA43999 are available"
- else say "Enhanced password options under OA43999 are not available"
-if SUBSTR(RCVTFLGX,7,1) = 1 then say "Multi factor auth is available"
- else say "Multi factor auth is not available"
-RCVTFLG4 = RCVx + 640                          /* point to RCVTFLG4  */
-RCVTFLGY = X2B(C2X(STORAGE(D2X(RCVTFLG4),8)))  /* get the bits       */
-if SUBSTR(RCVTFLGY,2,1) = 1 then say " MFA3 is available (OA50930)"
- else say " MFA3 is not available (OA50930)"
-/* Checks for new password encryption */
-RCVTPALG = C2D(Strip(Storage(D2x(RCVT + 635),1))) /* pw encryption   */
-if RCVTPALG = "1" then say "KDFAES encryption is active"
- else say "Legacy encryption is active"
-/* ----------------------------------------------------------------- */
-/* See if new password exit is active.                               */
-/* ----------------------------------------------------------------- */
-pwx01hex = Storage(D2x(RCVT + 236),4)
-RCVTPWDX = C2d(BITAND(pwx01hex,'7FFFFFFF'x))
-If RCVTPWDX = 0 Then
-  YesOrNo = 'is NOT'
-else
-  YesOrNo = 'IS'
-say "There" YesOrNo "a new password exit (ICHPWX01) installed."
-return 0
-
-/* pwcheck function to check for an empty rule but with a max length */
-pwcheck: parse arg pw length
-if c2x(pw) = "0000000000000000" & c2x(length) <> "00" then
- return "********"
- else return pw
-
-/*--------------------------------------------------------------------*\
-|*                                                                    *|
-|* MODULE NAME = SWAREQ                                               *|
-|*                                                                    *|
-|* DESCRIPTIVE NAME = Convert an SVA to a 31-bit address              *|
-|*                                                                    *|
-|* STATUS = R200                                                      *|
-|*                                                                    *|
-|* FUNCTION = The SWAREQ function simulates the SWAREQ macro to       *|
-|*            convert an SWA Virtual Address (SVA) to a full 31-bit   *|
-|*            address which can be used to access SWA control blocks  *|
-|*            in the SWA=ABOVE environment.  The input is a 3-byte    *|
-|*            SVA; the output value is a 10-digit decimal number.     *|
-|*                                                                    *|
-|* AUTHOR   =  Gilbert Saint-Flour <gsf@pobox.com>                    *|
-|*                                                                    *|
-|* DEPENDENCIES = TSO/E V2                                            *|
-|*                                                                    *|
-|* SYNTAX   =  SWAREQ(sva)                                            *|
-|*                                                                    *|
-|*             sva must contain a 3-byte SVA.                         *|
-|*                                                                    *|
-\*--------------------------------------------------------------------*/
-SWAREQ: PROCEDURE
-NUMERIC DIGITS 20                         /* allow up to 2**64    */
-sva=C2D(ARG(1))                           /* convert to decimal   */
-tcb = C2D(STORAGE(21C,4))                 /* TCB         PSATOLD  */
-jscb = C2D(STORAGE(D2X(tcb+180),4))       /* JSCB        TCBJSCB  */
-qmpl = C2D(STORAGE(D2X(jscb+244),4))      /* QMPL        JSCBQMPI */
-/* See if qmat can be above the bar */
-qmsta= C2X(STORAGE(D2X(qmpl+16),1))       /* JOB STATUS BYTE      */
-if SUBSTR(X2B(qmsta),6,1) then            /* is QMQMAT64 bit on?  */
-do                                        /* yes, qmat can be ATB */
-  IF RIGHT(X2B(C2X(ARG(1))),1) \= '1' THEN/* SWA=BELOW ?          */
-    RETURN C2D(ARG(1))+16                 /* yes, return sva+16   */
-  qmat=C2D(STORAGE(D2X(qmpl+10),2))*(2**48) +,/* QMAT+0  QMADD01  */
-       C2D(STORAGE(D2X(qmpl+18),2))*(2**32) +,/* QMAT+2  QMADD23  */
-       C2D(STORAGE(D2X(qmpl+24),4))       /* QMAT+4      QMADD    */
-  RETURN C2D(STORAGE(D2X(qmat+(sva*12)+64),4))+16
-end
-else
-do                                        /* no, qmat is BTB      */
-  IF RIGHT(C2X(ARG(1)),1) \= 'F' THEN     /* SWA=BELOW ?          */
-    RETURN C2D(ARG(1))+16                 /* yes, return sva+16   */
-  qmat = C2D(STORAGE(D2X(qmpl+24),4))     /* QMAT        QMADD    */
-  DO WHILE sva>65536
-    qmat = C2D(STORAGE(D2X(qmat+12),4))   /* next QMAT   QMAT+12  */
-    sva=sva-65536                         /* 010006F -> 000006F   */
-  END
-  RETURN C2D(STORAGE(D2X(qmat+sva+1),4))+16
-end
-/*-------------------------------------------------------------------*/
-
-
-
-HEXDUMP: PROCEDURE
-say 'HEXDUMP:'
-HEXOUT = ''
-j = 1
-Do i = 1 to LENGTH(ARG(1))
- HEXOUT = HEXOUT ||" " || C2X(SUBSTR(ARG(1),i,1))
- IF i // 8 = 0 THEN DO
-  if i = 8 THEN j = 1
-  ELSE j = i - 8
-  SAY HEXOUT "|" SUBSTR(ARG(1),j,8)
-  HEXOUT = ''
- END
-END
-IF LENGTH(ARG(1)) // 8 /= 0 THEN
-SAY HEXOUT "|" SUBSTR(ARG(1),j,LENGTH(ARG(1)))
-RETURN 0
-/*-------------------------------------------------------------------*/ 
-ptr:  Return c2d(storage(d2x(Arg(1)),4))     /* Return a pointer */     
-/*-------------------------------------------------------------------*/ 
-stg:  Return storage(d2x(Arg(1)),Arg(2))     /* Return storage */       
-
-USSU: PROCEDURE
-  call syscalls 'ON'
-    address syscall
-    ucount = 0
-    Do Forever
-      "getpwent pw."
-      if retval=0 | retval=-1 then leave
-      else Do
-      Name = strip(pw.pw_name)
-      UID = strip(pw.pw_uid)
-      GID = strip(pw.pw_gid)
-      Home = strip(pw.pw_dir)
-      ucount = ucount + 1
-      usr.ucount = left(Name,8) left(GID,10) left(UID,10) left(Home, 48)
-    End
-    usr.0 = ucount
-  End
-  Say 'USS/OMVS user details:'
-  Say copies('-',41)
-  Say left('USER ID',8) left('GID',10) left('UID',10) left('HOME', 10)
-  Do i = 1 to usr.0
-    Say usr.i
-  End
+    SAY ' LEGEND: A-ALPHA C-CONSONANT L-ALPHANUM N-NUMERIC',
+      'V-VOWEL W-NOVOWEL *-ANYTHING c-MIXED CONSONANT',
+      'm-MIXED NUMERIC v-MIXED VOWEL $-NATIONAL s-SPECIAL'
 RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate RACF password options and features                    */
+/*------------------------------------------------------------------*/
+EnumPasswordOptions: PROCEDURE EXPOSE (findingsVars)
+  PARSE ARG rcvx, rcvt
+
+  rcvtFlg3 = rcvx + 633
+  rcvtFlgx = X2B(C2X(GetStorage(rcvtFlg3, 8)))
+
+  IF SUBSTR(rcvtFlgx, 2, 1) == 1 THEN
+    SAY 'Mixed case passwords enabled'
+  ELSE DO
+    SAY 'Mixed case passwords disabled'
+    /* Example: Add finding for mixed case disabled */
+    CALL AddFinding 'RACF-MIXED-CASE-DISABLED'
+    CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+      'available at http://github.com/mainframed/ with the argument',
+      'SEC and observe that in RACF mixed case passwords are not enabled.'
+    CALL AddVerificationContent '(TRUNCATED)/n',
+      'Mixed case passwords disabled/n(TRUNCATED)'
+
+  END
+
+  IF SUBSTR(rcvtFlgx, 5, 1) == 1 THEN
+    SAY 'Special characters are allowed in passwords'
+  ELSE SAY 'Special characters are not allowed in passwords'
+
+  IF SUBSTR(rcvtFlgx, 6, 1) == 1 THEN
+    SAY 'Enhanced password options under OA43999 available'
+  ELSE
+    SAY 'Enhanced password options under OA43999 not available'
+
+  IF SUBSTR(rcvtFlgx, 7, 1) == 1 THEN
+    SAY 'Multi factor auth is available'
+  ELSE SAY 'Multi factor auth is not available'
+
+  rcvtFlg4 = rcvx + 640
+  rcvtFlgy = X2B(C2X(GetStorage(rcvtFlg4, 8)))
+
+  IF SUBSTR(rcvtFlgy, 2, 1) == 1 THEN
+    SAY ' MFA3 is available (OA50930)'
+  ELSE SAY ' MFA3 is not available (OA50930)'
+
+  /* Password encryption */
+  rcvtPalg = C2D(STRIP(GetStorage(rcvt+635, 1)))
+  IF rcvtPalg == '1' THEN SAY 'KDFAES encryption is active'
+  ELSE DO
+    SAY 'Legacy encryption is active'
+    IF assessMode == 1 THEN DO
+      CALL AddFinding 'RACF-LEGACY-ENCRYPTION-ACTIVE'
+      CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        'available at http://github.com/mainframed/ with the argument',
+        'SEC and observe that RACF is using legacy encryption instead of',
+        'KDFAES encryption.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'Legacy encryption is active/n(TRUNCATED)'
+    END
+  END
+
+  /* Password exit */
+  pwx01hex = GetStorage(rcvt+236, 4)
+  rcvtPwdx = C2D(BITAND(pwx01hex, '7FFFFFFF'x))
+
+  IF rcvtPwdx == 0 THEN yesOrNo = 'is NOT'
+  ELSE yesOrNo = 'IS'
+
+  SAY 'There' yesOrNo 'a new password exit (ICHPWX01)',
+    'installed.'
+RETURN
+
+/*==================================================================*/
+/*                         HELPER FUNCTIONS                         */
+/*==================================================================*/
+
+/*------------------------------------------------------------------*/
+/* Check dataset access (RACF only)                                */
+/* Returns: 'UACC WARNING ACCESS' (e.g., 'NONE NO ALTER')          */
+/*          or error message if checks fail                         */
+/*------------------------------------------------------------------*/
+CheckDatasetAccess: PROCEDURE
+  PARSE ARG dataset
+
+  /* First check if we're on RACF */
+  cvt = GetPtr(16)
+  cvtrac = GetPtr(cvt+992)
+  id = GetStorage(cvtrac, 4)
+
+  IF id \== 'RCVT' THEN DO
+    RETURN 'ERROR: Not a RACF system'
+  END
+
+  /* Check if we can run LISTDSD */
+  ADDRESS 'TSO'
+  rc = OUTTRAP('checkOut.')
+  'LISTDSD'
+  rc = OUTTRAP('OFF')
+
+  /* If command not found or not authorized */
+  IF checkOut.0 > 0 THEN DO
+    DO i = 1 TO checkOut.0
+      IF POS('NOT AUTHORIZED', checkOut.i) > 0 |,
+         POS('COMMAND NOT FOUND', checkOut.i) > 0 THEN DO
+        RETURN 'ERROR: Cannot run LISTDSD command'
+      END
+    END
+  END
+
+  /* Try LISTDSD with the dataset */
+  rc = OUTTRAP('out.')
+  "LISTDSD da('"||STRIP(dataset)||"')"
+  cmdRc = RC
+  rc = OUTTRAP('OFF')
+
+  /* Check if we got the "NO RACF DESCRIPTION FOUND" error */
+  IF cmdRc \== 0 THEN DO
+    foundNoDesc = 0
+    DO i = 1 TO out.0
+      IF POS('ICH35003I', out.i) > 0 THEN DO
+        foundNoDesc = 1
+        LEAVE
+      END
+    END
+
+    /* Try with GENERIC option */
+    IF foundNoDesc == 1 THEN DO
+      rc = OUTTRAP('out.')
+      "LISTDSD da('"||STRIP(dataset)||"') GENERIC"
+      cmdRc = RC
+      rc = OUTTRAP('OFF')
+
+      /* If still fails, dataset is not RACF protected */
+      IF cmdRc \== 0 THEN DO
+        RETURN 'ERROR: Dataset not RACF protected'
+      END
+    END
+    ELSE DO
+      /* Different error */
+      RETURN 'ERROR: LISTDSD command failed'
+    END
+  END
+
+  /* Parse the output */
+  uacc = ''
+  warning = ''
+  access = ''
+
+  DO i = 1 TO out.0
+    /* Look for the LEVEL line with UNIVERSAL ACCESS and WARNING */
+    IF POS('UNIVERSAL ACCESS', out.i) > 0 THEN DO
+      /* Next line should have the actual values */
+      IF i < out.0 THEN DO
+        n = i + 2
+        nextLine = out.n
+        /* Parse: " 00    PHIL            NONE          NO      NO" */
+        PARSE VAR nextLine . . uacc warning .
+        uacc = STRIP(uacc)
+        warning = STRIP(warning)
+      END
+    END
+
+    /* Look for YOUR ACCESS line */
+    IF POS('YOUR ACCESS', out.i) > 0 THEN DO
+      /* Next line should have the access value */
+      IF i < out.0 THEN DO
+        n = i + 2
+        nextLine = out.n
+        /* Parse: "   ALTER        SYS1           NON-VSAM" */
+        PARSE VAR nextLine access .
+        access = STRIP(access)
+      END
+    END
+  END
+
+  /* Validate we found all values */
+  IF uacc == '' | warning == '' | access == '' THEN DO
+    RETURN 'ERROR: Could not parse LISTDSD output'
+  END
+
+RETURN uacc || ' ' || warning || ' ' || access
+
+/*------------------------------------------------------------------*/
+/* Check dataset access and track findings                          */
+/* Returns: formatted output string for display                     */
+/* Side effects: Updates warningDatasets, excessiveUaccDatasets,    */
+/*               and excessiveAccessDatasets variables              */
+/* Parameters:                                                      */
+/*   dataset - Dataset name to check                               */
+/*   volume  - Volume name for display                             */
+/*   missing - Missing status for display                          */
+/*   checkRead - If 1, READ access is also a finding (default 0)   */
+/*------------------------------------------------------------------*/
+CheckAndReportDatasetAccess: PROCEDURE EXPOSE warningDatasets,
+  excessiveUaccDatasets excessiveAccessDatasets
+  PARSE ARG dataset, volume, missing, checkRead
+
+  /* Default checkRead to 0 if not specified */
+  IF checkRead == '' THEN checkRead = 0
+
+  accessInfo = CheckDatasetAccess(STRIP(dataset))
+
+  IF POS('ERROR:', accessInfo) == 0 THEN DO
+    /* Parse the result: 'UACC WARNING ACCESS' */
+    PARSE VAR accessInfo uacc warning access
+    uaccDisp = LEFT(uacc, 4)
+    warnDisp = LEFT(warning, 4)
+    accessDisp = LEFT(access, 6)
+
+    /* If volume/missing are empty, use simplified format */
+    IF volume == '' & missing == '' THEN DO
+      output = uaccDisp '|' warnDisp '|' accessDisp '|' STRIP(dataset)
+    END
+    ELSE DO
+      output = LEFT(STRIP(volume),6) '|' STRIP(LEFT(missing,6)),
+        '|' uaccDisp '|' warnDisp '|' accessDisp '|' STRIP(dataset)
+    END
+
+    /* Track findings */
+    dsName = STRIP(dataset)
+
+    /* Check for WARNING mode */
+    IF warning == 'YES' THEN DO
+      IF warningDatasets == '' THEN
+        warningDatasets = ' ' || dsName
+      ELSE
+        warningDatasets = warningDatasets || ', ' || dsName
+    END
+
+    /* Check for excessive UACC - always check UPDATE/CONTROL/ALTER */
+    /* For sensitive datasets (checkRead=1), also check READ */
+    IF uacc == 'UPDATE' | uacc == 'CONTROL' | uacc == 'ALTER' THEN DO
+      IF excessiveUaccDatasets == '' THEN
+        excessiveUaccDatasets = ' ' || dsName
+      ELSE
+        excessiveUaccDatasets = excessiveUaccDatasets || ', ' || dsName
+    END
+    ELSE IF checkRead == 1 & uacc == 'READ' THEN DO
+      IF excessiveUaccDatasets == '' THEN
+        excessiveUaccDatasets = ' ' || dsName
+      ELSE
+        excessiveUaccDatasets = excessiveUaccDatasets || ', ' || dsName
+    END
+
+    /* Check for excessive user access */
+    IF access == 'UPDATE' | access == 'CONTROL' | access == 'ALTER' THEN DO
+      IF excessiveAccessDatasets == '' THEN
+        excessiveAccessDatasets = ' ' || dsName
+      ELSE
+        excessiveAccessDatasets = excessiveAccessDatasets || ', ' || dsName
+    END
+    ELSE IF checkRead == 1 & access == 'READ' THEN DO
+      IF excessiveAccessDatasets == '' THEN
+        excessiveAccessDatasets = ' ' || dsName
+      ELSE
+        excessiveAccessDatasets = excessiveAccessDatasets || ', ' || dsName
+    END
+  END
+  ELSE DO
+    /* Error occurred, display placeholder */
+    IF volume == '' & missing == '' THEN DO
+      output = ' ??  |  ??  |   ??   |' STRIP(dataset)
+    END
+    ELSE DO
+      output = LEFT(STRIP(volume),6) '|' STRIP(LEFT(missing,6)),
+        '|  ??  |  ??  |   ??   |' STRIP(dataset)
+    END
+  END
+
+RETURN output
+
+/*------------------------------------------------------------------*/
+/* Get LPAR name (SMFID) from system                               */
+/*------------------------------------------------------------------*/
+GetLparName: PROCEDURE
+
+  lparName = MVSVAR("SYSNAME")  /* LPAR name */
+
+RETURN lparName
+
+/*------------------------------------------------------------------*/
+/* Get pointer from storage                                         */
+/*------------------------------------------------------------------*/
+GetPtr: PROCEDURE
+  PARSE ARG addr
+RETURN C2D(STORAGE(D2X(addr), 4))
+
+/*------------------------------------------------------------------*/
+/* Get storage at address                                           */
+/*------------------------------------------------------------------*/
+GetStorage: PROCEDURE
+  PARSE ARG addr, len
+RETURN STORAGE(D2X(addr), len)
+
+/*------------------------------------------------------------------*/
+/* Get storage using hex address                                    */
+/*------------------------------------------------------------------*/
+GetStorageHex: PROCEDURE
+  PARSE ARG addr, disp
+RETURN C2X(STORAGE(D2X(X2D(addr)+X2D(disp)), 4))
+
+/*------------------------------------------------------------------*/
+/* Get userid from ASCB                                             */
+/*------------------------------------------------------------------*/
+GetUserid: PROCEDURE
+  PARSE ARG ascb
+
+  assb = GetPtr(ascb+336)
+  jsab = GetPtr(assb+168)
+
+  IF jsab == 0 THEN usid = ''
+  ELSE usid = GetStorage(jsab+44, 8)
+
+RETURN usid
+
+/*------------------------------------------------------------------*/
+/* Add element to array                                             */
+/*------------------------------------------------------------------*/
+AddToArray: PROCEDURE EXPOSE (globalVars)
+  PARSE ARG arrayName, value
+
+  INTERPRET 'idx = ' || arrayName || '.0 + 1'
+  INTERPRET arrayName || '.' || idx || ' = value'
+  INTERPRET arrayName || '.0 = idx'
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Convert SWA Virtual Address to 31-bit address                    */
+/* Credit: Gilbert Saint-Flour                                      */
+/*------------------------------------------------------------------*/
+Swareq: PROCEDURE
+  sva = C2D(ARG(1))
+  tcb = C2D(STORAGE('21C', 4))
+  jscb = GetPtr(tcb+180)
+  qmpl = GetPtr(jscb+244)
+
+  /* Check if QMAT can be above the bar */
+  qmsta = C2X(GetStorage(qmpl+16, 1))
+
+  IF SUBSTR(X2B(qmsta), 6, 1) THEN DO
+    /* QMAT can be ATB */
+    IF RIGHT(X2B(C2X(ARG(1))), 1) \== '1' THEN
+      RETURN C2D(ARG(1)) + 16
+
+    qmat = C2D(GetStorage(qmpl+10, 2)) * (2**48) +,
+      C2D(GetStorage(qmpl+18, 2)) * (2**32) +,
+      GetPtr(qmpl+24)
+
+    RETURN GetPtr(qmat+(sva*12)+64) + 16
+  END
+  ELSE DO
+    /* QMAT is BTB */
+    IF RIGHT(C2X(ARG(1)), 1) \== 'F' THEN
+      RETURN C2D(ARG(1)) + 16
+
+    qmat = GetPtr(qmpl+24)
+
+    DO WHILE sva > 65536
+      qmat = GetPtr(qmat+12)
+      sva = sva - 65536
+    END
+
+    RETURN GetPtr(qmat+sva+1) + 16
+  END
+
+/*------------------------------------------------------------------*/
+/* Print section separator                                          */
+/*------------------------------------------------------------------*/
+PrintSeparator: PROCEDURE
+  SAY COPIES('-', 72)
+  SAY ''
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Print section banner with header                                 */
+/*------------------------------------------------------------------*/
+PrintSectionBanner: PROCEDURE
+  PARSE ARG sectionTitle
+
+  SAY ''
+  SAY '$$$$$$$$$$$$$$$$$$$$$$$$$'
+  SAY '$$Y'''
+  SAY '$$'
+  SAY '$$' sectionTitle
+  SAY '$$'
+  SAY '$$b.'
+  SAY '$$$$$$$$$$$$$$$$$$$$$$$$$'
+  SAY ''
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Print banner text                                                */
+/*------------------------------------------------------------------*/
+PrintBanner: PROCEDURE
+  PARSE ARG text
+  SAY text
+RETURN
+
+/*==================================================================*/
+/*              ASSESSMENT MODE FUNCTIONS (OSS VERSION)             */
+/*==================================================================*/
+/*                                                                  */
+/* NOTE: This open source version contains simplified examples of  */
+/* the assessment mode functions. The actual implementation would   */
+/* track and report real security findings discovered during the    */
+/* enumeration process.                                             */
+/*                                                                  */
+/* Example usage pattern for adding findings:                       */
+/*                                                                  */
+/* 1. Add EXPOSE clause to your enumeration procedure:              */
+/*    PROCEDURE EXPOSE (findingsVars)                               */
+/*                                                                  */
+/* 2. When a security issue is detected, call:                      */
+/*    CALL AddFinding 'FINDING-TEMPLATE-ID'                         */
+/*    CALL AddVerificationCaption 'Title for verification step'     */
+/*    CALL AddVerificationContent 'Detailed evidence and steps'     */
+/*                                                                  */
+/* 3. You can add multiple verification steps per finding           */
+/*==================================================================*/
+
+/*------------------------------------------------------------------*/
+/* Add a finding to the assessment results                          */
+/*------------------------------------------------------------------*/
+AddFinding: PROCEDURE EXPOSE (findingsVars)
+  IF assessMode == 0 THEN RETURN  /* Only add findings in assess mode */
+
+  PARSE ARG templateId
+
+  idx = findings.0 + 1
+  findingtemplate.idx = templateId
+  verificationcaption.idx = ''
+  verificationsteps.idx = ''
+
+  findings.0 = idx
+  findingtemplate.0 = idx
+  verificationcaption.0 = idx
+  verificationsteps.0 = idx
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Add verification caption to the most recent finding              */
+/* This is the title/heading for the verification step             */
+/*------------------------------------------------------------------*/
+AddVerificationCaption: PROCEDURE EXPOSE (findingsVars)
+  IF findings.0 == 0 THEN RETURN  /* No findings to add to */
+
+  PARSE ARG caption
+
+  idx = findings.0  /* Get most recent finding */
+
+  /* Append to caption (first one has no delimiter prefix) */
+  IF verificationcaption.idx == '' THEN
+    verificationcaption.idx = caption
+  ELSE
+    verificationcaption.idx = verificationcaption.idx||VSTEP_DELIM||caption
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Add verification content to the most recent finding              */
+/* This is the detailed content for the verification step           */
+/* Must be called after AddVerificationCaption                      */
+/*------------------------------------------------------------------*/
+AddVerificationContent: PROCEDURE EXPOSE (findingsVars)
+  IF findings.0 == 0 THEN RETURN  /* No findings to add to */
+
+  PARSE ARG content
+
+  idx = findings.0  /* Get most recent finding */
+
+  /* Append to steps (first one has no delimiter prefix) */
+  IF verificationsteps.idx == '' THEN
+    verificationsteps.idx = content
+  ELSE
+    verificationsteps.idx = verificationsteps.idx||VSTEP_DELIM||content
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Output assessment results                                        */
+/*------------------------------------------------------------------*/
+OutputAssessmentJSON: PROCEDURE EXPOSE (findingsVars)
+
+  CALL PrintSectionBanner 'Assessment Findings'
+
+  DO i = 1 TO findings.0
+    templateId = findingtemplate.i
+
+    /* Parse verification captions and steps */
+    captions = verificationcaption.i
+    steps = verificationsteps.i
+
+    SAY ''
+    SAY 'Finding' i||':' templateId
+    SAY COPIES('-', 60)
+
+    /* Parse and output verification steps */
+    IF captions \== '' THEN DO
+      captionPos = 1
+      stepPos = 1
+
+      DO WHILE captionPos > 0
+        /* Find next delimiter position */
+        nextCaptionDelim = POS(VSTEP_DELIM, captions, captionPos)
+        nextStepDelim = POS(VSTEP_DELIM, steps, stepPos)
+
+        /* Extract caption */
+        IF nextCaptionDelim > 0 THEN DO
+          vCaption = SUBSTR(captions, captionPos,,
+            nextCaptionDelim - captionPos)
+          captionPos = nextCaptionDelim + LENGTH(VSTEP_DELIM)
+        END
+        ELSE DO
+          vCaption = SUBSTR(captions, captionPos)
+          captionPos = 0  /* Signal end */
+        END
+
+        /* Extract step */
+        IF nextStepDelim > 0 THEN DO
+          vContent = SUBSTR(steps, stepPos, nextStepDelim - stepPos)
+          stepPos = nextStepDelim + LENGTH(VSTEP_DELIM)
+        END
+        ELSE DO
+          vContent = SUBSTR(steps, stepPos)
+          stepPos = 0
+        END
+
+        /* Output verification caption and content */
+        SAY vCaption
+        SAY vContent
+        SAY ''
+      END
+    END
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Escape special characters for JSON strings                       */
+/*------------------------------------------------------------------*/
+JsonEscape: PROCEDURE
+  PARSE ARG text
+
+  /* Replace backslash first */
+  text = ReplaceStr(text, '\', '\\')
+  /* Replace double quotes */
+  text = ReplaceStr(text, '"', '\"')
+
+RETURN text
+
+/*------------------------------------------------------------------*/
+/* Return placeholder for open curly brace                         */
+/*------------------------------------------------------------------*/
+OpenCurly: PROCEDURE
+RETURN '<<LC>>'
+
+/*------------------------------------------------------------------*/
+/* Return placeholder for close curly brace                        */
+/*------------------------------------------------------------------*/
+CloseCurly: PROCEDURE
+RETURN '<<RC>>'
+
+/*------------------------------------------------------------------*/
+/* Return placeholder for open square bracket                      */
+/*------------------------------------------------------------------*/
+OpenSquare: PROCEDURE
+RETURN '<<LB>>'
+
+/*------------------------------------------------------------------*/
+/* Return placeholder for close square bracket                     */
+/*------------------------------------------------------------------*/
+CloseSquare: PROCEDURE
+RETURN '<<RB>>'
+
+/*------------------------------------------------------------------*/
+/* Replace all occurrences of a string                              */
+/*------------------------------------------------------------------*/
+ReplaceStr: PROCEDURE
+  PARSE ARG text, old, new
+
+  DO WHILE POS(old, text) > 0
+    p = POS(old, text)
+    text = SUBSTR(text, 1, p-1) || new ||,
+      SUBSTR(text, p+LENGTH(old))
+  END
+
+RETURN text
+
 @@
 //*********************************************************************
 //PUTFSTJ EXEC PUTFILE,FILENAME='FileSystemTraversal.java'
@@ -1157,15 +2201,17 @@ import java.util.*;
 // This has been formatted to fit in an 80 column
 // dataset/pds, hence the weird indentation
 public class FileSystemTraversal {
- private static boolean includeDirs = false;
+ private static boolean includeDirs = true;
  private static boolean onlyExecutable = false;
- private static boolean onlyWritable = false;
+ private static boolean onlyWritable = true;
  private static boolean onlyReadable = false;
+ private static boolean flagsSpecified = false;
  private static PrintWriter output = null;
 
  public static void main(String[] args) {
-     if (args.length < 2) {
+     if (args.length < 1) {
 System.out.println("Usage: java FileSystemTraversal [flags] <directory_path>");
+System.out.println("Default: shows writable files and directories");
 System.out.println("Flags:");
 System.out.println("  -d (include directories)");
 System.out.println("  -x (only executable files)");
@@ -1178,6 +2224,21 @@ System.exit(1);
 
      List<String> argList = new ArrayList<>(Arrays.asList(args));
      String directoryPath = argList.remove(argList.size() - 1);
+
+     // If any filter flags are specified, reset defaults
+     for (String arg : argList) {
+      if (arg.equals("-d") || arg.equals("-x") || arg.equals("-w") ||
+          arg.equals("-r") || arg.equals("-a")) {
+          flagsSpecified = true;
+          break;
+      }
+     }
+     if (flagsSpecified) {
+      includeDirs = false;
+      onlyExecutable = false;
+      onlyWritable = false;
+      onlyReadable = false;
+     }
 
      for (int i = 0; i < argList.size(); i++) {
       String arg = argList.get(i);
@@ -1322,11 +2383,11 @@ usage()
 {
     
 echo "\n\
-########################################################################\n\
-# Local Unix System Services Enumeration & Privilege Escalation Script #\n\
-########################################################################\n\
-#       Soldier of FORTRAN    #            @mainframed767              #\n\
-########################################################################\n\
+##################################################################\n\
+# Local USS Enumeration & Privilege Escalation Script            #\n\
+##################################################################\n\
+# Soldier of FORTRAN  |  @mainframed767                          #\n\
+##################################################################\n\
 # $version\n\
 # Based on LinEnum.sh\n\
 # Example: $0 -k keyword -r report -e /tmp/ -t\n\
@@ -1338,29 +2399,36 @@ OPTIONS:\n\
 -h\tDisplays this help text\n\
 \n\
 Running with no options = limited scans/no output file\n\
-########################################################################"
+##################################################################"
 # useful binaries (thanks to https://gtfobins.github.io/)
-set binarylist = 'aria2c\|arp\|ash\|awk\|base64\|bash\|busybox\|cat\|chmod\|\
-chown\|cp\|csh\|curl\|cut\|dash\|date\|dd\|diff\|dmsetup\|docker\|ed\|emacs\|\
-env\|expand\|expect\|file\|find\|flock\|fmt\|fold\|ftp\|gawk\|gdb\|gimp\|git\|\
-grep\|head\|ht\|iftop\|ionice\|ip$\|irb\|jjs\|jq\|jrunscript\|ksh\|ld.so\|\
-ldconfig\|less\|logsave\|lua\|make\|man\|mawk\|more\|mv\|mysql\|nano\|nawk\|\
-nc\|netcat\|nice\|nl\|nmap\|node\|od\|openssl\|perl\|pg\|php\|pic\|pico\|\
-python\|readelf\|rlwrap\|rpm\|rpmquery\|rsync\|ruby\|run-parts\|rvim\|scp\|\
-script\|sed\|setarch\|sftp\|sh\|shuf\|socat\|sort\|sqlite3\|ssh$\|\
-start-stop-daemon\|stdbuf\|strace\|systemctl\|tail\|tar\|taskset\|tclsh\|\
-tee\|telnet\|tftp\|time\|timeout\|ul\|unexpand\|uniq\|unshare\|vi\|vim\|\
-watch\|wget\|wish\|xargs\|xxd\|zip\|zsh'
+set binarylist = 'aria2c\|arp\|ash\|awk\|base64\|\
+bash\|busybox\|cat\|chmod\|chown\|cp\|csh\|\
+curl\|cut\|dash\|date\|dd\|diff\|dmsetup\|\
+docker\|ed\|emacs\|env\|expand\|expect\|file\|\
+find\|flock\|fmt\|fold\|ftp\|gawk\|gdb\|gimp\|\
+git\|grep\|head\|ht\|iftop\|ionice\|ip$\|irb\|\
+jjs\|jq\|jrunscript\|ksh\|ld.so\|ldconfig\|\
+less\|logsave\|lua\|make\|man\|mawk\|more\|mv\|\
+mysql\|nano\|nawk\|nc\|netcat\|nice\|nl\|nmap\|\
+node\|od\|openssl\|perl\|pg\|php\|pic\|pico\|\
+python\|readelf\|rlwrap\|rpm\|rpmquery\|rsync\|\
+ruby\|run-parts\|rvim\|scp\|script\|sed\|\
+setarch\|sftp\|sh\|shuf\|socat\|sort\|sqlite3\|\
+ssh$\|start-stop-daemon\|stdbuf\|strace\|\
+systemctl\|tail\|tar\|taskset\|tclsh\|tee\|\
+telnet\|tftp\|time\|timeout\|ul\|unexpand\|\
+uniq\|unshare\|vi\|vim\|watch\|wget\|wish\|\
+xargs\|xxd\|zip\|zsh'
 
 }
 
 header()
 {
-echo "\n#######################################################################"
-echo "# Local Unix System Services Enumeration & Privilege Escalation Script #"
-echo "########################################################################"
-echo "#       Soldier of FORTRAN    #            @mainframed767              #"
-echo "########################################################################"
+echo "\n##############################################################"
+echo "# Local USS Enumeration & Privilege Escalation Script      #"
+echo "##############################################################"
+echo "# Soldier of FORTRAN  |  @mainframed767                    #"
+echo "##############################################################"
 echo "# $version" 
 echo "# Time: " `date`
 
@@ -1368,7 +2436,7 @@ echo "# Time: " `date`
 
 footer()
 {
-echo "\n#######  Scan complete ################################################"
+echo "\n#######  Scan complete ##############################"
 echo "# Time: " `date` "\n\n"
 }
 
@@ -1377,7 +2445,8 @@ debug_info()
 echo "[-] Debug Info" 
 
 if [ "$keyword" ]; then 
-  echo "[+] Searching for the keyword $keyword in conf, php, ini and log files" 
+  echo "[+] Searching for keyword $keyword in" \
+       "conf, php, ini and log files" 
 fi
 
 if [ "$report" ]; then 
@@ -1408,7 +2477,7 @@ who=`whoami` 2>/dev/null
 
 system_info()
 {
-echo "\n#######  System Info ################################################\n"
+echo "\n#######  System Info ############################\n"
 
 
 #basic kernel info
@@ -1435,7 +2504,8 @@ fi
 #          Zx is the operating system (for example, Z1 is z/OS)
 #          vv is the version number from ECVTPVER (for example, 02)
 #          rr is the release number from ECVTPREL (for example, 01)
-#          mm is the modification number from ECVTPMOD (for example, 00).
+#          mm is the modification number from
+#          ECVTPMOD (for example, 00).
 #          Example For z/OS 2.1, the value is Z1020100.
 sysoslvl=`sysvar SYSOSLVL 2>/dev/null`
 if [ "$sysoslvl" ]; then
@@ -1464,8 +2534,8 @@ if [ "$sysalvl" ]; then
   echo "[-] Architecture level of the system: $sysalvl" 
 fi
 
-# Shorthand notation for the name of the system; often used in fields that are 
-# limited to two characters.
+# Shorthand notation for the name of the system;
+# often used in fields limited to two characters.
 sysclone=`sysvar SYSCLONE 2>/dev/null`
 if [ "$sysclone" ]; then
   echo "[-] Shorthand notation for the name of the system: $sysclone" 
@@ -1496,7 +2566,7 @@ fi
 
 user_info()
 {
-echo "\n#######  User/ Group ################################################\n"
+echo "\n#######  User/ Group ############################\n"
 
 #current user details
 currusr=`id 2>/dev/null`
@@ -1539,7 +2609,9 @@ fi
 
 # Display subgroup information
 if [ "$usernum" ]; then
-  sub_group=`/bin/tsocmd lg 2>/dev/null|grep -ni "SUBGROUP(S)="|cut -d":" -f1`
+  sub_group=`/bin/tsocmd lg 2>/dev/null|\
+             grep -ni "SUBGROUP(S)="|\
+             cut -d":" -f1`
   tail_num=`expr $usernum - $sub_group`
   head_num=`expr $usernum - 1`
   group_users=`/bin/tsocmd lg 2>/dev/null|head -n $head_num|\
@@ -1553,10 +2625,16 @@ if [ "$usernum" ]; then
         usernum=`/bin/tsocmd lg $i 2>/dev/null|grep -ni "USER(S)="|\
                  cut -d":" -f1`
         if [ "$usernum" ]; then
-          total_lines=`/bin/tsocmd lg $i 2>/dev/null|wc|awk '{print $1}'`
+          total_lines=`/bin/tsocmd lg $i \
+                       2>/dev/null|wc|\
+                       awk '{print $1}'`
           group_lines=`expr $total_lines - $usernum`
-          group_users=`/bin/tsocmd lg $i 2>/dev/null|tail -n $group_lines|\
-                       grep -v CONNECT|grep -v REVOKE|awk '{print "\t"$1}'`
+          group_users=`/bin/tsocmd lg $i \
+                       2>/dev/null|\
+                       tail -n $group_lines|\
+                       grep -v CONNECT|\
+                       grep -v REVOKE|\
+                       awk '{print "\t"$1}'`
           echo "[-] Sub group $i users:\n$group_users" 
         fi
       done
@@ -1610,14 +2688,17 @@ if [ "$thorough" = "1" ]; then
   grfilesall=`find / -writable ! -user \`whoami\` -type f -exec ls \
               -al {} \; 2>/dev/null`
   if [ "$grfilesall" ]; then
-    echo "[-] Files not owned by user but writable by group:\n$grfilesall" 
+    echo "[-] Files not owned by user but" \
+         "writable by group:\n$grfilesall"
     echo "\n"
   fi
 fi
 
 #looks for files that belong to us
 if [ "$thorough" = "1" ]; then
-  ourfilesall=`find / -user \`whoami\` -type f -exec ls -al {} \; 2>/dev/null`
+  ourfilesall=`find / -user \`whoami\` \
+              -type f -exec ls -al {} \; \
+              2>/dev/null`
   if [ "$ourfilesall" ]; then
     echo "[-] Files owned by our user:\n$ourfilesall"
     echo "\n"
@@ -1634,8 +2715,8 @@ if [ "$thorough" = "1" ]; then
 fi
 
 # looks for world-reabable files within /u - depending on number of /u 
-# dirs & files, this can take some time so is only 'activated' with thorough 
-# scanning switch
+# dirs & files, this can take some time so is
+# only 'activated' with thorough scanning switch
 if [ "$thorough" = "1" ]; then
 wrfileshm=`find /u/ -perm -4 -type f -exec ls -al {} \; 2>/dev/null`
   if [ "$wrfileshm" ]; then
@@ -1647,7 +2728,9 @@ fi
 if [ "$thorough" = "1" ]; then
   if [ "$export" ] && [ "$wrfileshm" ]; then
    mkdir $format/wr-files/ 2>/dev/null
-   for i in $wrfileshm; do cp --parents $i $format/wr-files/ ; done 2>/dev/null
+   for i in $wrfileshm; do
+     cp --parents $i $format/wr-files/
+   done 2>/dev/null
   fi
 fi
 
@@ -1658,12 +2741,16 @@ if [ "$homedircontents" ] ; then
   echo "\n" 
 fi
 
-# checks for if various ssh files are accessible - this can take some time so is
-# only 'activated' with thorough scanning switch
+# checks for if various ssh files are accessible
+# this can take some time so is only 'activated'
+# with thorough scanning switch
 if [ "$thorough" = "1" ]; then
-sshfiles=`find / \( -name "id_dsa*" -o -name "id_rsa*" -o -name "known_hosts" \
-          -o -name "authorized_hosts" -o -name "authorized_keys" \) -exec ls \
-          -la {} 2>/dev/null \;`
+sshfiles=`find / \( -name "id_dsa*" \
+          -o -name "id_rsa*" \
+          -o -name "known_hosts" \
+          -o -name "authorized_hosts" \
+          -o -name "authorized_keys" \) \
+          -exec ls -la {} 2>/dev/null \;`
   if [ "$sshfiles" ]; then
     echo "[-] SSH keys/host information found in the \
 following locations:\n$sshfiles" 
@@ -1674,16 +2761,23 @@ fi
 if [ "$thorough" = "1" ]; then
   if [ "$export" ] && [ "$sshfiles" ]; then
     mkdir $format/ssh-files/ 2>/dev/null
-    for i in $sshfiles; do cp --parents $i $format/ssh-files/; done 2>/dev/null
+    for i in $sshfiles; do
+      cp --parents $i $format/ssh-files/
+    done 2>/dev/null
   fi
 fi
 
 #is root permitted to login via ssh
-sshrootlogin=`grep "PermitRootLogin " /etc/ssh/sshd_config 2>/dev/null | \
-              grep -v "#" | awk '{print  $2}'`
+sshrootlogin=`grep "PermitRootLogin " \
+              /etc/ssh/sshd_config \
+              2>/dev/null | \
+              grep -v "#" | \
+              awk '{print  $2}'`
 if [ "$sshrootlogin" = "yes" ]; then
-  echo "[-] Root is allowed to login via SSH:" ; grep "PermitRootLogin " \
-  /etc/ssh/sshd_config 2>/dev/null | grep -v "#" 
+  echo "[-] Root is allowed to login via SSH:"
+  grep "PermitRootLogin " \
+  /etc/ssh/sshd_config 2>/dev/null |\
+  grep -v "#"
   echo "\n"
 fi
 
@@ -1708,7 +2802,7 @@ fi
 environmental_info()
 {
 
-echo "\n#######  Environmental ##############################################\n"
+echo "\n#######  Environmental ##########################\n"
 
 #env information
 envinfo=`env 2>/dev/null | grep -v 'LS_COLORS' 2>/dev/null`
@@ -1734,7 +2828,7 @@ fi
 
 job_info()
 {
-echo "\n#######  Jobs/Tasks #################################################\n"
+echo "\n#######  Jobs/Tasks #############################\n"
 
 #are there any cron jobs configured
 cronjobs=`ls -la /etc/cron* 2>/dev/null`
@@ -1747,7 +2841,8 @@ fi
 cronjobwwperms=`find /etc/cron* -perm -0002 -type f -exec ls \
                 -la {} \; -exec cat {} 2>/dev/null \;`
 if [ "$cronjobwwperms" ]; then
-  echo "[+] World-writable cron jobs and file contents:\n$cronjobwwperms" 
+  echo "[+] World-writable cron jobs and" \
+       "file contents:\n$cronjobwwperms"
   echo "\n"
 fi
 
@@ -1760,7 +2855,8 @@ fi
 
 crontabvar=`ls -la /var/spool/cron/crontabs 2>/dev/null`
 if [ "$crontabvar" ]; then
-  echo "[-] Anything interesting in /var/spool/cron/crontabs:\n$crontabvar" 
+  echo "[-] Anything interesting in" \
+       "/var/spool/cron/crontabs:\n$crontabvar"
   echo "\n"
 fi
 
@@ -1768,7 +2864,7 @@ fi
 
 networking_info()
 {
-echo "\n#######  Networking ###################################################"
+echo "\n#######  Networking #############################"
 
 #nic information
 nicinfo=`netstat -h 2>/dev/null`
@@ -1837,7 +2933,7 @@ fi
 services_info()
 {
 
-echo "\n#######  Services   #################################################\n"
+echo "\n#######  Services   #############################\n"
 
 #running processes
 # OMVS is more secure and only lets you list running processes
@@ -1849,11 +2945,13 @@ psef=`ps -ef 2>/dev/null |grep -v UID|grep -v $username`
 if [ "$psef" ]; then 
   psef_good=`ps -ef 2>/dev/null`
   if [ "$psef_good" ]; then
-    echo "[+] Access to list all processes:\n[-] List processes:\n$psef_good" 
+    echo "[+] Access to list all processes:" \
+         "\n[-] List processes:\n$psef_good"
     echo "\n" 
   fi
 else 
-  echo "[!] This user cannot list prosses for all users skipping steps\n"
+  echo "[!] This user cannot list processes" \
+       "for all users skipping steps\n"
 fi
 
 #anything 'useful' in inetd.conf
@@ -1868,12 +2966,13 @@ if [ "$export" ] && [ "$inetdread" ]; then
   cp /etc/inetd.conf $format/etc-export/inetd.conf 2>/dev/null
 fi
 
-# very 'rough' command to extract associated binaries from inetd.conf & 
-# show permisisons of each
+# very 'rough' command to extract associated
+# binaries from inetd.conf & show permissions
 inetdbinperms=`awk '{print $6}' /etc/inetd.conf 2>/dev/null |\
                xargs ls -laskL 2>/dev/null`
 if [ "$inetdbinperms" ]; then
-  echo "[-] The related inetd binary permissions:\n$inetdbinperms" 
+  echo "[-] The related inetd binary" \
+       "permissions:\n$inetdbinperms"
   echo "\n"
 fi
 
@@ -1881,7 +2980,7 @@ fi
 
 software_configs()
 {
-echo "\n#######  Sotfware   #################################################\n"
+echo "\n#######  Sotfware   #############################\n"
 
 #TODO: This needs to have more stuff added 
 # - zosmf?
@@ -1901,9 +3000,12 @@ fi
 #############################################
 ### This is broken and needs fixing
 # CICS USSHOME
-#USSHOME=`find /usr/lpp/cicsts/ -exec ls -laE {} 2>/dev/null \; 2>/dev/null`
+#USSHOME=`find /usr/lpp/cicsts/ \
+#         -exec ls -laE {} 2>/dev/null \; \
+#         2>/dev/null`
 #if [ "$USSHOME" ]; then
-#    echo "[-] CICS Default File Permissions (/usr/lpp/cicsts)\n$USSHOME"
+#    echo "[-] CICS Default File Permissions" \
+#         "(/usr/lpp/cicsts)\n$USSHOME"
 #    echo "\n"
 #fi
 #############################################
@@ -1912,7 +3014,7 @@ fi
 
 interesting_files()
 {
-echo "\n#######  Interesting Files   ########################################\n"
+echo "\n#######  Interesting Files   ####################\n"
 
 #checks to see if various files are installed
 #useful programs
@@ -1949,7 +3051,9 @@ if [ "$thorough" = "1" ]; then
 
   if [ "$export" ] && [ "$findsuidapf" ]; then
     mkdir $format/suid-apf-files/ 2>/dev/null
-    for i in $findsuidapf; do cp $i $format/suid-files/; done 2>/dev/null
+    for i in $findsuidapf; do
+      cp $i $format/suid-files/
+    done 2>/dev/null
   fi
 
   #list of 'interesting' suid files - feel free to make additions
@@ -1961,13 +3065,17 @@ if [ "$thorough" = "1" ]; then
   fi
 
   #lists word-writable suid files
-  wwsuid=`find / -ext a -perm -4002 -type f -exec ls -la {} 2>/dev/null \;`
+  wwsuid=`find / -ext a -perm -4002 \
+          -type f -exec ls -la {} \
+          2>/dev/null \;`
   if [ "$wwsuid" ]; then
     echo "[+] World-writable SUID files:\n$wwsuid" 
     echo "\n"
   fi
 
-  wwapf=`find ./ -ext a -perm -0002 -type f -exec ls -laE {} 2>/dev/null \;`
+  wwapf=`find ./ -ext a -perm -0002 \
+         -type f -exec ls -laE {} \
+         2>/dev/null \;`
   if [ "$wwapf" ]; then
     echo "[-] World-writeable APF files:\n$wwapf" 
     echo "\n"
@@ -1994,7 +3102,9 @@ if [ "$thorough" = "1" ]; then
   fi
 
   #list of 'interesting' sgid files
-  #intsgid=`find / -perm -2000 -type f  -exec ls -la {} \; 2>/dev/null | \
+  #intsgid=`find / -perm -2000 -type f \
+  #         -exec ls -la {} \; \
+  #         2>/dev/null | \
   #         grep -w $binarylist 2>/dev/null`
   #if [ "$intsgid" ]; then
   #  echo "[+] Possibly interesting SGID files:\n$intsgid" 
@@ -2018,7 +3128,9 @@ if [ "$thorough" = "1" ]; then
 fi
 
 #look for keys
-keyfiles=`find /u/ -type f -exec grep -l "PRIVATE KEY-----" {} 2> /dev/null \;`
+keyfiles=`find /u/ -type f \
+          -exec grep -l "PRIVATE KEY-----" \
+          {} 2> /dev/null \;`
   if [ "$keyfiles" ]; then
       echo "[+] Secret keys found!:\n$keyfiles"
       echo "\n"
@@ -2045,12 +3157,17 @@ fi
 if [ "$thorough" = "1" ]; then
   if [ "$export" ] && [ "$wwfiles" ]; then
     mkdir $format/ww-files/ 2>/dev/null
-    for i in $wwfiles; do cp --parents $i $format/ww-files/; done 2>/dev/null
+    for i in $wwfiles; do
+      cp --parents $i $format/ww-files/
+    done 2>/dev/null
   fi
 fi
 
-#are any .plan files accessible in /home (could contain useful information)
-usrplan=`find /u/ -name *.plan -exec ls -la {} \; -exec cat {} 2>/dev/null \;`
+#are any .plan files accessible in /home
+#(could contain useful information)
+usrplan=`find /u/ -name *.plan \
+         -exec ls -la {} \; \
+         -exec cat {} 2>/dev/null \;`
 if [ "$usrplan" ]; then
   echo "[-] Plan file permissions and contents:\n$usrplan" 
   echo "\n"
@@ -2058,11 +3175,13 @@ fi
 
 if [ "$export" ] && [ "$usrplan" ]; then
   mkdir $format/plan_files/ 2>/dev/null
-  for i in $usrplan; do cp --parents $i $format/plan_files/; done 2>/dev/null
+  for i in $usrplan; do
+    cp --parents $i $format/plan_files/
+  done 2>/dev/null
 fi
 
-# are there any .rhosts files accessible - these may allow us to login as 
-# another user etc.
+# are there any .rhosts files accessible
+# these may allow us to login as another user
 rhostsusr=`find /u/ -name *.rhosts -exec ls -la {} 2>/dev/null \; \
            -exec cat {} 2>/dev/null \;`
 if [ "$rhostsusr" ]; then
@@ -2072,12 +3191,16 @@ fi
 
 if [ "$export" ] && [ "$rhostsusr" ]; then
   mkdir $format/rhosts/ 2>/dev/null
-  for i in $rhostsusr; do cp --parents $i $format/rhosts/; done 2>/dev/null
+  for i in $rhostsusr; do
+    cp --parents $i $format/rhosts/
+  done 2>/dev/null
 fi
 
 if [ "$export" ] && [ "$bsdrhostsusr" ]; then
   mkdir $format/rhosts 2>/dev/null
-  for i in $bsdrhostsusr; do cp --parents $i $format/rhosts/; done 2>/dev/null
+  for i in $bsdrhostsusr; do
+    cp --parents $i $format/rhosts/
+  done 2>/dev/null
 fi
 
 rhostssys=`find /etc -iname hosts.equiv -exec ls -la {} 2>/dev/null \; \
@@ -2089,7 +3212,9 @@ fi
 
 if [ "$export" ] && [ "$rhostssys" ]; then
   mkdir $format/rhosts/ 2>/dev/null
-  for i in $rhostssys; do cp --parents $i $format/rhosts/; done 2>/dev/null
+  for i in $rhostssys; do
+    cp --parents $i $format/rhosts/
+  done 2>/dev/null
 fi
 
 #HFS/ZFS mount points
@@ -2100,8 +3225,9 @@ if [ "$fstab" ]; then
   echo "\n"
 fi
 
-# use supplied keyword and cat *.conf files for potential matches - output will 
-# show line number within relevant file path where a match has been located
+# use supplied keyword and cat *.conf files for
+# potential matches - output will show line number
+# within relevant file path where match is located
 if [ "$keyword" = "" ]; then
   echo "[-] Can't search *.conf files as no keyword was entered\n" 
   else
@@ -2124,14 +3250,17 @@ if [ "$keyword" = "" ]; then
     if [ "$export" ] && [ "$confkey" ]; then
     confkeyfile=`find / -maxdepth 4 -name *.conf -type f -exec \
                  grep -ln $keyword {} \; 2>/dev/null`
-      mkdir --parents $format/keyword_file_matches/config_files/ 2>/dev/null
+      mkdir --parents \
+      $format/keyword_file_matches/config_files/ \
+      2>/dev/null
       for i in $confkeyfile; do cp --parents $i \
       $format/keyword_file_matches/config_files/ ; done 2>/dev/null
   fi
 fi
 
-#use supplied keyword and cat *.php files for potential matches - output will 
-# show line number within relevant file path where a match has been located
+#use supplied keyword and cat *.php files for
+# potential matches - output will show line number
+# within relevant file path where match is located
 if [ "$keyword" = "" ]; then
   echo "[-] Can't search *.php files as no keyword was entered\n" 
   else
@@ -2148,8 +3277,9 @@ filepath:identified line number where keyword appears):\n$phpkey"
     fi
 fi
 
-# use supplied keyword and cat *.class files for potential matches - output
-# will show line number within relevant file path where a match has been located
+# use supplied keyword and cat *.class files for
+# potential matches - output will show line number
+# within relevant file path where match is located
 if [ "$keyword" = "" ]; then
   echo "[-] Can't search *.class files as no keyword was entered\n" 
   else
@@ -2172,14 +3302,17 @@ if [ "$keyword" = "" ]; then
     if [ "$export" ] && [ "$phpkey" ]; then
     phpkeyfile=`find / -maxdepth 10 -name *.php -type f -exec grep \
                -ln $keyword {} \; 2>/dev/null`
-      mkdir --parents $format/keyword_file_matches/php_files/ 2>/dev/null
+      mkdir --parents \
+      $format/keyword_file_matches/php_files/ \
+      2>/dev/null
       for i in $phpkeyfile; do cp --parents $i \
       $format/keyword_file_matches/php_files/ ; done 2>/dev/null
   fi
 fi
 
-# use supplied keyword and cat *.log files for potential matches - output will 
-# show line number within relevant file path where a match has been located
+# use supplied keyword and cat *.log files for
+# potential matches - output will show line number
+# within relevant file path where match is located
 if [ "$keyword" = "" ];then
   echo "[-] Can't search *.log files as no keyword was entered\n" 
   else
@@ -2208,8 +3341,9 @@ if [ "$keyword" = "" ];then
   fi
 fi
 
-#use supplied keyword and cat *.ini files for potential matches - output will 
-# show line number within relevant file path where a match has been located
+#use supplied keyword and cat *.ini files for
+# potential matches - output will show line number
+# within relevant file path where match is located
 if [ "$keyword" = "" ];then
   echo "[-] Can't search *.ini files as no keyword was entered\n" 
   else
@@ -2232,7 +3366,9 @@ if [ "$keyword" = "" ];then
     if [ "$export" ] && [ "$inikey" ]; then
     inikey=`find / -maxdepth 4 -name *.ini -type f -exec \
             grep -lHn $keyword {} \; 2>/dev/null`
-      mkdir --parents $format/keyword_file_matches/ini_files/ 2>/dev/null
+      mkdir --parents \
+      $format/keyword_file_matches/ini_files/ \
+      2>/dev/null
       for i in $inikey; do cp --parents $i \
       $format/keyword_file_matches/ini_files/ ; done 2>/dev/null
   fi
@@ -2247,7 +3383,9 @@ fi
 
 if [ "$export" ] && [ "$allconf" ]; then
   mkdir $format/conf-files/ 2>/dev/null
-  for i in $allconf; do cp --parents $i $format/conf-files/; done 2>/dev/null
+  for i in $allconf; do
+    cp --parents $i $format/conf-files/
+  done 2>/dev/null
 fi
 
 #extract any user history files that are accessible
@@ -2259,7 +3397,9 @@ fi
 
 if [ "$export" ] && [ "$usrhist" ]; then
  mkdir $format/history_files/ 2>/dev/null
- for i in $usrhist; do cp --parents $i $format/history_files/; done 2>/dev/null
+ for i in $usrhist; do
+   cp --parents $i $format/history_files/
+ done 2>/dev/null
 fi
 
 #can we read roots *_history files - could be passwords stored etc.
@@ -2275,7 +3415,9 @@ if [ "$export" ] && [ "$roothist" ]; then
 fi
 
 #all accessible .bash_history files in /home
-checkbashhist=`find /u/ -name .*history -print -exec cat {} 2>/dev/null \;`
+checkbashhist=`find /u/ -name .*history \
+               -print -exec cat {} \
+               2>/dev/null \;`
 if [ "$checkbashhist" ]; then
   echo "[-] Location and contents (if accessible) of \
 .*history file(s):\n$checkbashhist"
@@ -2311,9 +3453,19 @@ if [ "$mounteddataset" ]; then
       listdsd=`/bin/tsocmd "listdsd dataset('$dataset')" 2>/dev/null`
       generic=''
       if echo $listdsd|grep -q ICH35003I; then
-        listdsd=`/bin/tsocmd "listdsd dataset('$dataset') GENERIC" 2>/dev/null`
+        listdsd=`/bin/tsocmd \
+        "listdsd dataset('$dataset') GENERIC" \
+        2>/dev/null`
         generic='GENERIC'
       fi
+      if echo "$dataset" | grep -q "/"; then
+        echo "\t NOT A DATASET \t $dataset"
+        continue
+      fi
+      if echo $listdsd|grep -q ICH35002I; then
+        echo "LISTDSD ACCESS DENIED \t $dataset"
+        continue
+      fi  
       if echo $listdsd|grep -q ICH35003I; then
         echo "\t UNPROTECTED \t $dataset"
       else
@@ -2343,9 +3495,281 @@ deltmpfile=`rm /tmp/$tmpfilename.omvsenum`
 
 }
 
+hfs_permission_bypass()
+{
+echo "\n#######  HFS Permission Bypass Checks   #########\n"
+
+echo "[-] Testing if RACF/ACF2/TSS dataset" \
+     "permissions bypass Unix file perms"
+echo "\n"
+
+# Test 1: Check if we can read other users'
+# files despite Unix permissions
+echo "[-] Searching for readable files in" \
+     "other users' home directories..."
+
+# Look for files in /u that we shouldn't be
+# able to read based on Unix perms
+# Common targets: .profile, .ssh/*, .netrc, etc.
+targets=".profile .bash_profile .bashrc"
+targets="$targets .netrc .ssh/id_rsa"
+targets="$targets .ssh/id_dsa .ssh/authorized_keys"
+found_bypass=0
+
+for userdir in /u/*; do
+  if [ -d "$userdir" ]; then
+    username=`basename $userdir`
+    current_user=`whoami`
+
+    # Skip our own directory
+    if [ "$username" = "$current_user" ]; then
+      continue
+    fi
+
+    # Try to read common sensitive files
+    for target in $targets; do
+      filepath="$userdir/$target"
+      if [ -f "$filepath" ]; then
+        # Check Unix permissions - look for files
+        # we shouldn't be able to read
+        perms=`ls -l "$filepath" 2>/dev/null | awk '{print $1}'`
+
+        # Try to read the file
+        content=`head -1 "$filepath" 2>/dev/null`
+        read_result=$?
+        if [ "$read_result" -eq 0 ]; then
+          if [ -n "$content" ]; then
+            # We could read it - check if perms say we shouldn't
+            echo "$perms" | grep "^-rw-------" >/dev/null 2>&1
+            perm_check1=$?
+            echo "$perms" | grep "^-r--------" >/dev/null 2>&1
+            perm_check2=$?
+            if [ "$perm_check1" -eq 0 ] || \
+               [ "$perm_check2" -eq 0 ]; then
+              echo "[+] BYPASS DETECTED:" \
+                   "Can read $filepath" \
+                   "despite perms ($perms)"
+              found_bypass=1
+            fi
+          fi
+        fi
+      fi
+    done
+  fi
+done
+
+if [ $found_bypass -eq 0 ]; then
+  echo "[-] No obvious permission bypasses detected in /u/*"
+fi
+echo "\n"
+
+# Test 2: Create our own test file with
+# restrictive perms and verify we can read it
+# This confirms the test methodology works
+echo "[-] Creating test file with restrictive permissions..."
+tmpfilename=`head -3 /dev/urandom | tr -cd '[a-zA-Z0-9]' | cut -c -5`
+tmpfile="/tmp/$tmpfilename.permtest"
+echo "secret_test_content_$$" > $tmpfile 2>/dev/null
+
+if [ -f "$tmpfile" ]; then
+  # Set to 000 (no permissions for anyone)
+  chmod 000 $tmpfile 2>/dev/null
+
+  # Try to read our own file with 000 permissions
+  content=`cat $tmpfile 2>/dev/null`
+  read_result=$?
+  if [ "$read_result" -eq 0 ]; then
+    if [ -n "$content" ]; then
+      echo "[+] Can read our own file even with 000 permissions!"
+      echo "[+] HFS Security permissions override Unix permissions"
+      fperms=`ls -l $tmpfile 2>/dev/null |\
+              awk '{print $1}'`
+      echo "[-] File permissions: $fperms"
+    else
+      echo "[-] Cannot read own file with" \
+           "000 perms (expected behavior)"
+    fi
+  else
+    echo "[-] Cannot read own file with" \
+         "000 perms (expected behavior)"
+  fi
+
+  # Cleanup
+  chmod 600 $tmpfile 2>/dev/null
+  rm $tmpfile 2>/dev/null
+else
+  echo "[-] Could not create test file"
+fi
+
+echo "\n"
+
+# Test 3: Check if we can list directories we shouldn't have access to
+echo "[-] Testing directory access despite Unix permissions..."
+found_dir_bypass=0
+
+for userdir in /u/*; do
+  if [ -d "$userdir" ]; then
+    username=`basename $userdir`
+    current_user=`whoami`
+
+    # Skip our own directory
+    if [ "$username" = "$current_user" ]; then
+      continue
+    fi
+
+    # Check if directory has restrictive permissions
+    dirperms=`ls -ld "$userdir" 2>/dev/null | awk '{print $1}'`
+
+    # Try to list it
+    listing=`ls "$userdir" 2>/dev/null | head -1`
+    list_result=$?
+    if [ "$list_result" -eq 0 ]; then
+      if [ -n "$listing" ]; then
+        # Check if perms suggest we shouldn't be able to list
+        echo "$dirperms" | grep "^drwx------" >/dev/null 2>&1
+        dir_check1=$?
+        echo "$dirperms" | grep "^dr-x------" >/dev/null 2>&1
+        dir_check2=$?
+        if [ "$dir_check1" -eq 0 ] || \
+           [ "$dir_check2" -eq 0 ]; then
+          echo "[+] BYPASS DETECTED:" \
+               "Can list $userdir" \
+               "despite perms ($dirperms)"
+          found_dir_bypass=1
+        fi
+      fi
+    fi
+  fi
+done
+
+if [ $found_dir_bypass -eq 0 ]; then
+  echo "[-] No directory permission bypasses detected"
+fi
+
+echo "\n"
+}
+
+chown_checks()
+{
+echo "\n#######  CHOWN Privilege Checks   ###########\n"
+
+# Test for CHOWN_UNRESTRICTED and/or
+# SUPERUSER.FILESYS.CHOWN
+# Create a temporary test file
+tmpfilename=`head -3 /dev/urandom | tr -cd '[a-zA-Z0-9]' | cut -c -5`
+tmpfile="/tmp/$tmpfilename.chowntest"
+touch $tmpfile 2>/dev/null
+
+if [ ! -f "$tmpfile" ]; then
+  echo "[-] Could not create test file for chown checks"
+  echo "\n"
+  return
+fi
+
+current_uid=`id -u`
+echo "[-] Testing chown capabilities" \
+     "(current UID: $current_uid)"
+echo "\n"
+
+# Test 1: Try to chown to UID 0
+echo "[-] Attempting to change ownership to UID 0..."
+chown 0 $tmpfile 2>/dev/null
+chown_result=$?
+if [ "$chown_result" -eq 0 ]; then
+  file_owner=`ls -ln $tmpfile | awk '{print $3}'`
+  if [ "$file_owner" = "0" ]; then
+    echo "[+] SUCCESS: chown to UID 0 worked!" \
+         "(CHOWN_UNRESTRICTED or" \
+         "SUPERUSER.FILESYS.CHOWN likely)"
+
+    # Try to change it back to our UID
+    echo "[-] Attempting to chown back" \
+         "to UID $current_uid..."
+    chown $current_uid $tmpfile 2>/dev/null
+    chown_back_result=$?
+    if [ "$chown_back_result" -eq 0 ]; then
+      file_owner=`ls -ln $tmpfile |\
+                   awk '{print $3}'`
+      if [ "$file_owner" = "$current_uid" ]; then
+        echo "[+] SUCCESS: Changed back" \
+             "to UID ($current_uid)"
+      else
+        echo "[-] FAILED: Could not verify" \
+             "chown back (owner: $file_owner)"
+      fi
+    else
+      echo "[-] FAILED: Could not change ownership back to our UID"
+    fi
+  else
+    echo "[-] FAILED: File owner is $file_owner, not 0"
+  fi
+else
+  echo "[-] FAILED: Could not change ownership to UID 0"
+fi
+echo "\n"
+
+# Test 2: Find another UID from /u and test changing to that
+echo "[-] Finding another user's UID from /u directory..."
+other_uid=`ls -ln /u 2>/dev/null |\
+           awk '{print $3}' |\
+           grep -v "^$current_uid$" |\
+           grep -v "^0$" | head -1`
+
+if [ "$other_uid" != "" ]; then
+  echo "[-] Found UID: $other_uid"
+  echo "[-] Attempting to chown to" \
+       "UID $other_uid..."
+
+  # Reset file to our ownership first
+  chown $current_uid $tmpfile 2>/dev/null
+
+  # Try to change to other UID
+  chown $other_uid $tmpfile 2>/dev/null
+  chown_other_result=$?
+  if [ "$chown_other_result" -eq 0 ]; then
+    file_owner=`ls -ln $tmpfile | awk '{print $3}'`
+    if [ "$file_owner" = "$other_uid" ]; then
+      echo "[+] SUCCESS: Changed ownership to UID $other_uid"
+
+      # Try to change it back
+      echo "[-] Attempting to chown back" \
+           "to UID $current_uid..."
+      chown $current_uid $tmpfile 2>/dev/null
+      chown_back2_result=$?
+      if [ "$chown_back2_result" -eq 0 ]; then
+        file_owner=`ls -ln $tmpfile |\
+                     awk '{print $3}'`
+        if [ "$file_owner" = "$current_uid" ]; then
+          echo "[+] SUCCESS: Changed back" \
+               "to UID ($current_uid)"
+          echo "[+] We have unrestricted" \
+               "chown capabilities!"
+        else
+          echo "[-] FAILED: Could not verify" \
+               "chown back (owner: $file_owner)"
+        fi
+      else
+        echo "[-] FAILED: Could not change ownership back to our UID"
+      fi
+    else
+      echo "[-] FAILED: File owner is $file_owner, not $other_uid"
+    fi
+  else
+    echo "[-] FAILED: Could not chown" \
+         "to UID $other_uid"
+  fi
+else
+  echo "[-] Could not find another UID to test with"
+fi
+
+# Clean up
+rm $tmpfile 2>/dev/null
+echo "\n"
+}
+
 racf_searches()
 {
-echo "\n#######  RACF Searches   ############################################\n"
+echo "\n#######  RACF Searches   ########################\n"
 
 #Can we even issue the search command?
 
@@ -2366,17 +3790,23 @@ if [ "$searchcmd" ]; then
     echo "[+] Unix Privileged resources:\n$srchupriv"
     echo "\n"
   fi
-    srchbpx=`/bin/tsocmd "SEARCH CLASS(FACILITY) FILTER(BPX.**)" 2>/dev/null`
+    srchbpx=`/bin/tsocmd \
+    "SEARCH CLASS(FACILITY) FILTER(BPX.**)" \
+    2>/dev/null`
   if [ "$srchbpx" ]; then
     echo "[-] BPX Access:\n$srchbpx"
     echo "\n"
   fi
-    srchsgt=`/bin/tsocmd "SEARCH CLASS(SURROGAT) FILTER(*.SUBMIT)" 2>/dev/null`
+    srchsgt=`/bin/tsocmd \
+    "SEARCH CLASS(SURROGAT) FILTER(*.SUBMIT)" \
+    2>/dev/null`
   if [ "$srchsgt" ]; then
     echo "[+] Surrogate Access:\n$srchsgt"
     echo "\n"
   fi
-srchsu=`/bin/tsocmd "SEARCH CLASS(SURROGAT) FILTER(BPX.SRV.ADMIN)" 2>/dev/null`
+srchsu=`/bin/tsocmd \
+"SEARCH CLASS(SURROGAT) FILTER(BPX.SRV.ADMIN)" \
+2>/dev/null`
   if [ "$srchsu" ]; then
     echo "[+] su access without password:\n$srchsu"
     echo "\n"
@@ -2396,6 +3826,8 @@ call_each()
   services_info
   software_configs
   interesting_files
+  hfs_permission_bypass
+  chown_checks
   racf_searches
   footer
 }
@@ -2452,9 +3884,11 @@ public class portscan
         int timeout = 1000;
         boolean debug = false;
         int exit = 1;
+        String line = "";
         System.out.println("PortScan by SirCICSalot");
         if (args.length < 3 || args[0].toString() == "help") {
-System.out.println("Usage: java -cp . portscan host, start port, end port,");
+System.out.println("Usage: java -cp . portscan" +
+            " host, start port, end port,");
         System.out.println("       [-t timeout] [-d debug]");
             System.exit(exit);
         }
@@ -2464,7 +3898,8 @@ System.out.println("Usage: java -cp . portscan host, start port, end port,");
             portStart = Integer.parseInt(args[1]);
             portEnd = Integer.parseInt(args[2]);
         } catch (NumberFormatException e) {
-            System.err.println("Invalid port format: " + e.getMessage());
+            System.err.println(
+                "Invalid port format: " + e.getMessage());
             System.exit(exit);
         }
         
@@ -2492,18 +3927,25 @@ System.out.println("Usage: java -cp . portscan host, start port, end port,");
             try {
                 final InetAddress ia = InetAddress.getByName(host);
                 System.out.println(ia.getHostAddress());
-                System.out.println(InetAddress.getLocalHost().toString());
+                System.out.println(
+                    InetAddress.getLocalHost().toString());
                 System.out.println("Timeout: " + timeout);
             }
             catch (Exception ex) {}
         }
         for (int port = portStart; port <= portEnd; ++port) {
+            line = "[Timeout: " + timeout +
+                "] [" + host + "] Current Port: " + port;
             if (debug) {
-                System.out.println("Trying Port: " + port);
+                System.out.println(line);
+            } else if (port % 100 == 0){
+                System.out.println(line);
             }
             try {
                 final Socket socket = new Socket();
-                socket.connect(new InetSocketAddress(host, port), timeout);
+                socket.connect(
+                    new InetSocketAddress(host, port),
+                    timeout);
                 socket.close();
                 System.out.println("Port " + port + " is open");
                 exit = 0;
@@ -2517,25 +3959,25 @@ System.out.println("Usage: java -cp . portscan host, start port, end port,");
 //*********************************************************************
 //* Run ENUM
 //*********************************************************************
-//ENUM      EXEC PGM=BPXBATCH
+//ENUMREXX  EXEC PGM=BPXBATCH
 //STDIN     DD DUMMY
 //STDOUT    DD SYSOUT=*
 //STDERR    DD SYSOUT=*     
 //STDPARM   DD *
-SH cd /home/phil/tet/;
- ./ENUM.rexx SEC > ENUM.out.txt; 
- ./ENUM.rexx SVC >> ENUM.out.txt; 
- ./ENUM.rexx APF >> ENUM.out.txt; 
- ./ENUM.rexx USSU >> ENUM.out.txt;
+SH cd /u/mainframe;
+ ./ENUM.rexx SEC; 
+ ./ENUM.rexx SVC; 
+ ./ENUM.rexx APF; 
+ ./ENUM.rexx USSU;
 //*********************************************************************
 //* Run OMVSENUM
 //*********************************************************************
-//ENUM      EXEC PGM=BPXBATCH
+//OMVSENUM  EXEC PGM=BPXBATCH
 //STDIN     DD DUMMY
 //STDOUT    DD SYSOUT=*
 //STDERR    DD SYSOUT=*     
 //STDPARM   DD *
-SH cd /home/phil/tet/;
+SH cd /u/mainframe;
  sed 's/[[:space:]]*$//' OMVSEnum.sh > OMVSSed.sh;
  chmod +x OMVSSed.sh;
  ./OMVSSed.sh;
@@ -2548,7 +3990,7 @@ SH cd /home/phil/tet/;
 //STDERR    DD SYSOUT=*     
 //STDPARM   DD *
 SH set JAVA_HOME=/usr/lpp/java/J8.0_64;
- cd /home/phil/tet/;
+ cd /u/mainframe;
  /usr/lpp/java/J8.0_64/bin/javac  FileSystemTraversal.java;
  /usr/lpp/java/J8.0_64/bin/javac  portscan.java;
 //*********************************************************************
@@ -2560,7 +4002,7 @@ SH set JAVA_HOME=/usr/lpp/java/J8.0_64;
 //STDERR    DD SYSOUT=*     
 //STDPARM   DD *
 SH set JAVA_HOME=/usr/lpp/java/J8.0_64;
- cd /home/phil/tet/;
+ cd /u/mainframe;
  /usr/lpp/java/J8.0_64/bin/java FileSystemTraversal -w /u > u.writeable.txt;
  /usr/lpp/java/J8.0_64/bin/java FileSystemTraversal -w /etc > etc.writeable.txt;
  /usr/lpp/java/J8.0_64/bin/java FileSystemTraversal -w /opt > opt.writeable.txt;
