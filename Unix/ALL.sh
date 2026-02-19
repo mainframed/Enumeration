@@ -10,9 +10,16 @@
 ####
 
 STDOUT="SYSOUT=*" # <--- Where you want the output from ENUM and OMVSENUM to go
-folder='/u/mainframe' # <--- Folder to run tools from Make sure you have the trailing /
+folder='/u/mainframe' # <--- Folder to run tools from
 JAVAC='/usr/lpp/java/J8.0_64/bin/javac' # <--- Must point to a valid javac
 JAVA='/usr/lpp/java/J8.0_64/bin/java' # <--- Must point to a valid java
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+# Ensure trailing slash
+case "$folder" in
+  */) ;;
+  *)  folder="$folder/" ;;
+esac
+
 cat << EOF
 //OMVSENUM JOB (JOB),'JOB',CLASS=A,MSGCLASS=A,
 //         NOTIFY=&SYSUID,REGION=0M
@@ -32,7 +39,7 @@ cat << EOF
 SH cd $folder;
  rm ENUM.rexx;
  rm OMVSEnum.sh;
- rm FileSystemTraversal.java;
+ rm GhostWalker.java;
  rm portscan.java;
 //*********************************************************************
 //PUTFILE  PROC FOLDER='$folder',FILENAME=''
@@ -57,10 +64,10 @@ cat ../ENUM
 cat << 'EOF'
 @@
 //*********************************************************************
-//PUTFSTJ EXEC PUTFILE,FILENAME='FileSystemTraversal.java'
+//PUTFSTJ EXEC PUTFILE,FILENAME='GhostWalker.java'
 //PUTFILE.SYSUT1 DD DATA,DLM='@@'
 EOF
-cat FileSystemTraversal.java
+cat GhostWalker.java
 cat << 'EOF'
 @@
 //*********************************************************************
@@ -112,7 +119,7 @@ SH cd $folder;
 //STDPARM   DD *
 SH set JAVA_HOME=/usr/lpp/java/J8.0_64;
  cd $folder;
- $JAVAC  FileSystemTraversal.java;
+ $JAVAC  GhostWalker.java;
  $JAVAC  portscan.java;
 //*********************************************************************
 //* Run FileSystemTraversal 
@@ -124,10 +131,10 @@ SH set JAVA_HOME=/usr/lpp/java/J8.0_64;
 //STDPARM   DD *
 SH set JAVA_HOME=/usr/lpp/java/J8.0_64;
  cd $folder;
- $JAVA FileSystemTraversal -w /u > u.writeable.txt;
- $JAVA FileSystemTraversal -w /etc > etc.writeable.txt;
- $JAVA FileSystemTraversal -w /opt > opt.writeable.txt;
- $JAVA FileSystemTraversal -w /usr > usr.writeable.txt;
- $JAVA FileSystemTraversal -w /var > var.writeable.txt;
+ $JAVA GhostWalker -w /u > u.writeable.txt;
+ $JAVA GhostWalker -w /etc > etc.writeable.txt;
+ $JAVA GhostWalker -w /opt > opt.writeable.txt;
+ $JAVA GhostWalker -w /usr > usr.writeable.txt;
+ $JAVA GhostWalker -w /var > var.writeable.txt;
 //*********************************************************************
 EOF
