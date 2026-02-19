@@ -75,7 +75,6 @@ public class GhostWalker {
       includeDirs = false;
       onlyDirs = false;
       onlyExecutable = false;
-      onlyWritable = false;
       onlyReadable = false;
      }
 
