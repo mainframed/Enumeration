@@ -22,8 +22,8 @@ import java.util.*;
 //         IX     U  .        V     IX       
 //          V     .           .     V        
                                           
-//           G H O S T W A L K              
-//        z/OS OMVS Filesystem Recon        
+//           G H O S T W A L K E R             
+//         z/OS OMVS Filesystem Recon        
 
 // To compile: javac GhostWalker.java
 
@@ -150,8 +150,8 @@ public class GhostWalk {
       "        IX     U  .        V     IX       ",
       "         V     .           .     V        ",
       "                                          ",
-      "          G H O S T W A L K              ",
-      "       z/OS OMVS Filesystem Recon         "
+      "          G H O S T W A L K E R              ",
+      "        z/OS OMVS Filesystem Recon         "
      };
      for (String line : art) {
          System.err.println(line);
