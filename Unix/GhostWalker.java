@@ -4,6 +4,9 @@ import java.nio.file.attribute.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+// License: GPL 3.0
+// Author: Soldier of FORTRAN
+
 //               ..ooo@@@XXX%%%xx..          
 //            .oo@@XXX%x%xxx..     ` .       
 //          .o@XX%%xx..               ` .    
@@ -29,8 +32,9 @@ import java.util.*;
 
 // This has been formatted to fit in an 80 column
 // dataset/pds, hence the weird indentation
-public class GhostWalk {
+public class GhostWalker {
  private static boolean includeDirs = true;
+ private static boolean onlyDirs = false;
  private static boolean onlyExecutable = false;
  private static boolean onlyWritable = true;
  private static boolean onlyReadable = false;
@@ -69,6 +73,7 @@ public class GhostWalk {
      }
      if (flagsSpecified) {
       includeDirs = false;
+      onlyDirs = false;
       onlyExecutable = false;
       onlyWritable = false;
       onlyReadable = false;
@@ -79,6 +84,7 @@ public class GhostWalk {
       switch (arg) {
        case "-d":
            includeDirs = true;
+           onlyDirs = true;
            break;
        case "-x":
            onlyExecutable = true;
@@ -161,12 +167,12 @@ public class GhostWalk {
 
  private static void printUsage() {
      System.out.println(
-      "Usage: java GhostWalk [flags] <dir>");
+      "Usage: java GhostWalker [flags] <dir>");
      System.out.println(
       "Default: shows writable files and dirs");
      System.out.println("Flags:");
      System.out.println(
-      "  -d        (include directories)");
+      "  -d        (only directories)");
      System.out.println(
       "  -x        (only executable files)");
      System.out.println(
@@ -254,7 +260,7 @@ public class GhostWalk {
                  printFileInfo(file, true);
              }
              traverseDirectory(file);
-         } else if (shouldPrint) {
+         } else if (!onlyDirs && shouldPrint) {
              printFileInfo(file, false);
          }
      }
