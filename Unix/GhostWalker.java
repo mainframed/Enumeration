@@ -59,8 +59,7 @@ public class GhostWalker {
 
      List<String> argList =
          new ArrayList<>(Arrays.asList(args));
-     String directoryPath =
-         argList.remove(argList.size() - 1);
+     List<String> dirs = new ArrayList<>();
 
      // If any filter flags are specified, reset defaults
      for (String arg : argList) {
@@ -120,14 +119,24 @@ public class GhostWalker {
         }
         break;
        default:
-           System.err.println(
-               "Unknown flag: " + arg);
-           System.exit(1);
+        if (arg.startsWith("-")) {
+            System.err.println(
+                "Unknown flag: " + arg);
+            System.exit(1);
+        }
+        dirs.add(arg);
       }
      }
 
-     debug("Starting traversal of: " + directoryPath);
-     traverseDirectory(new File(directoryPath));
+     if (dirs.isEmpty()) {
+         printUsage();
+         System.exit(1);
+     }
+
+     for (String dirPath : dirs) {
+         debug("Starting traversal of: " + dirPath);
+         traverseDirectory(new File(dirPath));
+     }
 
      if (output != null) {
          output.close();
@@ -166,7 +175,7 @@ public class GhostWalker {
 
  private static void printUsage() {
      System.out.println(
-      "Usage: java GhostWalker [flags] <dir>");
+      "Usage: java GhostWalker [flags] <dir> [dir ...]");
      System.out.println(
       "Default: shows writable files and dirs");
      System.out.println("Flags:");
@@ -254,28 +263,30 @@ public class GhostWalker {
          boolean isDir =
              Files.isDirectory(filePath);
 
-         if (isDir) {
+         if (isLink && isDir) {
+             // Symlinked dir: always show the link
+             // without perms (symlink perms are
+             // meaningless), then recurse into it
+             printFileInfo(file, true, false);
+             traverseDirectory(file);
+         } else if (isDir) {
              if (includeDirs && shouldPrint) {
-                 printFileInfo(file, true);
+                 printFileInfo(file, true, true);
              }
              traverseDirectory(file);
          } else if (!onlyDirs && shouldPrint) {
-             printFileInfo(file, false);
+             printFileInfo(file, false, true);
          }
      }
  }
 
  private static void printFileInfo(
-     File file, boolean isDirectory
+     File file, boolean isDirectory,
+     boolean showPerms
  ) {
   try {
    Path path = file.toPath();
    boolean isLink = Files.isSymbolicLink(path);
-
-   Set<PosixFilePermission> perms =
-    Files.getPosixFilePermissions(
-        path, LinkOption.NOFOLLOW_LINKS);
-   String permStr = getPermissionString(perms);
 
    FileTime mtime = Files.getLastModifiedTime(
        path, LinkOption.NOFOLLOW_LINKS);
@@ -287,8 +298,16 @@ public class GhostWalker {
                    : isDirectory ? "d" : "-";
 
    StringBuilder sb = new StringBuilder();
-   sb.append(typeChar).append(permStr)
-     .append(" ").append(dateStr)
+   if (showPerms) {
+    Set<PosixFilePermission> perms =
+     Files.getPosixFilePermissions(
+         path, LinkOption.NOFOLLOW_LINKS);
+    sb.append(typeChar)
+      .append(getPermissionString(perms));
+   } else {
+    sb.append(typeChar);
+   }
+   sb.append(" ").append(dateStr)
      .append(" ").append(file.getAbsolutePath());
 
    if (isLink) {
