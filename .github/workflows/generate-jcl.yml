@@ -1,0 +1,30 @@
+name: Generate UNIXENUM JCL
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  generate-jcl:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate UNIXENUM.jcl
+        run: |
+          cd Unix
+          chmod +x UNIXENUM.sh
+          ./UNIXENUM.sh > UNIXENUM.jcl
+
+      - name: Commit and push UNIXENUM.jcl
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Unix/UNIXENUM.jcl
+          git diff --cached --quiet && echo "No changes to commit" || \
+            git commit -m "Auto-generate UNIXENUM.jcl [skip ci]" && git push

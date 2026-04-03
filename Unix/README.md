@@ -1,47 +1,103 @@
 # Unix Enumeration Tools
 
-This folder contains various tools used to enumeration unix system services
-on z/OS. 
+This folder contains various tools used to enumerate unix system services on z/OS.
 
-## ALL.sh
+## UNIXENUM.sh / UNIXENUM.jcl
 
-This script generates JCL which will automatically upload, compile (if needed),
-and run the various programs in this folder. 
+`UNIXENUM.sh` generates JCL (`UNIXENUM.jcl`) which automatically uploads, compiles (where needed), and runs all enumeration tools in this folder on a target z/OS system.
 
-Note: portscan is compiled but not run. 
+**UNIXENUM.jcl is auto-generated** — do not edit it directly. A GitHub Actions workflow regenerates it on every push to the repository.
 
-## FileSystemTraversal
+To generate manually:
 
-This java program will search the file system and output any files the current
-account has write access to.  E.g. `java FileSystemTraversal /u`
+```sh
+cd Unix
+./UNIXENUM.sh > UNIXENUM.jcl
+```
+
+Before submitting the JCL, edit the top of `UNIXENUM.sh` to set the four site-specific variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `STDOUT` | Where output from ENUM and OMVSEnum goes (default: `SYSOUT=*`) |
+| `folder` | USS directory to deploy and run tools from |
+| `JAVAC`  | Full path to `javac` on the target system |
+| `JAVA`   | Full path to `java` on the target system |
+
+The generated JCL will:
+1. Remove any previously deployed copies of the tools
+2. Upload ENUM.rexx, GhostWalker.java, OMVSEnum.java, and portscan.java into `folder`
+3. Run ENUM.rexx (SEC, SVC, APF, USSU checks)
+4. Compile and run OMVSEnum.java
+5. Compile GhostWalker.java and portscan.java
+6. Run GhostWalker against `/u`, `/etc`, `/opt`, `/usr`, and `/var`, writing writable paths to `*.writeable.txt` files
+
+## GhostWalker.java
+
+Walks the z/OS OMVS filesystem and reports files/directories the current account has access to.
 
 ```
-Usage: java FileSystemTraversal [flags] <directory_path>
+Usage: java GhostWalker [flags] <directory_path>
 Flags:
-  -d (include directories)
-  -x (only executable files)
-  -w (only writable files)
-  -r (only readable files)
-  -a (both -d and -x)
-  -f <filename> (output to file)
+  -d   Include directories
+  -x   Only executable files
+  -w   Only writable files
+  -r   Only readable files
+  -a   Both -d and -x
+  -f <filename>  Write output to file
 ```
 
-## OMVSEnum.sh
+Example: `java GhostWalker -w /u`
 
-A script similar to LinEnum.sh but looks for common issues in z/OS Unix System
-Services
+## OMVSEnum.java
 
-You can run it with `./OMVSEnum.sh` it also allowes for thorough searches and
-specifying a keyword to search within files your account has read access
-to. 
+A Java rewrite of OMVSEnum.sh — enumerates common privilege escalation vectors and misconfigurations in z/OS Unix System Services, similar in spirit to LinEnum.sh on Linux.
+
+```
+Usage: java OMVSEnum [options]
+Options:
+  -k <word>   Keyword to search for in config/log files
+  -e <dir>    Export directory
+  -r <file>   Write report to file (also prints to stdout)
+  -t          Thorough mode (enables slow filesystem searches)
+  -q          Quiet: show [+] and [!] findings only
+  --debug     Debug output to stderr
+  -h          Show help
+```
+
+To compile: `javac OMVSEnum.java`  
+To run: `java OMVSEnum`
 
 ## portscan.java
 
-This is essentially a SYN packet sprayer. By itself it can be used to check for openports on other hosts. But when paired with Egressbuster it allows us to find potentially open egress ports from the mainframe to our Linux machine. On the linux machine download and run https://github.com/trustedsec/egressbuster/blob/master/egress_listener.py with the following: `python egress_listener.py 0.0.0.0 enps60 0.0.0.0/0` where 0.0.0.0 is the IP address to listen on, enps60 is the interface (you can get both from `ip -c a`) and 0.0.0.0/0 is what IP address we accept, in this case all. 
+A SYN packet sprayer for checking open ports on other hosts from the mainframe. When paired with [egressbuster](https://github.com/trustedsec/egressbuster) it can identify open egress paths from z/OS to an external Linux host.
 
-On the mainframe, in USS/OMVS run the following:
+On the Linux listener:
+```sh
+python egress_listener.py 0.0.0.0 <interface> 0.0.0.0/0
+```
 
-1. `javac portscan.java`
-2. `java -cp . portscan host, start port, end port, [-t timeout] [-d debug]` where `-t timeout` is the timeout in miliseconds, 1000 is the default, and `-d` is optional debug messaging. 
+On the mainframe (USS/OMVS):
+```sh
+javac portscan.java
+java -cp . portscan <host> <start_port> <end_port> [-t timeout] [-d debug]
+```
 
-Observe for connections in the Linux terminal, there will be no confirmation in the mainframe terminal, unless the packets come back in a reasonable amount of time, if you used `-d` then you'll see the packets sent out. 
+`-t` sets the timeout in milliseconds (default 1000). `-d` enables debug output showing packets sent.
+
+Note: portscan is compiled by the JCL but not run automatically — invoke it manually after deployment.
+
+## racf2john.java
+
+A Java port of the `racf2john` utility (originally by Dhiru Kholia). Reads IBM RACF binary database files and outputs password hashes in a format compatible with John the Ripper.
+
+```
+Usage: java RACF2John [RACF binary files]
+```
+
+To compile: `javac racf2john.java`  
+To run: `java RACF2John <path-to-racf-db>`
+
+## AUTOMVS.XMIT
+
+A transmit (XMIT) file for the AutoMVS tool.
