@@ -5,6 +5,9 @@ on:
     branches:
       - '**'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   generate-jcl:
     runs-on: ubuntu-latest
