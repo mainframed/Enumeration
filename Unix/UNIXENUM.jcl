@@ -16,13 +16,14 @@
 SH cd /u/mainframe/;
  rm ENUM.rexx;
  rm -f OMVSEnum.java;
- rm -f OMVSEnum.class;
+ rm -f OMVSEnum*.class OMVSEnum.jar;
  rm -f OMVSSecurityChecks.java;
  rm -f OMVSSecurityChecks*.class;
  rm -f safauth safauth.c;
  rm -f Makefile;
- rm GhostWalker.java;
- rm portscan.java;
+ rm -f GhostWalker.java GhostWalker*.class GhostWalker.jar;
+ rm -f portscan.java portscan*.class portscan.jar;
+ rm -rf build;
 //*********************************************************************
 //PUTFILE  PROC FOLDER='/u/mainframe/',FILENAME=''
 //*********************************************************************
@@ -56,6 +57,8 @@ SH cd /u/mainframe/;
 |* Arguments:                                                       *|
 |*   ALL  - Display all information                                 *|
 |*   APF  - APF authorized datasets                                 *|
+|*   ASSESS - Run all checks and report security findings           *|
+|*   AUTH - Check curated SAF resources                             *|
 |*   CAT  - Display master catalog                                  *|
 |*   JOB  - Display executing job name                              *|
 |*   LIBS - Display PARMLIB and current library DD datasets         *|
@@ -70,27 +73,13 @@ SH cd /u/mainframe/;
 |*   USSU - Display USS/OMVS user list                              *|
 |*   VERS - Operating system version info                           *|
 |*   WHO  - Currently logged on users (TSO/OMVS)                    *|
+|*   HELP - Display usage information                               *|
 |*                                                                  *|
 |* Credits: Mark Zelden (IPLINFO), CBT Tape Files 221/496,          *|
 |*          Ayoub Elaassal, Jim Taylor, Davide Girardi              *|
 \*------------------------------------------------------------------*/
 
 NUMERIC DIGITS 20
-
-/*==================================================================*/
-/* EBCDIC-SAFE BRACKET/BRACE PLACEHOLDERS                          */
-/*==================================================================*/
-/* These placeholders work across all EBCDIC code pages.            */
-/* After downloading output, use sed to replace with actual chars:  */
-/*                                                                  */
-/*   sed 's/<<LB>>/[/g; s/<<RB>>]/]/g; s/<<LC>>/{/g; s/<<RC>>}/}/g' */
-/*                                                                  */
-/* Or use any find/replace tool:                                    */
-/*   <<LB>> -> [    (left square bracket)                           */
-/*   <<RB>> -> ]    (right square bracket)                          */
-/*   <<LC>> -> {    (left curly brace)                              */
-/*   <<RC>> -> }    (right curly brace)                             */
-/*==================================================================*/
 
 /* Initialize global assessment variables */
 assessMode = 0
@@ -168,6 +157,7 @@ SELECT
   WHEN type == 'USSU' THEN CALL EnumUssUsers
   WHEN type == 'VERS' THEN CALL EnumVersion
   WHEN type == 'WHO'  THEN CALL EnumUsers
+  WHEN type == 'HELP' THEN CALL ShowUsage
 
   WHEN type == 'ALL'  THEN DO
     CALL PrintBanner 'z/OS System Enumeration'
@@ -214,8 +204,8 @@ SELECT
     CALL EnumSmf
     IF space == 'OMVS' THEN CALL EnumLibraries
     ELSE CALL EnumLibraries 1
-    /* Output JSON assessment results at the end */
-    CALL OutputAssessmentJSON
+    /* Output assessment results at the end */
+    CALL OutputAssessmentResults
   END
 
   OTHERWISE DO
@@ -280,6 +270,7 @@ SAY "$$   Arguments: ALL, APF, AUTH, CAT, JOB"||,
 ", LIBS, LNK, LPA, PATH, SEC,          $$"
 SAY "$$              SMF, SVC, TSTA, TSOT, U"||,
 "SSU, VERS, WHO, HELP                  $$"
+SAY "$$                                     "||,
 "                                      $$"
 SAY "$$b.                                   "||,
 "                                    .d$$"
@@ -1595,56 +1586,39 @@ EnumTsoTables: PROCEDURE EXPOSE (findingsVars)
       OTHERWISE name = name'/UNKNOWN'
     END
 
-    /* Determine if we should show this table */
-    showTable = 1
-    IF assessMode == 0 & POS('AUTHTSF', name) > 0 THEN DO
-      /* AUTHTSF is shown only when IDCAMS is present. */
-        hasIdcams = 0
-        DO j = 2 TO entries
-          ent = GetStorage(X2D(table)+(length*j), length)
-          IF POS('IDCAMS', ent) > 0 THEN DO
-            hasIdcams = 1
-            LEAVE
-          END
-        END
-        IF hasIdcams == 0 THEN showTable = 0
+    SAY ''
+    SAY name 'ENTRIES:' entries-1
+    SAY ''
+
+    output = ''
+    idcamsFound = 0
+    DO j = 2 TO entries
+      ent = GetStorage(X2D(table)+(length*j), length)
+      IF ent == ' PARMLIB' THEN ITERATE
+
+      /* Check for IDCAMS in AUTHTSF table */
+      IF POS('AUTHTSF', name) > 0 & POS('IDCAMS', ent) > 0 THEN DO
+        idcamsFound = 1
+      END
+
+      output = output ent
+
+      IF LENGTH(output) > 60 THEN DO
+        SAY output
+        output = ''
+      END
     END
 
-    IF showTable == 1 THEN DO
-      SAY ''
-      SAY name 'ENTRIES:' entries-1
-      SAY ''
+    IF output \== '' THEN SAY output
 
-      output = ''
-      idcamsFound = 0
-      DO j = 2 TO entries
-        ent = GetStorage(X2D(table)+(length*j), length)
-        IF ent == ' PARMLIB' THEN ITERATE
-
-        /* Check for IDCAMS in AUTHTSF table */
-        IF POS('AUTHTSF', name) > 0 & POS('IDCAMS', ent) > 0 THEN DO
-          idcamsFound = 1
-        END
-
-        output = output ent
-
-        IF LENGTH(output) > 60 THEN DO
-          SAY output
-          output = ''
-        END
-      END
-
-      IF output \== '' THEN SAY output
-
-      /* Add finding if IDCAMS found in AUTHTSF */
-      IF idcamsFound == 1 & assessMode == 1 THEN DO
-        CALL AddFinding 'TSO-IDCAMS-IN-AUTHTSF'
-        CALL AddVerificationCaption 'Run the REXX program ENUM',
-          'available at http://github.com/mainframed/ and observe that',
-          'IDCAMS is present in the IKJEFTAP/AUTHTSF table.'
-        CALL AddVerificationContent '(TRUNCATED)/n',
-          'IKJEFTAP/AUTHTSF contains IDCAMS/n(TRUNCATED)'
-      END
+    /* Add finding if IDCAMS found in AUTHTSF */
+    IF idcamsFound == 1 & assessMode == 1 THEN DO
+      CALL AddFinding 'TSO-IDCAMS-IN-AUTHTSF'
+      CALL AddVerificationCaption 'Run the REXX program ENUM',
+        'available at http://github.com/mainframed/ and observe that',
+        'IDCAMS is present in the IKJEFTAP/AUTHTSF table.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'IKJEFTAP/AUTHTSF contains IDCAMS/n(TRUNCATED)'
     END
   END
 RETURN
@@ -2405,15 +2379,11 @@ PrintBanner: PROCEDURE
 RETURN
 
 /*==================================================================*/
-/*              ASSESSMENT MODE FUNCTIONS (OSS VERSION)             */
+/*                    ASSESSMENT MODE FUNCTIONS                     */
 /*==================================================================*/
 /*                                                                  */
-/* NOTE: This open source version contains simplified examples of  */
-/* the assessment mode functions. The actual implementation would   */
-/* track and report real security findings discovered during the    */
-/* enumeration process.                                             */
-/*                                                                  */
-/* Example usage pattern for adding findings:                       */
+/* Enumeration procedures add concrete findings through the         */
+/* following helper calls:                                          */
 /*                                                                  */
 /* 1. Add EXPOSE clause to your enumeration procedure:              */
 /*    PROCEDURE EXPOSE (findingsVars)                               */
@@ -2486,7 +2456,7 @@ RETURN
 /*------------------------------------------------------------------*/
 /* Output assessment results                                        */
 /*------------------------------------------------------------------*/
-OutputAssessmentJSON: PROCEDURE EXPOSE (findingsVars)
+OutputAssessmentResults: PROCEDURE EXPOSE (findingsVars)
 
   CALL PrintSectionBanner 'Assessment Findings'
 
@@ -2540,57 +2510,6 @@ OutputAssessmentJSON: PROCEDURE EXPOSE (findingsVars)
     END
   END
 RETURN
-
-/*------------------------------------------------------------------*/
-/* Escape special characters for JSON strings                       */
-/*------------------------------------------------------------------*/
-JsonEscape: PROCEDURE
-  PARSE ARG text
-
-  /* Replace backslash first */
-  text = ReplaceStr(text, '\', '\\')
-  /* Replace double quotes */
-  text = ReplaceStr(text, '"', '\"')
-
-RETURN text
-
-/*------------------------------------------------------------------*/
-/* Return placeholder for open curly brace                         */
-/*------------------------------------------------------------------*/
-OpenCurly: PROCEDURE
-RETURN '<<LC>>'
-
-/*------------------------------------------------------------------*/
-/* Return placeholder for close curly brace                        */
-/*------------------------------------------------------------------*/
-CloseCurly: PROCEDURE
-RETURN '<<RC>>'
-
-/*------------------------------------------------------------------*/
-/* Return placeholder for open square bracket                      */
-/*------------------------------------------------------------------*/
-OpenSquare: PROCEDURE
-RETURN '<<LB>>'
-
-/*------------------------------------------------------------------*/
-/* Return placeholder for close square bracket                     */
-/*------------------------------------------------------------------*/
-CloseSquare: PROCEDURE
-RETURN '<<RB>>'
-
-/*------------------------------------------------------------------*/
-/* Replace all occurrences of a string                              */
-/*------------------------------------------------------------------*/
-ReplaceStr: PROCEDURE
-  PARSE ARG text, old, new
-
-  DO WHILE POS(old, text) > 0
-    p = POS(old, text)
-    text = SUBSTR(text, 1, p-1) || new ||,
-      SUBSTR(text, p+LENGTH(old))
-  END
-
-RETURN text
 
 @@
 //*********************************************************************
@@ -2761,7 +2680,7 @@ public class GhostWalker {
 
  private static int usageError(String message) {
   System.err.println("Error: " + message);
-  System.err.println("Try: java GhostWalker --help");
+  System.err.println("Try: java -jar GhostWalker.jar --help");
   return 2;
  }
 
@@ -2777,6 +2696,16 @@ public class GhostWalker {
 
  private static void walk(final Path suppliedRoot) {
   Path requested = suppliedRoot.toAbsolutePath().normalize();
+  try {
+   Files.readAttributes(requested, BasicFileAttributes.class,
+       LinkOption.NOFOLLOW_LINKS);
+  } catch (IOException e) {
+   reportRootFailure(requested, e);
+   return;
+  } catch (SecurityException e) {
+   reportRootFailure(requested, e);
+   return;
+  }
   final Path root;
   try {
    if (Files.isSymbolicLink(requested)) {
@@ -2786,10 +2715,10 @@ public class GhostWalker {
     root = requested;
    }
   } catch (IOException e) {
-   reportFailure(requested, e);
+   reportRootFailure(requested, e);
    return;
   } catch (SecurityException e) {
-   reportFailure(requested, e);
+   reportRootFailure(requested, e);
    return;
   }
   debug("Starting traversal: " + root);
@@ -2833,9 +2762,9 @@ public class GhostWalker {
        Collections.<FileVisitOption>emptySet(),
        Integer.MAX_VALUE, visitor);
   } catch (IOException e) {
-   reportFailure(root, e);
+   reportRootFailure(root, e);
   } catch (SecurityException e) {
-   reportFailure(root, e);
+   reportRootFailure(root, e);
   }
  }
 
@@ -2931,6 +2860,13 @@ public class GhostWalker {
       + error.getClass().getSimpleName() + ": " + error.getMessage());
  }
 
+ private static void reportRootFailure(Path path, Exception error) {
+  failures++;
+  System.err.println("Error: cannot inspect start path " + path
+      + ": " + error.getClass().getSimpleName()
+      + ": " + error.getMessage());
+ }
+
  private static String typeCharacter(PosixFileAttributes attrs) {
   if (attrs.isDirectory()) {
    return "d";
@@ -3023,7 +2959,8 @@ public class GhostWalker {
 
  private static void printUsage() {
   System.out.println(
-      "Usage: java GhostWalker [options] <path> [path ...]");
+      "Usage: java -jar GhostWalker.jar [options] " +
+      "<path> [path ...]");
   System.out.println();
   System.out.println(
       "Default: recursively report files and directories");
@@ -3072,8 +3009,11 @@ public class GhostWalker {
   System.out.println(
       "  -h, --help                  Show this help");
   System.out.println();
-  System.out.println("Runtime access errors are silent. Exit 1 means at"
-      + " least one subtree could not be searched.");
+  System.out.println(
+      "Invalid start paths are reported. Access errors below"
+      + " valid roots are silent.");
+  System.out.println(
+      "Exit 1 means a root or subtree could not be searched.");
  }
 
  private static void printBanner() {
@@ -3122,7 +3062,7 @@ import java.util.regex.*;
 // z/OS USS Local Enumeration & Privilege Escalation
 // Based on OMVSEnum.sh
 // To compile: javac OMVSEnum.java
-// To run:     java OMVSEnum [options]
+// To run:     java -jar OMVSEnum.jar [options]
 
 public class OMVSEnum {
 
@@ -4892,7 +4832,7 @@ public class OMVSEnum {
 
  static void printUsage() {
   System.out.println(
-   "Usage: java OMVSEnum [options]");
+   "Usage: java -jar OMVSEnum.jar [options]");
   System.out.println();
   System.out.println("Enumeration:");
   System.out.println(
@@ -4942,15 +4882,15 @@ public class OMVSEnum {
   System.out.println();
   System.out.println("Examples:");
   System.out.println(
-   "  java OMVSEnum --thorough --threads 4");
+   "  java -jar OMVSEnum.jar --thorough --threads 4");
   System.out.println(
-   "  java OMVSEnum --active-probes");
+   "  java -jar OMVSEnum.jar --active-probes");
   System.out.println(
-   "  java OMVSEnum --extended-saf -s capability");
+   "  java -jar OMVSEnum.jar --extended-saf -s capability");
   System.out.println(
-   "  java OMVSEnum -s content -K -R /u");
+   "  java -jar OMVSEnum.jar -s content -K -R /u");
   System.out.println(
-   "  java OMVSEnum -P -L -R /etc -R /u");
+   "  java -jar OMVSEnum.jar -P -L -R /etc -R /u");
  }
 
  // ---- main ------------------------------------------
@@ -4963,7 +4903,7 @@ public class OMVSEnum {
    System.err.println("Error: " +
     e.getMessage());
    System.err.println(
-    "Try: java OMVSEnum --help");
+    "Try: java -jar OMVSEnum.jar --help");
    System.exit(2);
   }
 
@@ -8480,7 +8420,7 @@ public class portscan {
 
  private static void printUsage() {
   System.out.println(
-      "Usage: java portscan <host> <start-port> " +
+      "Usage: java -jar portscan.jar <host> <start-port> " +
       "<end-port> [options]");
   System.out.println();
   System.out.println("Required arguments:");
@@ -8504,7 +8444,7 @@ public class portscan {
       "  -h, --help                Show this help");
   System.out.println();
   System.out.println(
-      "Threading is experimental and opt-in. " +
+      "Threading is experimental! " +
       "The default scan is sequential.");
   System.out.println();
   System.out.println("Examples:");
@@ -8528,36 +8468,58 @@ TARGET = safauth
 SOURCE = safauth.c
 JAVA_HOME = /usr/lpp/java/J8.0_64
 JAVAC = $(JAVA_HOME)/bin/javac
+JAR = $(JAVA_HOME)/bin/jar
 OMVS_SOURCES = OMVSEnum.java OMVSSecurityChecks.java
 JAVA_SOURCES = $(OMVS_SOURCES) \
 	GhostWalker.java portscan.java
-JAVA_TARGETS = OMVSEnum.class OMVSSecurityChecks.class \
-	GhostWalker.class portscan.class
+JAVA_JARS = OMVSEnum.jar GhostWalker.jar portscan.jar
+BUILD_DIR = build
+OMVS_BUILD = $(BUILD_DIR)/omvsenum
+GHOST_BUILD = $(BUILD_DIR)/ghostwalker
+PORT_BUILD = $(BUILD_DIR)/portscan
+JAVA_TARGETS = $(OMVS_BUILD)/.built $(GHOST_BUILD)/.built \
+	$(PORT_BUILD)/.built
 
-.PHONY: all clean java
+.PHONY: all clean jars java
 
-all: $(TARGET) java
+all: $(TARGET) jars
 
 $(TARGET): $(SOURCE)
 	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $(SOURCE) $(LDFLAGS) $(LDLIBS)
 
 java: $(JAVA_TARGETS)
 
-OMVSEnum.class: $(OMVS_SOURCES)
-	$(JAVAC) $(OMVS_SOURCES)
+jars: $(JAVA_JARS)
 
-OMVSSecurityChecks.class: OMVSEnum.class
-	@test -f $@ || $(JAVAC) $(OMVS_SOURCES)
+$(OMVS_BUILD)/.built: $(OMVS_SOURCES)
+	mkdir -p $(OMVS_BUILD)
+	$(JAVAC) -d $(OMVS_BUILD) $(OMVS_SOURCES)
+	touch $@
 
-GhostWalker.class: GhostWalker.java
-	$(JAVAC) GhostWalker.java
+$(GHOST_BUILD)/.built: GhostWalker.java
+	mkdir -p $(GHOST_BUILD)
+	$(JAVAC) -d $(GHOST_BUILD) GhostWalker.java
+	touch $@
 
-portscan.class: portscan.java
-	$(JAVAC) portscan.java
+$(PORT_BUILD)/.built: portscan.java
+	mkdir -p $(PORT_BUILD)
+	$(JAVAC) -d $(PORT_BUILD) portscan.java
+	touch $@
+
+OMVSEnum.jar: $(OMVS_BUILD)/.built
+	$(JAR) cfe $@ OMVSEnum -C $(OMVS_BUILD) .
+
+GhostWalker.jar: $(GHOST_BUILD)/.built
+	$(JAR) cfe $@ GhostWalker -C $(GHOST_BUILD) .
+
+portscan.jar: $(PORT_BUILD)/.built
+	$(JAR) cfe $@ portscan -C $(PORT_BUILD) .
 
 clean:
-	rm -f $(TARGET) OMVSEnum*.class OMVSSecurityChecks*.class \
+	rm -f $(TARGET) $(JAVA_JARS) \
+		OMVSEnum*.class OMVSSecurityChecks*.class \
 		GhostWalker*.class portscan*.class
+	rm -rf $(BUILD_DIR)
 @@
 //*********************************************************************
 //* Run ENUM
@@ -8581,15 +8543,23 @@ SH cd /u/mainframe/;
 //STDERR    DD SYSOUT=*
 //STDPARM   DD *
 SH cd /u/mainframe/;
- if test ! -x /bin/make; then
-  echo \"ERROR: make utility unavailable: /bin/make\";
+ MAKE='/bin/make';
+ JAVAC='/usr/lpp/java/J8.0_64/bin/javac';
+ JAR='/usr/lpp/java/J8.0_64/bin/jar';
+ C89='/bin/c89';
+ if test ! -x $MAKE; then
+  echo \"ERROR: make utility unavailable: $MAKE\";
   exit 1;
  fi;
- if test -x /bin/c89; then
-  /bin/make JAVAC=/usr/lpp/java/J8.0_64/bin/javac CC=/bin/c89 all;
+ if test ! -x $JAVAC || test ! -x $JAR; then
+  echo \"ERROR: Java build utilities unavailable\";
+  exit 1;
+ fi;
+ if test -x $C89; then
+  $MAKE JAVAC=$JAVAC JAR=$JAR CC=$C89 all;
  else
   echo \"WARNING: C89 unavailable; SAF checks skipped\";
-  /bin/make JAVAC=/usr/lpp/java/J8.0_64/bin/javac java;
+  $MAKE JAVAC=$JAVAC JAR=$JAR jars;
  fi;
 //*********************************************************************
 //* Run OMVSENUM
@@ -8599,9 +8569,8 @@ SH cd /u/mainframe/;
 //STDOUT    DD SYSOUT=*
 //STDERR    DD SYSOUT=*
 //STDPARM   DD *
-SH set JAVA_HOME=/usr/lpp/java/J8.0_64;
- cd /u/mainframe/;
- /usr/lpp/java/J8.0_64/bin/java -cp . OMVSEnum;
+SH cd /u/mainframe/;
+ /usr/lpp/java/J8.0_64/bin/java -jar OMVSEnum.jar;
 //*********************************************************************
 //* Run FileSystemTraversal 
 //*********************************************************************
@@ -8610,18 +8579,17 @@ SH set JAVA_HOME=/usr/lpp/java/J8.0_64;
 //STDOUT    DD SYSOUT=*
 //STDERR    DD SYSOUT=*     
 //STDPARM   DD *
-SH set JAVA_HOME=/usr/lpp/java/J8.0_64;
- cd /u/mainframe/;
+SH cd /u/mainframe/;
  JAVA=/usr/lpp/java/J8.0_64/bin/java;
- GW='GhostWalker';
- $JAVA -cp . $GW -w /u > u.writable-by-user.txt;
- $JAVA -cp . $GW -W /u > u.world-writable.txt;
- $JAVA -cp . $GW -w /etc > etc.writable-by-user.txt;
- $JAVA -cp . $GW -W /etc > etc.world-writable.txt;
- $JAVA -cp . $GW -w /opt > opt.writable-by-user.txt;
- $JAVA -cp . $GW -W /opt > opt.world-writable.txt;
- $JAVA -cp . $GW -w /usr > usr.writable-by-user.txt;
- $JAVA -cp . $GW -W /usr > usr.world-writable.txt;
- $JAVA -cp . $GW -w /var > var.writable-by-user.txt;
- $JAVA -cp . $GW -W /var > var.world-writable.txt;
+ GW='GhostWalker.jar';
+ $JAVA -jar $GW -w /u > u.writable-by-user.txt;
+ $JAVA -jar $GW -W /u > u.world-writable.txt;
+ $JAVA -jar $GW -w /etc > etc.writable-by-user.txt;
+ $JAVA -jar $GW -W /etc > etc.world-writable.txt;
+ $JAVA -jar $GW -w /opt > opt.writable-by-user.txt;
+ $JAVA -jar $GW -W /opt > opt.world-writable.txt;
+ $JAVA -jar $GW -w /usr > usr.writable-by-user.txt;
+ $JAVA -jar $GW -W /usr > usr.world-writable.txt;
+ $JAVA -jar $GW -w /var > var.writable-by-user.txt;
+ $JAVA -jar $GW -W /var > var.world-writable.txt;
 //*********************************************************************

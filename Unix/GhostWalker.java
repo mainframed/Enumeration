@@ -163,7 +163,7 @@ public class GhostWalker {
 
  private static int usageError(String message) {
   System.err.println("Error: " + message);
-  System.err.println("Try: java GhostWalker --help");
+  System.err.println("Try: java -jar GhostWalker.jar --help");
   return 2;
  }
 
@@ -179,6 +179,16 @@ public class GhostWalker {
 
  private static void walk(final Path suppliedRoot) {
   Path requested = suppliedRoot.toAbsolutePath().normalize();
+  try {
+   Files.readAttributes(requested, BasicFileAttributes.class,
+       LinkOption.NOFOLLOW_LINKS);
+  } catch (IOException e) {
+   reportRootFailure(requested, e);
+   return;
+  } catch (SecurityException e) {
+   reportRootFailure(requested, e);
+   return;
+  }
   final Path root;
   try {
    if (Files.isSymbolicLink(requested)) {
@@ -188,10 +198,10 @@ public class GhostWalker {
     root = requested;
    }
   } catch (IOException e) {
-   reportFailure(requested, e);
+   reportRootFailure(requested, e);
    return;
   } catch (SecurityException e) {
-   reportFailure(requested, e);
+   reportRootFailure(requested, e);
    return;
   }
   debug("Starting traversal: " + root);
@@ -235,9 +245,9 @@ public class GhostWalker {
        Collections.<FileVisitOption>emptySet(),
        Integer.MAX_VALUE, visitor);
   } catch (IOException e) {
-   reportFailure(root, e);
+   reportRootFailure(root, e);
   } catch (SecurityException e) {
-   reportFailure(root, e);
+   reportRootFailure(root, e);
   }
  }
 
@@ -333,6 +343,13 @@ public class GhostWalker {
       + error.getClass().getSimpleName() + ": " + error.getMessage());
  }
 
+ private static void reportRootFailure(Path path, Exception error) {
+  failures++;
+  System.err.println("Error: cannot inspect start path " + path
+      + ": " + error.getClass().getSimpleName()
+      + ": " + error.getMessage());
+ }
+
  private static String typeCharacter(PosixFileAttributes attrs) {
   if (attrs.isDirectory()) {
    return "d";
@@ -425,7 +442,8 @@ public class GhostWalker {
 
  private static void printUsage() {
   System.out.println(
-      "Usage: java GhostWalker [options] <path> [path ...]");
+      "Usage: java -jar GhostWalker.jar [options] " +
+      "<path> [path ...]");
   System.out.println();
   System.out.println(
       "Default: recursively report files and directories");
@@ -474,8 +492,11 @@ public class GhostWalker {
   System.out.println(
       "  -h, --help                  Show this help");
   System.out.println();
-  System.out.println("Runtime access errors are silent. Exit 1 means at"
-      + " least one subtree could not be searched.");
+  System.out.println(
+      "Invalid start paths are reported. Access errors below"
+      + " valid roots are silent.");
+  System.out.println(
+      "Exit 1 means a root or subtree could not be searched.");
  }
 
  private static void printBanner() {

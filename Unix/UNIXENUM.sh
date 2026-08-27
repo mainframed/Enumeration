@@ -12,6 +12,7 @@
 STDOUT="SYSOUT=*" # <--- ENUM and OMVSEnum output destination
 folder='/u/mainframe' # <--- Folder to run tools from
 JAVAC='/usr/lpp/java/J8.0_64/bin/javac' # <--- javac path
+JAR='/usr/lpp/java/J8.0_64/bin/jar' # <--- jar path
 JAVA='/usr/lpp/java/J8.0_64/bin/java' # <--- Must point to a valid java
 C89='/bin/c89' # <--- 31-bit compiler used for the optional SAF helper
 MAKE='/bin/make' # <--- make utility
@@ -41,13 +42,14 @@ cat << EOF
 SH cd $folder;
  rm ENUM.rexx;
  rm -f OMVSEnum.java;
- rm -f OMVSEnum.class;
+ rm -f OMVSEnum*.class OMVSEnum.jar;
  rm -f OMVSSecurityChecks.java;
  rm -f OMVSSecurityChecks*.class;
  rm -f safauth safauth.c;
  rm -f Makefile;
- rm GhostWalker.java;
- rm portscan.java;
+ rm -f GhostWalker.java GhostWalker*.class GhostWalker.jar;
+ rm -f portscan.java portscan*.class portscan.jar;
+ rm -rf build;
 //*********************************************************************
 //PUTFILE  PROC FOLDER='$folder',FILENAME=''
 //*********************************************************************
@@ -134,15 +136,23 @@ SH cd $folder;
 //STDERR    DD SYSOUT=*
 //STDPARM   DD *
 SH cd $folder;
- if test ! -x $MAKE; then
-  echo \"ERROR: make utility unavailable: $MAKE\";
+ MAKE='$MAKE';
+ JAVAC='$JAVAC';
+ JAR='$JAR';
+ C89='$C89';
+ if test ! -x \$MAKE; then
+  echo \"ERROR: make utility unavailable: \$MAKE\";
   exit 1;
  fi;
- if test -x $C89; then
-  $MAKE JAVAC=$JAVAC CC=$C89 all;
+ if test ! -x \$JAVAC || test ! -x \$JAR; then
+  echo \"ERROR: Java build utilities unavailable\";
+  exit 1;
+ fi;
+ if test -x \$C89; then
+  \$MAKE JAVAC=\$JAVAC JAR=\$JAR CC=\$C89 all;
  else
   echo \"WARNING: C89 unavailable; SAF checks skipped\";
-  $MAKE JAVAC=$JAVAC java;
+  \$MAKE JAVAC=\$JAVAC JAR=\$JAR jars;
  fi;
 //*********************************************************************
 //* Run OMVSENUM
@@ -152,9 +162,8 @@ SH cd $folder;
 //STDOUT    DD $STDOUT
 //STDERR    DD SYSOUT=*
 //STDPARM   DD *
-SH set JAVA_HOME=/usr/lpp/java/J8.0_64;
- cd $folder;
- $JAVA -cp . OMVSEnum;
+SH cd $folder;
+ $JAVA -jar OMVSEnum.jar;
 //*********************************************************************
 //* Run FileSystemTraversal 
 //*********************************************************************
@@ -163,19 +172,18 @@ SH set JAVA_HOME=/usr/lpp/java/J8.0_64;
 //STDOUT    DD SYSOUT=*
 //STDERR    DD SYSOUT=*     
 //STDPARM   DD *
-SH set JAVA_HOME=/usr/lpp/java/J8.0_64;
- cd $folder;
+SH cd $folder;
  JAVA=$JAVA;
- GW='GhostWalker';
- \$JAVA -cp . \$GW -w /u > u.writable-by-user.txt;
- \$JAVA -cp . \$GW -W /u > u.world-writable.txt;
- \$JAVA -cp . \$GW -w /etc > etc.writable-by-user.txt;
- \$JAVA -cp . \$GW -W /etc > etc.world-writable.txt;
- \$JAVA -cp . \$GW -w /opt > opt.writable-by-user.txt;
- \$JAVA -cp . \$GW -W /opt > opt.world-writable.txt;
- \$JAVA -cp . \$GW -w /usr > usr.writable-by-user.txt;
- \$JAVA -cp . \$GW -W /usr > usr.world-writable.txt;
- \$JAVA -cp . \$GW -w /var > var.writable-by-user.txt;
- \$JAVA -cp . \$GW -W /var > var.world-writable.txt;
+ GW='GhostWalker.jar';
+ \$JAVA -jar \$GW -w /u > u.writable-by-user.txt;
+ \$JAVA -jar \$GW -W /u > u.world-writable.txt;
+ \$JAVA -jar \$GW -w /etc > etc.writable-by-user.txt;
+ \$JAVA -jar \$GW -W /etc > etc.world-writable.txt;
+ \$JAVA -jar \$GW -w /opt > opt.writable-by-user.txt;
+ \$JAVA -jar \$GW -W /opt > opt.world-writable.txt;
+ \$JAVA -jar \$GW -w /usr > usr.writable-by-user.txt;
+ \$JAVA -jar \$GW -W /usr > usr.world-writable.txt;
+ \$JAVA -jar \$GW -w /var > var.writable-by-user.txt;
+ \$JAVA -jar \$GW -W /var > var.world-writable.txt;
 //*********************************************************************
 EOF

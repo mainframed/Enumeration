@@ -11,7 +11,7 @@ import java.util.regex.*;
 // z/OS USS Local Enumeration & Privilege Escalation
 // Based on OMVSEnum.sh
 // To compile: javac OMVSEnum.java
-// To run:     java OMVSEnum [options]
+// To run:     java -jar OMVSEnum.jar [options]
 
 public class OMVSEnum {
 
@@ -1781,7 +1781,7 @@ public class OMVSEnum {
 
  static void printUsage() {
   System.out.println(
-   "Usage: java OMVSEnum [options]");
+   "Usage: java -jar OMVSEnum.jar [options]");
   System.out.println();
   System.out.println("Enumeration:");
   System.out.println(
@@ -1831,15 +1831,15 @@ public class OMVSEnum {
   System.out.println();
   System.out.println("Examples:");
   System.out.println(
-   "  java OMVSEnum --thorough --threads 4");
+   "  java -jar OMVSEnum.jar --thorough --threads 4");
   System.out.println(
-   "  java OMVSEnum --active-probes");
+   "  java -jar OMVSEnum.jar --active-probes");
   System.out.println(
-   "  java OMVSEnum --extended-saf -s capability");
+   "  java -jar OMVSEnum.jar --extended-saf -s capability");
   System.out.println(
-   "  java OMVSEnum -s content -K -R /u");
+   "  java -jar OMVSEnum.jar -s content -K -R /u");
   System.out.println(
-   "  java OMVSEnum -P -L -R /etc -R /u");
+   "  java -jar OMVSEnum.jar -P -L -R /etc -R /u");
  }
 
  // ---- main ------------------------------------------
@@ -1852,7 +1852,7 @@ public class OMVSEnum {
    System.err.println("Error: " +
     e.getMessage());
    System.err.println(
-    "Try: java OMVSEnum --help");
+    "Try: java -jar OMVSEnum.jar --help");
    System.exit(2);
   }
 

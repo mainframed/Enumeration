@@ -48,7 +48,6 @@ retain their own GPLv3 notices; those file-level notices continue to apply.
 | [`PDSTEST.rexx`](PDSTEST.rexx) | Data set write test | TSO; modifies data |
 | [`PDSACCESSTEST.rexx`](PDSACCESSTEST.rexx) | PDS member write test | TSO; modifies data |
 | [`Legacy/exfil.rx`](Legacy/exfil.rx) | Legacy data set transfer over TCP | TSO; network egress |
-| [`iplinfo.txt`](iplinfo.txt) | Mark Zelden IPLINFO reference source | Not deployed automatically |
 
 ### USS tools
 
@@ -148,11 +147,11 @@ EX 'YOUR.REXX.LIB(ENUM)' '<argument>'
 | `SMF` | SMF recording data sets, status, utilization, and access |
 | `SVC` | Installed SVC inventory |
 | `TSTA` | TESTAUTH authorization status |
-| `TSOT` | TSO AUTHCMD, AUTHPGM, NOTBKGND, and related tables |
+| `TSOT` | TSO AUTHCMD, AUTHPGM, NOTBKGND, and AUTHTSF tables |
 | `USSU` | USS/OMVS user list |
 | `VERS` | Operating-system version information |
 | `WHO` | Logged-on TSO and OMVS users |
-| `HELP` | Print the compact usage banner; current implementation exits 8 |
+| `HELP` | Print the compact usage banner and exit successfully |
 
 Examples:
 
@@ -223,27 +222,11 @@ address-space TIOT for `SYSPROC`, `SYSEXEC`, `IEFPDSI`, `IEFJOBS`, and
 `PROCxx` allocations. It does not enumerate every private allocation in other
 address spaces or every JES2 dynamic PROCLIB.
 
-### Output conversion
+### Assessment output
 
-To remain portable across EBCDIC code pages, ENUM emits these placeholders in
-assessment structures:
-
-```text
-<<LB>>  [
-<<RB>>  ]
-<<LC>>  {
-<<RC>>  }
-```
-
-After downloading converted text, replace them with:
-
-```sh
-sed 's/<<LB>>/[/g; s/<<RB>>/]/g; s/<<LC>>/{/g; s/<<RC>>/}/g' \
-  output.txt
-```
-
-Despite the internal routine name `OutputAssessmentJSON`, the current ASSESS
-tail is human-readable finding output rather than a standalone JSON document.
+`ASSESS` appends human-readable findings and verification guidance to the
+normal enumeration output. It does not currently emit a standalone JSON
+document.
 
 ## APFCHECK
 
@@ -362,13 +345,6 @@ and should be reviewed and tested before use; do not assume that all fallback
 ports or error paths behave reliably. The USS Java `portscan` can help
 identify approved reachable listener ports.
 
-## Reference source
-
-[`iplinfo.txt`](iplinfo.txt) is retained as Mark Zelden IPLINFO reference
-source. ENUM and [`Legacy/startmap.rx`](Legacy/startmap.rx) use related
-control-block mapping techniques. It is not embedded in `UNIXENUM.jcl`,
-installed by the Makefile, or otherwise deployed automatically.
-
 ## USS deployment summary
 
 From the `Unix` directory:
@@ -378,8 +354,8 @@ make
 ./UNIXENUM.sh > UNIXENUM.jcl
 ```
 
-- `make` builds OMVSEnum, OMVSSecurityChecks, GhostWalker, the Java port
-  scanner, and `safauth`.
+- `make` builds executable JARs for OMVSEnum, GhostWalker, and the Java port
+  scanner, plus `safauth`.
 - `UNIXENUM.sh` generates the checked-in deployment job.
 - The job embeds the root `ENUM` source as `ENUM.rexx`, uploads selected USS
   sources and the Makefile, builds them on z/OS, and runs the default
@@ -418,14 +394,11 @@ exit-code, and usage details.
   identities.
 - **USS Java is not in PATH:** invoke `java` and `javac` by their full
   `/usr/lpp/java/.../bin` paths or configure the generator variables.
-- **Output contains placeholders:** run the EBCDIC placeholder conversion
-  command above after transferring output as text.
 
 ## Generated and local-only artifacts
 
 - `Unix/UNIXENUM.jcl` is generated from `Unix/UNIXENUM.sh`.
-- `Unix/*-ADCD-*.raw.txt` and `Unix/*-ADCD-*.stderr.txt` are checked-in sample
-  reports, not program inputs.
-- Compiled `.class` files and the `safauth` executable are build products.
+- OMVSEnum and GhostWalker reports are runtime output and are not checked in.
+- Compiled `.class` and `.jar` files plus `safauth` are build products.
 - `.vscode` and `.claude` files are local editor/assistant configuration, not
   runtime dependencies.

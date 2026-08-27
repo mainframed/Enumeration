@@ -13,6 +13,8 @@
 |* Arguments:                                                       *|
 |*   ALL  - Display all information                                 *|
 |*   APF  - APF authorized datasets                                 *|
+|*   ASSESS - Run all checks and report security findings           *|
+|*   AUTH - Check curated SAF resources                             *|
 |*   CAT  - Display master catalog                                  *|
 |*   JOB  - Display executing job name                              *|
 |*   LIBS - Display PARMLIB and current library DD datasets         *|
@@ -27,27 +29,13 @@
 |*   USSU - Display USS/OMVS user list                              *|
 |*   VERS - Operating system version info                           *|
 |*   WHO  - Currently logged on users (TSO/OMVS)                    *|
+|*   HELP - Display usage information                               *|
 |*                                                                  *|
 |* Credits: Mark Zelden (IPLINFO), CBT Tape Files 221/496,          *|
 |*          Ayoub Elaassal, Jim Taylor, Davide Girardi              *|
 \*------------------------------------------------------------------*/
 
 NUMERIC DIGITS 20
-
-/*==================================================================*/
-/* EBCDIC-SAFE BRACKET/BRACE PLACEHOLDERS                          */
-/*==================================================================*/
-/* These placeholders work across all EBCDIC code pages.            */
-/* After downloading output, use sed to replace with actual chars:  */
-/*                                                                  */
-/*   sed 's/<<LB>>/[/g; s/<<RB>>]/]/g; s/<<LC>>/{/g; s/<<RC>>}/}/g' */
-/*                                                                  */
-/* Or use any find/replace tool:                                    */
-/*   <<LB>> -> [    (left square bracket)                           */
-/*   <<RB>> -> ]    (right square bracket)                          */
-/*   <<LC>> -> {    (left curly brace)                              */
-/*   <<RC>> -> }    (right curly brace)                             */
-/*==================================================================*/
 
 /* Initialize global assessment variables */
 assessMode = 0
@@ -125,6 +113,7 @@ SELECT
   WHEN type == 'USSU' THEN CALL EnumUssUsers
   WHEN type == 'VERS' THEN CALL EnumVersion
   WHEN type == 'WHO'  THEN CALL EnumUsers
+  WHEN type == 'HELP' THEN CALL ShowUsage
 
   WHEN type == 'ALL'  THEN DO
     CALL PrintBanner 'z/OS System Enumeration'
@@ -171,8 +160,8 @@ SELECT
     CALL EnumSmf
     IF space == 'OMVS' THEN CALL EnumLibraries
     ELSE CALL EnumLibraries 1
-    /* Output JSON assessment results at the end */
-    CALL OutputAssessmentJSON
+    /* Output assessment results at the end */
+    CALL OutputAssessmentResults
   END
 
   OTHERWISE DO
@@ -237,6 +226,7 @@ SAY "$$   Arguments: ALL, APF, AUTH, CAT, JOB"||,
 ", LIBS, LNK, LPA, PATH, SEC,          $$"
 SAY "$$              SMF, SVC, TSTA, TSOT, U"||,
 "SSU, VERS, WHO, HELP                  $$"
+SAY "$$                                     "||,
 "                                      $$"
 SAY "$$b.                                   "||,
 "                                    .d$$"
@@ -1552,56 +1542,39 @@ EnumTsoTables: PROCEDURE EXPOSE (findingsVars)
       OTHERWISE name = name'/UNKNOWN'
     END
 
-    /* Determine if we should show this table */
-    showTable = 1
-    IF assessMode == 0 & POS('AUTHTSF', name) > 0 THEN DO
-      /* AUTHTSF is shown only when IDCAMS is present. */
-        hasIdcams = 0
-        DO j = 2 TO entries
-          ent = GetStorage(X2D(table)+(length*j), length)
-          IF POS('IDCAMS', ent) > 0 THEN DO
-            hasIdcams = 1
-            LEAVE
-          END
-        END
-        IF hasIdcams == 0 THEN showTable = 0
+    SAY ''
+    SAY name 'ENTRIES:' entries-1
+    SAY ''
+
+    output = ''
+    idcamsFound = 0
+    DO j = 2 TO entries
+      ent = GetStorage(X2D(table)+(length*j), length)
+      IF ent == ' PARMLIB' THEN ITERATE
+
+      /* Check for IDCAMS in AUTHTSF table */
+      IF POS('AUTHTSF', name) > 0 & POS('IDCAMS', ent) > 0 THEN DO
+        idcamsFound = 1
+      END
+
+      output = output ent
+
+      IF LENGTH(output) > 60 THEN DO
+        SAY output
+        output = ''
+      END
     END
 
-    IF showTable == 1 THEN DO
-      SAY ''
-      SAY name 'ENTRIES:' entries-1
-      SAY ''
+    IF output \== '' THEN SAY output
 
-      output = ''
-      idcamsFound = 0
-      DO j = 2 TO entries
-        ent = GetStorage(X2D(table)+(length*j), length)
-        IF ent == ' PARMLIB' THEN ITERATE
-
-        /* Check for IDCAMS in AUTHTSF table */
-        IF POS('AUTHTSF', name) > 0 & POS('IDCAMS', ent) > 0 THEN DO
-          idcamsFound = 1
-        END
-
-        output = output ent
-
-        IF LENGTH(output) > 60 THEN DO
-          SAY output
-          output = ''
-        END
-      END
-
-      IF output \== '' THEN SAY output
-
-      /* Add finding if IDCAMS found in AUTHTSF */
-      IF idcamsFound == 1 & assessMode == 1 THEN DO
-        CALL AddFinding 'TSO-IDCAMS-IN-AUTHTSF'
-        CALL AddVerificationCaption 'Run the REXX program ENUM',
-          'available at http://github.com/mainframed/ and observe that',
-          'IDCAMS is present in the IKJEFTAP/AUTHTSF table.'
-        CALL AddVerificationContent '(TRUNCATED)/n',
-          'IKJEFTAP/AUTHTSF contains IDCAMS/n(TRUNCATED)'
-      END
+    /* Add finding if IDCAMS found in AUTHTSF */
+    IF idcamsFound == 1 & assessMode == 1 THEN DO
+      CALL AddFinding 'TSO-IDCAMS-IN-AUTHTSF'
+      CALL AddVerificationCaption 'Run the REXX program ENUM',
+        'available at http://github.com/mainframed/ and observe that',
+        'IDCAMS is present in the IKJEFTAP/AUTHTSF table.'
+      CALL AddVerificationContent '(TRUNCATED)/n',
+        'IKJEFTAP/AUTHTSF contains IDCAMS/n(TRUNCATED)'
     END
   END
 RETURN
@@ -2362,15 +2335,11 @@ PrintBanner: PROCEDURE
 RETURN
 
 /*==================================================================*/
-/*              ASSESSMENT MODE FUNCTIONS (OSS VERSION)             */
+/*                    ASSESSMENT MODE FUNCTIONS                     */
 /*==================================================================*/
 /*                                                                  */
-/* NOTE: This open source version contains simplified examples of  */
-/* the assessment mode functions. The actual implementation would   */
-/* track and report real security findings discovered during the    */
-/* enumeration process.                                             */
-/*                                                                  */
-/* Example usage pattern for adding findings:                       */
+/* Enumeration procedures add concrete findings through the         */
+/* following helper calls:                                          */
 /*                                                                  */
 /* 1. Add EXPOSE clause to your enumeration procedure:              */
 /*    PROCEDURE EXPOSE (findingsVars)                               */
@@ -2443,7 +2412,7 @@ RETURN
 /*------------------------------------------------------------------*/
 /* Output assessment results                                        */
 /*------------------------------------------------------------------*/
-OutputAssessmentJSON: PROCEDURE EXPOSE (findingsVars)
+OutputAssessmentResults: PROCEDURE EXPOSE (findingsVars)
 
   CALL PrintSectionBanner 'Assessment Findings'
 
@@ -2497,55 +2466,4 @@ OutputAssessmentJSON: PROCEDURE EXPOSE (findingsVars)
     END
   END
 RETURN
-
-/*------------------------------------------------------------------*/
-/* Escape special characters for JSON strings                       */
-/*------------------------------------------------------------------*/
-JsonEscape: PROCEDURE
-  PARSE ARG text
-
-  /* Replace backslash first */
-  text = ReplaceStr(text, '\', '\\')
-  /* Replace double quotes */
-  text = ReplaceStr(text, '"', '\"')
-
-RETURN text
-
-/*------------------------------------------------------------------*/
-/* Return placeholder for open curly brace                         */
-/*------------------------------------------------------------------*/
-OpenCurly: PROCEDURE
-RETURN '<<LC>>'
-
-/*------------------------------------------------------------------*/
-/* Return placeholder for close curly brace                        */
-/*------------------------------------------------------------------*/
-CloseCurly: PROCEDURE
-RETURN '<<RC>>'
-
-/*------------------------------------------------------------------*/
-/* Return placeholder for open square bracket                      */
-/*------------------------------------------------------------------*/
-OpenSquare: PROCEDURE
-RETURN '<<LB>>'
-
-/*------------------------------------------------------------------*/
-/* Return placeholder for close square bracket                     */
-/*------------------------------------------------------------------*/
-CloseSquare: PROCEDURE
-RETURN '<<RB>>'
-
-/*------------------------------------------------------------------*/
-/* Replace all occurrences of a string                              */
-/*------------------------------------------------------------------*/
-ReplaceStr: PROCEDURE
-  PARSE ARG text, old, new
-
-  DO WHILE POS(old, text) > 0
-    p = POS(old, text)
-    text = SUBSTR(text, 1, p-1) || new ||,
-      SUBSTR(text, p+LENGTH(old))
-  END
-
-RETURN text
 

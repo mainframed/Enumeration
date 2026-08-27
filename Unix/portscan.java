@@ -266,7 +266,7 @@ public class portscan {
 
  private static void printUsage() {
   System.out.println(
-      "Usage: java portscan <host> <start-port> " +
+      "Usage: java -jar portscan.jar <host> <start-port> " +
       "<end-port> [options]");
   System.out.println();
   System.out.println("Required arguments:");
@@ -290,7 +290,7 @@ public class portscan {
       "  -h, --help                Show this help");
   System.out.println();
   System.out.println(
-      "Threading is experimental and opt-in. " +
+      "Threading is experimental! " +
       "The default scan is sequential.");
   System.out.println();
   System.out.println("Examples:");

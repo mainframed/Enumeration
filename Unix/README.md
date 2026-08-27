@@ -71,10 +71,14 @@ make
 Targets:
 
 ```sh
-make          # safauth plus all deployed Java classes
-make java     # all deployed Java classes, without safauth
+make          # safauth plus all executable Java JARs
+make jars     # all executable Java JARs, without safauth
+make java     # compile Java classes only
 make clean
 ```
+
+Java class files are isolated beneath `build/`; the executable JARs remain in
+the working directory.
 
 The default Java location is `/usr/lpp/java/J8.0_64`. Override it when needed:
 
@@ -116,6 +120,7 @@ Site settings near the top of `UNIXENUM.sh`:
 | `STDOUT` | Destination for ENUM and OMVSEnum standard output |
 | `folder` | USS deployment and working directory |
 | `JAVAC` | Full target-system path to `javac` |
+| `JAR` | Full target-system path to the `jar` utility |
 | `JAVA` | Full target-system path to `java` |
 | `C89` | Full path to the 31-bit C compiler |
 | `MAKE` | Full path to the `make` utility |
@@ -127,7 +132,7 @@ The generated job:
 3. uploads OMVSEnum, OMVSSecurityChecks, GhostWalker, `safauth.c`,
    `portscan.java`, and the Makefile
 4. runs selected USS-compatible ENUM sections
-5. invokes the Makefile to compile all deployed Java sources
+5. invokes the Makefile to build one executable JAR per Java program
 6. builds `safauth` through the Makefile when `C89` is available
 7. runs passive OMVSEnum
 8. runs effective-user and world-writable GhostWalker scans
@@ -149,9 +154,8 @@ the legacy `OMVSEnum.sh` are not deployed.
 [`../.github/workflows/generate-jcl.yml`](../.github/workflows/generate-jcl.yml)
 after pushes. Make changes in `UNIXENUM.sh`, not in generated JCL.
 
-The generator passes `JAVAC` and `C89` to the Makefile and uses `JAVA` for
-execution. Its run steps also set a Java 8 `JAVA_HOME`; if another Java
-release requires a different environment, update both before regenerating.
+The generator passes `JAVAC`, `JAR`, and `C89` to the Makefile and uses
+`JAVA` for execution. Keep all three Java paths on the same target release.
 
 ## OMVSEnum
 
@@ -163,7 +167,7 @@ SYSOUT.
 ### Usage
 
 ```text
-Usage: java OMVSEnum [options]
+Usage: java -jar OMVSEnum.jar [options]
 
 Enumeration:
   -t, --thorough             Enable slower scans
@@ -200,32 +204,32 @@ files,audit,hfs,chown,racf,content
 
 ```sh
 # Passive default scan with the default two workers
-java OMVSEnum
+java -jar OMVSEnum.jar
 
 # Passive scan with four workers
-java OMVSEnum --threads 4
+java -jar OMVSEnum.jar --threads 4
 
 # Thorough file and software inspection
-java OMVSEnum --thorough --sections software,files
+java -jar OMVSEnum.jar --thorough --sections software,files
 
 # Run all default sections plus active probes
-java OMVSEnum --active-probes
+java -jar OMVSEnum.jar --active-probes
 
 # Explicit active-probe-only sections
-java OMVSEnum --active-probes --sections hfs,chown
+java -jar OMVSEnum.jar --active-probes --sections hfs,chown
 
 # Expanded concrete SAF checks
-java OMVSEnum --extended-saf --sections capability
+java -jar OMVSEnum.jar --extended-saf --sections capability
 
 # Case-insensitive credential scan
-java OMVSEnum --sections content --credentials \
+java -jar OMVSEnum.jar --sections content --credentials \
   --search-root /etc --search-root /u
 
 # List JCL files containing password
-java OMVSEnum -s content -J -L -R /u
+java -jar OMVSEnum.jar -s content -J -L -R /u
 
 # Write normal output and a report
-java OMVSEnum --report /tmp/omvsenum.txt
+java -jar OMVSEnum.jar --report /tmp/omvsenum.txt
 ```
 
 ### Option constraints
@@ -308,7 +312,7 @@ GhostWalker recursively reports selected files and directories. The default
 selection is everything the current process can write.
 
 ```text
-Usage: java GhostWalker [options] <path> [path ...]
+Usage: java -jar GhostWalker.jar [options] <path> [path ...]
 
 Access selection (last selector wins):
   -w, --only-user-writeable   Effective user write access (default)
@@ -342,22 +346,22 @@ implemented.
 Examples:
 
 ```sh
-javac GhostWalker.java
+make GhostWalker.jar
 
 # Effective write access
-java GhostWalker /u
+java -jar GhostWalker.jar /u
 
 # Effective read or write access
-java GhostWalker --read /u
+java -jar GhostWalker.jar --read /u
 
 # World-writable entries
-java GhostWalker --only-world-writeable /
+java -jar GhostWalker.jar --only-world-writeable /
 
 # Group-writable entries with identity and timestamps
-java GhostWalker -G -u -m /u
+java -jar GhostWalker.jar -G -u -m /u
 
 # CSV report
-java GhostWalker -W -u -m --csv /tmp/world-writable.csv /
+java -jar GhostWalker.jar -W -u -m --csv /tmp/world.csv /
 ```
 
 An explicitly supplied root symbolic link is resolved. Links encountered
@@ -365,8 +369,9 @@ below that root are neither displayed nor followed, preventing link cycles.
 The resolved starting directory is included when it matches.
 
 The banner always goes to stderr and does not contaminate redirected findings
-or CSV output. Runtime access errors are silent by default. Exit 1 means at
-least one subtree could not be searched; use `--debug` for details.
+or CSV output. Missing or unusable start paths are always reported on stderr.
+Access errors below a valid root are silent by default. Exit 1 means a root or
+subtree could not be searched; use `--debug` for details.
 
 ## Port scanners
 
@@ -396,9 +401,9 @@ The Java implementation uses a bounded worker thread pool when experimental
 parallelism is requested:
 
 ```sh
-javac portscan.java
-java -cp . portscan localhost 1 1024
-java -cp . portscan host.example 1 65535 \
+make portscan.jar
+java -jar portscan.jar localhost 1 1024
+java -jar portscan.jar host.example 1 65535 \
   --timeout 250 --threads 8
 ```
 
@@ -450,24 +455,15 @@ It is not deployed by `UNIXENUM.jcl`, mixes shell-specific constructs, and
 contains active tests without the Java version's explicit opt-in model. Use
 the Java implementation for current assessments.
 
-## Sample and generated output
+## Generated output
 
-The checked-in files matching these patterns are sample ADCD reports:
+Runtime reports are not checked into the repository. OMVSEnum writes to
+standard output unless `--output` is supplied, while banners and diagnostics
+use standard error. The generated JCL writes GhostWalker reports beneath its
+configured USS working directory.
 
-```text
-OMVSEnum-ADCD-*.raw.txt
-OMVSEnum-ADCD-*.stderr.txt
-GhostWalker-ADCD-*.raw.txt
-GhostWalker-ADCD-*.stderr.txt
-```
-
-`raw.txt` contains standard output; `stderr.txt` captures banners or
-diagnostics. They are examples, not inputs and not regenerated by the
-Makefile.
-
-Other generated artifacts include `.class` files, the `safauth` executable,
-user-selected OMVSEnum report files, and the GhostWalker reports produced by
-the JCL workflow.
+Other generated artifacts include `.class` and `.jar` files, the `safauth`
+executable, user-selected OMVSEnum reports, and GhostWalker report files.
 
 ## Troubleshooting
 
