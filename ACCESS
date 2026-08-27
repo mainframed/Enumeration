@@ -1,97 +1,204 @@
-* For use on z/OS TSO only
-CHKACCSS TITLE 'Checks Access to a Dataset'
+* Callable z/OS TSO SAF effective-access checker
+CHKACCSS TITLE 'Checks Effective SAF Access'
          PRINT ON,DATA,GEN
 CLEAR    CSECT
-         YREGS                 # Register readability macro
-*         SETUP registers and save areas thanks @bigendiansmalls      *
-MAIN     BAKR  R14,0           # Save regs linkage stack
-         LR    R8,R15          # R15 Program base into R8 for Adrsblty
-         USING MAIN,R8         # R8 for addressability
-         DS    0H              # Halfword boundaries
-* Get the Dataset we're going to check
-* CASE is ImPoRtAnT
-         TPUT  MESSAGE1,L'MESSAGE1,EDIT   # Get Dataset Name
-         TGET  GETDSN,130                 # Case sensitive
-         TPUT  MESSAGE2,L'MESSAGE2,EDIT   # Get Dataset Volume
-         TGET  GETVOL,6                   # Case sensitive
-*        TPUT  GETDSN,L'GETDSN,EDIT # For some reason I need this
-*                                   # or this abends *shrugs*
-* Now we need to check access
-SAFCHK   RACROUTE REQUEST=AUTH,                                        x
-               RELEASE=1.9,                                            x
-               STATUS=ACCESS,                                          x
-               CLASS='DATASET',                                        x
-               ATTR=UPDATE,                                            x
-               ENTITY=GETDSN,VOLSER=GETVOL,                            x
+         YREGS
+MAIN     BAKR  R14,0
+         LR    R8,R15
+         USING MAIN,R8
+         DS    0H
+* Clear all input fields.
+         MVI   GETDSN,C' '
+         MVC   GETDSN+1(L'GETDSN-1),GETDSN
+         MVI   GETVOL,C' '
+         MVC   GETVOL+1(L'GETVOL-1),GETVOL
+         MVI   CLASSNAM,C' '
+         MVC   CLASSNAM+1(L'CLASSNAM-1),CLASSNAM
+         MVI   ACCESSNM,C' '
+         MVC   ACCESSNM+1(L'ACCESSNM-1),ACCESSNM
+         MVI   RESNAME,C' '
+         MVC   RESNAME+1(L'RESNAME-1),RESNAME
+* Parse the standard TSO CALL parameter.
+         L     R9,0(,R1)
+         LH    R10,0(,R9)
+         LA    R9,2(,R9)
+         LTR   R10,R10
+         BNP   BADPARM
+* RESOURCE class access entity invokes the generic SAF form.
+         CHI   R10,9
+         BL    CHKDATA
+         CLC   0(9,R9),=CL9'RESOURCE '
+         BNE   CHKDATA
+         LA    R9,9(,R9)
+         AHI   R10,-9
+         B     PARSRES
+* DATASET dataset-name volume invokes the explicit dataset form.
+CHKDATA  CHI   R10,8
+         BL    SKIPDS
+         CLC   0(8,R9),=CL8'DATASET '
+         BNE   SKIPDS
+         LA    R9,8(,R9)
+         AHI   R10,-8
+* A legacy "dataset-name volume" parameter remains supported.
+SKIPDS   CLI   0(R9),C' '
+         BNE   COPYDS
+         LA    R9,1(,R9)
+         BCT   R10,SKIPDS
+         B     BADPARM
+COPYDS   LA    R6,GETDSN
+         LA    R7,L'GETDSN
+DSLOOP   CLI   0(R9),C' '
+         BE    SKIPVOL
+         MVC   0(1,R6),0(R9)
+         LA    R6,1(,R6)
+         LA    R9,1(,R9)
+         BCT   R7,DSROOM
+         B     SKIPVOL
+DSROOM   BCT   R10,DSLOOP
+         B     DSAUTH
+SKIPVOL  CLI   0(R9),C' '
+         BNE   COPYVOL
+         LA    R9,1(,R9)
+         BCT   R10,SKIPVOL
+         B     DSAUTH
+COPYVOL  LA    R6,GETVOL
+         LA    R7,L'GETVOL
+VOLLOOP  MVC   0(1,R6),0(R9)
+         LA    R6,1(,R6)
+         LA    R9,1(,R9)
+         BCT   R7,VOLROOM
+         B     DSAUTH
+VOLROOM  BCT   R10,VOLLOOP
+* Ask SAF for the caller's highest effective DATASET access.
+DSAUTH   RACROUTE REQUEST=AUTH,                                        X
+               RELEASE=1.9,                                            X
+               STATUS=ACCESS,                                          X
+               CLASS='DATASET',                                        X
+               ATTR=UPDATE,                                            X
+               ENTITY=GETDSN,VOLSER=GETVOL,                            X
                WORKA=SAFWORKA
-         LM    R3,R4,SAFCHK+4 # Save Return Code, Rsn Code in R3/R4
-CHECKRTN DS    0H           # Check SAF Return Code in R15
-         C     R15,=F'0'    # If its zero check RACF RC
-         BE    CHECKACS
-         C     R15,=F'4'    # Otherwise is the SAF RC 4?
-         BNE   ERROR        # Its not? Then its 8/64 and thats bad
-         C     R3,=F'4'     # The specified resource is not protected
-         BNE   NOACCESS     # We get no access (if rc is 8)
-         MVC   OUTPUTA,NOTPROTA
-         B     PRINTMSG     # Print not protected message
-CHECKACS DS    0H
-         C     R3,=F'20'    # Is the SAF return code 0x14?
-         BNE   ERROR        # No? Then we dont care
-*
-* SAF Return Codes (when R15 is 0 and R3 is  x14)
-* R4 is one of the following:
-* x0   = No Access
-* x4   = READ
-* x8   = UPDATE
-* xC   = CONTROL
-* x10  = ALTER
-*
-NOACCESS C     R4,=F'0'
+         LM    R3,R4,DSAUTH+4
+         C     R15,=F'0'
+         BE    DSHASACS
+         C     R15,=F'4'
+         BNE   ERROR
+         C     R3,=F'4'
+         BNE   ERROR
+         LA    R6,20
+         B     RETURNRC
+DSHASACS C     R3,=F'20'
+         BNE   ERROR
+         LR    R6,R4
+         B     VALIDACS
+* Parse RESOURCE class access entity.
+PARSRES  LA    R6,CLASSNAM
+         LA    R7,L'CLASSNAM
+         XR    R5,R5
+CLSLP    CLI   0(R9),C' '
+         BE    SETCLEN
+         MVC   0(1,R6),0(R9)
+         LA    R6,1(,R6)
+         LA    R9,1(,R9)
+         LA    R5,1(,R5)
+         BCT   R7,CLSROOM
+         B     SETCLEN
+CLSROOM  BCT   R10,CLSLP
+         B     BADPARM
+SETCLEN  STC   R5,CLASSLEN
+SKIPACC  CLI   0(R9),C' '
+         BNE   ACCSTART
+         LA    R9,1(,R9)
+         BCT   R10,SKIPACC
+         B     BADPARM
+ACCSTART LA    R6,ACCESSNM
+         LA    R7,L'ACCESSNM
+ACCLP    CLI   0(R9),C' '
+         BE    SKIPENT
+         MVC   0(1,R6),0(R9)
+         LA    R6,1(,R6)
+         LA    R9,1(,R9)
+         BCT   R7,ACCROOM
+         B     SKIPENT
+ACCROOM  BCT   R10,ACCLP
+         B     BADPARM
+SKIPENT  CLI   0(R9),C' '
+         BNE   ENTSTART
+         LA    R9,1(,R9)
+         BCT   R10,SKIPENT
+         B     BADPARM
+ENTSTART LA    R6,RESNAME
+         LA    R7,L'RESNAME
+         XR    R5,R5
+ENTLP    MVC   0(1,R6),0(R9)
+         LA    R6,1(,R6)
+         LA    R9,1(,R9)
+         LA    R5,1(,R5)
+         BCT   R7,ENTROOM
+         B     SETLEN
+ENTROOM  BCT   R10,ENTLP
+SETLEN   STH   R5,RESLEN
+* Validate the requested threshold; REXX performs the comparison.
+         CLC   ACCESSNM,=CL7'READ'
+         BE    RESAUTH
+         CLC   ACCESSNM,=CL7'UPDATE'
+         BE    RESAUTH
+         CLC   ACCESSNM,=CL7'CONTROL'
+         BE    RESAUTH
+         CLC   ACCESSNM,=CL7'ALTER'
+         BE    RESAUTH
+         B     BADPARM
+* Ask SAF for highest effective access to the supplied resource.
+RESAUTH  RACROUTE REQUEST=AUTH,                                        X
+               RELEASE=1.9,                                            X
+               CLASS=CLASSX,                                           X
+               STATUS=ACCESS,                                          X
+               ENTITY=RESNAME,                                         X
+               WORKA=SAFWORKA
+         LM    R3,R4,RESAUTH+4
+         C     R15,=F'0'
+         BE    RESHASAC
+         C     R15,=F'4'
+         BNE   ERROR
+         C     R3,=F'4'
+         BNE   ERROR
+         LA    R6,20
+         B     RETURNRC
+RESHASAC C     R3,=F'20'
+         BNE   ERROR
+         LR    R6,R4
+* Effective access: 0 NONE, 4 READ, 8 UPDATE, 12 CONTROL, 16 ALTER.
+VALIDACS C     R6,=F'0'
          BNE   READ
-         MVC   OUTPUTA,NONEA
-         B     PRINTMSG
-READ     C     R4,=F'4'
+         B     RETURNRC
+READ     C     R6,=F'4'
          BNE   UPDATE
-         MVC   OUTPUTA,READA
-         B     PRINTMSG
-UPDATE   C     R4,=F'8'
+         B     RETURNRC
+UPDATE   C     R6,=F'8'
          BNE   CONTROL
-         MVC   OUTPUTA,UPDATEA
-         B     PRINTMSG
-CONTROL  C     R4,=F'12'
+         B     RETURNRC
+CONTROL  C     R6,=F'12'
          BNE   ALTER
-         MVC   OUTPUTA,CONTROLA
-         B     PRINTMSG
-ALTER    C     R4,=F'16'
+         B     RETURNRC
+ALTER    C     R6,=F'16'
          BNE   WHATTHE
-         MVC   OUTPUTA,ALTERA
-         B     PRINTMSG
-WHATTHE  MVC   OUTPUTA,WHATA
-PRINTMSG TPUT  OUTPUTA,L'OUTPUTA,EDIT
+         B     RETURNRC
+WHATTHE  LA    R6,64
+RETURNRC DS    0H
+         LR    R15,R6
          B     EXITP
-ERROR    TPUT  ERRORMSG,L'ERRORMSG,EDIT
-* Now we're done lets exit
-EXITP    DS    0H
-         XR    R15,R15         # zero return code
-*        LR    R15,R4          # Return the results
-         PR    ,               # Return to caller
-*
-* FILE AND WORK AREA DEFINITIONS
-*
-MESSAGE1 DC    C'** ENTER DATASET:'
-MESSAGE2 DC    C'** ENTER VOLUME SERIAL:'
-ERRORMSG DC    C'** ERROR: SAF RC NOT 00 - Dataset/Volume incorrect'
-GETDSN   DS    CL44  # Max length for dataset
-GETVOL   DS    CL6   # Max length for volume
-NONEA    DC    C'RC 00 - No Access     '
-READA    DC    C'RC 04 - READ Access   '
-UPDATEA  DC    C'RC 08 - UPDATE Access '
-CONTROLA DC    C'RC 0C - CONTROL Access'
-ALTERA   DC    C'RC 10 - ALTER Access  '
-WHATA    DC    C'RC Not documented     '
-NOTPROTA DC    C'Not Protected by RACF '
-OUTPUTA  DS    CL(L'CONTROLA)
+BADPARM  DS    0H
+ERROR    DS    0H
+         LA    R15,64
+EXITP    PR    ,
+GETDSN   DS    CL44
+GETVOL   DS    CL6
+CLASSX   DS    0H
+CLASSLEN DS    X
+CLASSNAM DS    CL8
+ACCESSNM DS    CL7
+RESLEN   DS    H
+RESNAME  DS    CL246
 SAFWORKA DS    CL512
-         LTORG ,     # Literal pool here
-         DROP  R8    # Drop R8 Addressability
-         END   MAIN  # Peace owt
+         LTORG ,
+         DROP  R8
+         END   MAIN

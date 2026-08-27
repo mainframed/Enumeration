@@ -4,6 +4,7 @@ import java.nio.file.attribute.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.regex.*;
 
 // License: GPL 3.0
 // Author: Soldier of FORTRAN / @mainframed767
@@ -18,16 +19,44 @@ public class OMVSEnum {
  static boolean debugMode  = false;
  static boolean quietMode  = false;
  static boolean thorough   = false;
- static String  keyword    = null;
- static String  exportDir  = null;
  static PrintWriter report = null;
+ static String reportFile = null;
+ static int threadCount = 2;
+ static boolean filesWithMatches = false;
+ static boolean caseSensitive = false;
+ static boolean contentRequested = false;
+ static boolean activeProbes = false;
+ static boolean extendedSaf = false;
+ static Set<String> onlySections = null;
+ static Set<String> skippedSections =
+  new HashSet<String>();
+ static List<Path> searchRoots =
+  new ArrayList<Path>();
+ static List<SearchRule> searchRules =
+  new ArrayList<SearchRule>();
+
+ static final List<String> SECTION_ORDER =
+  Arrays.asList(
+   "system", "user", "environment", "capability",
+   "network", "services", "jobs", "software",
+   "files", "audit", "hfs", "chown", "racf",
+   "content");
+ static final Set<String> ACTIVE_SECTIONS =
+  new HashSet<String>(
+   Arrays.asList("files", "hfs", "chown"));
+
+ static final ThreadLocal<StringBuilder>
+  SECTION_OUTPUT =
+   new ThreadLocal<StringBuilder>();
 
  static final SimpleDateFormat DF =
   new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
  // ---- output helpers --------------------------------
 
- static void dbg(String fn, String msg) {
+ static synchronized void dbg(
+  String fn, String msg
+ ) {
   if (!debugMode) return;
   String ts = DF.format(new Date());
   System.err.println(
@@ -66,15 +95,70 @@ public class OMVSEnum {
   return sb.toString();
  }
 
- static void println(String s) {
+ static synchronized void println(String s) {
+  StringBuilder captured = SECTION_OUTPUT.get();
+  if (captured != null) {
+   captured.append(s).append("\n");
+   return;
+  }
   System.out.println(s);
   if (report != null) {
    report.println(s);
-   report.flush();
   }
  }
 
  // ---- command execution -----------------------------
+
+ static final class CommandResult {
+  final String stdout;
+  final String stderr;
+  final int exitCode;
+  final boolean timedOut;
+  final Exception error;
+
+  CommandResult(
+   String stdout, String stderr, int exitCode,
+   boolean timedOut, Exception error
+  ) {
+   this.stdout = stdout;
+   this.stderr = stderr;
+   this.exitCode = exitCode;
+   this.timedOut = timedOut;
+   this.error = error;
+  }
+ }
+
+ static final class StreamCollector
+  implements Runnable {
+  private final InputStream input;
+  private final StringBuilder text =
+   new StringBuilder();
+
+  StreamCollector(InputStream input) {
+   this.input = input;
+  }
+
+  public void run() {
+   try {
+    BufferedReader reader =
+     new BufferedReader(
+      new InputStreamReader(input));
+    try {
+     String line;
+     while ((line = reader.readLine()) != null)
+      text.append(line).append("\n");
+    } finally {
+     reader.close();
+    }
+   } catch (IOException e) {
+    // The process may close streams while timing out.
+   }
+  }
+
+  String text() {
+   return text.toString().trim();
+  }
+ }
 
  static String run(String... cmd) {
   return runTimeout(30, cmd);
@@ -83,59 +167,72 @@ public class OMVSEnum {
  static String runTimeout(
   int secs, String... cmd
  ) {
+  CommandResult result =
+   execute(secs, cmd);
+  debugCommand(cmd, result);
+  return result.stdout;
+ }
+
+ static CommandResult execute(
+  int secs, String... cmd
+ ) {
+  Process process = null;
   try {
-   ProcessBuilder pb =
-    new ProcessBuilder(cmd);
-   // Discard stderr - keeps permission-denied
-   // noise and z/OS error messages out of
-   // captured output (avoids false positives)
-   pb.redirectError(
-    ProcessBuilder.Redirect.to(
-     new File("/dev/null")));
-   Process p = pb.start();
-   // read all output
-   StringBuilder sb = new StringBuilder();
-   BufferedReader br = new BufferedReader(
-    new InputStreamReader(
-     p.getInputStream()));
-   try {
-    String line;
-    while ((line = br.readLine()) != null)
-     sb.append(line).append("\n");
-   } finally {
-    br.close();
-   }
+   process = new ProcessBuilder(cmd).start();
+   StreamCollector stdout =
+    new StreamCollector(process.getInputStream());
+   StreamCollector stderr =
+    new StreamCollector(process.getErrorStream());
+   Thread outThread =
+    new Thread(stdout, "omvsenum-command-out");
+   Thread errThread =
+    new Thread(stderr, "omvsenum-command-err");
+   outThread.setDaemon(true);
+   errThread.setDaemon(true);
+   outThread.start();
+   errThread.start();
+
    boolean done =
-    p.waitFor(secs, TimeUnit.SECONDS);
-   if (!done) p.destroyForcibly();
-   return sb.toString().trim();
+    process.waitFor(secs, TimeUnit.SECONDS);
+   if (!done) {
+    process.destroyForcibly();
+    process.waitFor(2, TimeUnit.SECONDS);
+   }
+   outThread.join(2000);
+   errThread.join(2000);
+   int exit = done ? process.exitValue() : -1;
+   return new CommandResult(
+    stdout.text(), stderr.text(), exit,
+    !done, null);
   } catch (Exception e) {
-   return "";
+   if (process != null)
+    process.destroyForcibly();
+   return new CommandResult(
+    "", "", -1, false, e);
   }
  }
 
- // Returns exit code; drains output to /dev/null
- // Java 7/8 safe (no transferTo / nullOutputStream)
  static int runExitCode(String... cmd) {
-  try {
-   ProcessBuilder pb =
-    new ProcessBuilder(cmd);
-   pb.redirectErrorStream(true);
-   Process p = pb.start();
-   InputStream is = p.getInputStream();
-   byte[] buf = new byte[4096];
-   while (is.read(buf) != -1) { /* drain */ }
-   is.close();
-   boolean done =
-    p.waitFor(30, TimeUnit.SECONDS);
-   if (!done) {
-    p.destroyForcibly();
-    return -1;
-   }
-   return p.exitValue();
-  } catch (Exception e) {
-   return -1;
-  }
+  CommandResult result = execute(30, cmd);
+  debugCommand(cmd, result);
+  return result.exitCode;
+ }
+
+ static void debugCommand(
+  String[] cmd, CommandResult result
+ ) {
+  if (!debugMode) return;
+  String joined = Arrays.toString(cmd);
+  if (result.error != null)
+   dbg("command", joined + " failed: " +
+    result.error.getMessage());
+  else if (result.timedOut)
+   dbg("command", joined + " timed out");
+  else if (result.exitCode != 0)
+   dbg("command", joined + " exit " +
+    result.exitCode +
+    (result.stderr.isEmpty() ? "" :
+     ": " + result.stderr));
  }
 
  static String tso(String cmd) {
@@ -172,6 +269,258 @@ public class OMVSEnum {
 
  static String sysvar(String var) {
   return runTimeout(10, "sysvar", var);
+ }
+
+ static final class SearchRule {
+  final String expression;
+  final boolean jclOnly;
+
+  SearchRule(
+   String expression, boolean jclOnly
+  ) {
+   this.expression = expression;
+   this.jclOnly = jclOnly;
+  }
+ }
+
+ static final class ContentResult {
+  final String output;
+  final long matches;
+
+  ContentResult(String output, long matches) {
+   this.output = output;
+   this.matches = matches;
+  }
+ }
+
+ static void contentSearch() {
+  if (!contentRequested) return;
+  section("Content Search");
+
+  int flags = caseSensitive ? 0
+   : Pattern.CASE_INSENSITIVE;
+  final List<Pattern> patterns =
+   new ArrayList<Pattern>();
+  for (SearchRule rule : searchRules)
+   patterns.add(Pattern.compile(
+    rule.expression, flags));
+
+  if (searchRoots.isEmpty())
+   searchRoots.add(Paths.get("/"));
+
+  long matches = 0;
+  List<ContentResult> results =
+   searchContentRoots(patterns);
+  for (ContentResult result : results) {
+   appendSectionOutput(result.output);
+   matches += result.matches;
+  }
+
+  if (matches == 0)
+   emit("[-]", "No content matches found",
+    null);
+ }
+
+ static List<ContentResult> searchContentRoots(
+  final List<Pattern> patterns
+ ) {
+  List<ContentResult> results =
+   new ArrayList<ContentResult>();
+  if (threadCount == 1 ||
+      searchRoots.size() == 1) {
+   for (Path root : searchRoots)
+    results.add(captureContentRoot(
+     root, patterns));
+   return results;
+  }
+
+  ExecutorService executor = null;
+  List<Future<ContentResult>> futures =
+   new ArrayList<Future<ContentResult>>();
+  try {
+   executor = Executors.newFixedThreadPool(
+    Math.min(threadCount, searchRoots.size()));
+   for (final Path root : searchRoots) {
+    futures.add(executor.submit(
+     new Callable<ContentResult>() {
+      public ContentResult call() {
+       return captureContentRoot(
+        root, patterns);
+      }
+     }));
+   }
+   for (int i = 0; i < futures.size(); i++) {
+    try {
+     results.add(futures.get(i).get());
+    } catch (Exception e) {
+     dbg("contentSearch",
+      "root worker failed: " +
+      e.getMessage());
+     results.add(captureContentRoot(
+      searchRoots.get(i), patterns));
+    }
+   }
+  } catch (Throwable error) {
+   dbg("contentSearch",
+    "root workers unavailable: " +
+    error.getMessage());
+   results.clear();
+   for (Path root : searchRoots)
+    results.add(captureContentRoot(
+     root, patterns));
+  } finally {
+   if (executor != null)
+    executor.shutdownNow();
+  }
+  return results;
+ }
+
+ static ContentResult captureContentRoot(
+  Path root, List<Pattern> patterns
+ ) {
+  StringBuilder buffer = new StringBuilder();
+  StringBuilder previous =
+   SECTION_OUTPUT.get();
+  SECTION_OUTPUT.set(buffer);
+  long[] matches = {0};
+  try {
+   scanContentRoot(root, patterns, matches);
+  } finally {
+   if (previous == null)
+    SECTION_OUTPUT.remove();
+   else
+    SECTION_OUTPUT.set(previous);
+  }
+  return new ContentResult(
+   buffer.toString(), matches[0]);
+ }
+
+ static void appendSectionOutput(String text) {
+  if (text == null || text.isEmpty()) return;
+  StringBuilder captured = SECTION_OUTPUT.get();
+  if (captured != null)
+   captured.append(text);
+  else
+   writeCaptured(text);
+ }
+
+ static void scanContentRoot(
+  Path suppliedRoot, final List<Pattern> patterns,
+  final long[] matches
+ ) {
+  Path requested =
+   suppliedRoot.toAbsolutePath().normalize();
+  final Path root;
+  try {
+   root = Files.isSymbolicLink(requested)
+    ? requested.toRealPath() : requested;
+  } catch (Exception e) {
+   dbg("contentSearch",
+    "cannot resolve " + requested + ": " +
+    e.getMessage());
+   return;
+  }
+
+  try {
+   Files.walkFileTree(root,
+    new SimpleFileVisitor<Path>() {
+     public FileVisitResult visitFile(
+      Path file, BasicFileAttributes attrs
+     ) {
+      if (!attrs.isRegularFile() ||
+          attrs.isSymbolicLink() ||
+          Files.isSymbolicLink(file) ||
+          !Files.isReadable(file))
+       return FileVisitResult.CONTINUE;
+      searchContentFile(
+       file, patterns, matches);
+      return FileVisitResult.CONTINUE;
+     }
+
+     public FileVisitResult visitFileFailed(
+      Path file, IOException error
+     ) {
+      dbg("contentSearch",
+       "cannot read " + file + ": " +
+       error.getMessage());
+      return FileVisitResult.CONTINUE;
+     }
+    });
+  } catch (Exception e) {
+   dbg("contentSearch",
+    "walk failed for " + root + ": " +
+    e.getMessage());
+  }
+ }
+
+ static void searchContentFile(
+  Path file, List<Pattern> patterns,
+  long[] matches
+ ) {
+  try {
+   if (isProbablyBinary(file)) return;
+   boolean isJcl = file.getFileName()
+    .toString().toLowerCase()
+    .endsWith(".jcl");
+   BufferedReader reader =
+    new BufferedReader(
+     new FileReader(file.toFile()));
+   try {
+    String line;
+    long lineNumber = 0;
+    while ((line = reader.readLine()) != null) {
+     lineNumber++;
+     boolean found = false;
+     for (int i = 0;
+          i < searchRules.size(); i++) {
+      SearchRule rule = searchRules.get(i);
+      if (rule.jclOnly && !isJcl)
+       continue;
+      if (patterns.get(i).matcher(line).find()) {
+       found = true;
+       break;
+      }
+     }
+     if (!found) continue;
+     matches[0]++;
+     if (filesWithMatches) {
+      println("[+] " + file);
+      return;
+     }
+     println("[+] " + file + ":" +
+      lineNumber + ": " + line);
+    }
+   } finally {
+    reader.close();
+   }
+  } catch (Exception e) {
+   dbg("contentSearch",
+    "cannot search " + file + ": " +
+    e.getMessage());
+  }
+ }
+
+ static boolean isProbablyBinary(Path file)
+  throws IOException {
+  InputStream input =
+   new BufferedInputStream(
+    new FileInputStream(file.toFile()));
+  try {
+   byte[] sample = new byte[4096];
+   int count = input.read(sample);
+   if (count <= 0) return false;
+   int controls = 0;
+   for (int i = 0; i < count; i++) {
+    int value = sample[i] & 0xff;
+    if (value == 0) return true;
+    if (value < 32 && value != '\n' &&
+        value != '\r' && value != '\t')
+     controls++;
+   }
+   return controls > count / 3;
+  } finally {
+   input.close();
+  }
  }
 
  // ---- modules ---------------------------------------
@@ -253,16 +602,18 @@ public class OMVSEnum {
   if (!tsswho.isEmpty() &&
       !tsswho.contains("IKJ56500I"))
    emit("[-]", "TSS user info", tsswho);
+  OMVSSecurityChecks.esmParityChecks();
 
   dbg(FN, "who");
   String who = run("who");
   if (!who.isEmpty())
    emit("[-]", "Other logged-on users", who);
 
-  // BPX.SUPERUSER: su -s with closed stdin
-  // exit 0 = permitted
-  dbg(FN, "testing su -s (BPX.SUPERUSER)");
-  try {
+  // This authentication probe can create audit records and
+  // is therefore explicitly opt-in.
+  if (activeProbes) {
+   dbg(FN, "testing su -s (BPX.SUPERUSER)");
+   try {
    ProcessBuilder pb =
     new ProcessBuilder("su", "-s");
    pb.redirectErrorStream(true);
@@ -275,8 +626,13 @@ public class OMVSEnum {
    is.close();
    boolean done =
     p.waitFor(10, TimeUnit.SECONDS);
-   if (!done) p.destroyForcibly();
-   if (p.exitValue() == 0) {
+   if (!done) {
+    p.destroyForcibly();
+    p.waitFor(2, TimeUnit.SECONDS);
+    emit("[!]",
+     "su -s timed out; result is unknown",
+     null);
+   } else if (p.exitValue() == 0) {
     emit("[+]",
      "su -s succeeded without password " +
      "(BPX.SUPERUSER likely permitted or " +
@@ -286,9 +642,10 @@ public class OMVSEnum {
      "su -s without password: denied " +
      "(exit " + p.exitValue() + ")", null);
    }
-  } catch (Exception e) {
-   dbg(FN, "su check failed: "
-    + e.getMessage());
+   } catch (Exception e) {
+    dbg(FN, "su check failed: "
+     + e.getMessage());
+   }
   }
 
   // Default RACF group users via LG
@@ -332,18 +689,29 @@ public class OMVSEnum {
   // sshd_config root login check
   dbg(FN, "checking sshd_config");
   try {
-   byte[] raw = Files.readAllBytes(
-    Paths.get("/etc/ssh/sshd_config"));
-   String sshcfg = new String(raw);
-   for (String l : sshcfg.split("\n")) {
-    if (l.trim().startsWith("#")) continue;
-    if (l.toLowerCase()
-        .contains("permitrootlogin") &&
-        l.toLowerCase().contains("yes")) {
-     emit("[+]",
-      "sshd: PermitRootLogin yes",
-      l.trim());
+   BufferedReader reader =
+    new BufferedReader(new FileReader(
+     "/etc/ssh/sshd_config"));
+   try {
+    String line;
+    while ((line = reader.readLine()) != null) {
+     int comment = line.indexOf('#');
+     String setting = (comment >= 0
+      ? line.substring(0, comment) : line)
+      .trim();
+     String[] fields =
+      setting.split("\\s+");
+     if (fields.length >= 2 &&
+         fields[0].equalsIgnoreCase(
+          "PermitRootLogin") &&
+         fields[1].equalsIgnoreCase("yes")) {
+      emit("[+]",
+       "sshd: PermitRootLogin yes",
+       setting);
+     }
     }
+   } finally {
+    reader.close();
    }
   } catch (Exception e) {
    dbg(FN, "sshd_config not readable");
@@ -393,6 +761,9 @@ public class OMVSEnum {
      "Writable files not owned by " + me,
      notours);
   }
+
+  OMVSSecurityChecks.identityHomeChecks();
+  OMVSSecurityChecks.sshPostureChecks();
  }
 
  static void environmentalInfo() {
@@ -420,28 +791,45 @@ public class OMVSEnum {
   // Writable PATH entries = hijacking risk
   dbg(FN, "checking PATH for writable dirs");
   if (path != null) {
-   StringBuilder writable =
-    new StringBuilder();
-   for (String dir : path.split(":")) {
-    if (dir.trim().isEmpty()) continue;
-    File d = new File(dir.trim());
+   Set<String> writable =
+    new LinkedHashSet<String>();
+   for (String entry : path.split(":", -1)) {
+    String dir = entry.trim();
+    // Empty PATH entries mean the current directory,
+    // just like an explicit "." entry.
+    if (dir.isEmpty()) dir = ".";
+    File d = new File(dir);
     if (d.exists() &&
         d.isDirectory() &&
         d.canWrite()) {
-     writable.append(dir).append("\n");
+     writable.add(dir);
     }
    }
-   if (writable.length() > 0)
+   if (!writable.isEmpty())
     emit("[+]",
      "Writable directories in PATH " +
      "(PATH hijacking possible)",
-     writable.toString().trim());
+     joinLines(writable));
   }
 
   dbg(FN, "umask");
-  String umask = run("umask");
+  String umask =
+   run("/bin/sh", "-c", "umask");
   if (!umask.isEmpty())
    emit("[-]", "umask value", umask);
+
+  OMVSSecurityChecks.sensitiveConfigChecks();
+ }
+
+ static String joinLines(
+  Collection<String> values
+ ) {
+  StringBuilder text = new StringBuilder();
+  for (String value : values) {
+   if (text.length() > 0) text.append("\n");
+   text.append(value);
+  }
+  return text.toString();
  }
 
  static void networkingInfo() {
@@ -500,6 +888,9 @@ public class OMVSEnum {
   String dns = run("dnsdomainname");
   if (!dns.isEmpty())
    emit("[-]", "DNS domain name", dns);
+
+  OMVSSecurityChecks.mountExposureChecks();
+  OMVSSecurityChecks.networkCorrelationChecks();
  }
 
  static void servicesInfo() {
@@ -508,6 +899,7 @@ public class OMVSEnum {
 
   dbg(FN, "ps -ef");
   String me = run("whoami");
+  String myUid = run("id", "-u");
   String psef = run("ps", "-ef");
   if (!psef.isEmpty()) {
    boolean canSeeAll = false;
@@ -515,7 +907,11 @@ public class OMVSEnum {
     // skip header
     if (l.contains("UID")) continue;
     // if a line belongs to someone else
-    if (!l.trim().startsWith(me)) {
+    String[] fields =
+     l.trim().split("\\s+");
+    if (fields.length > 0 &&
+        !fields[0].equals(me) &&
+        !fields[0].equals(myUid)) {
      canSeeAll = true;
      break;
     }
@@ -547,6 +943,10 @@ public class OMVSEnum {
   } catch (Exception e) {
    dbg(FN, "/etc/inetd.conf not readable");
   }
+
+  OMVSSecurityChecks.privilegedProcessTrustChecks();
+  if (thorough)
+   OMVSSecurityChecks.ipcExposureChecks();
  }
 
  static void softwareInfo() {
@@ -600,87 +1000,179 @@ public class OMVSEnum {
    emit("[-]", "No compilers found", null);
 
   if (thorough) {
-   dbg(FN, "searching for .htpasswd");
-   String htpw = runTimeout(120,
-    "find", "/",
-    "-name", ".htpasswd",
-    "-type", "f");
-   if (!htpw.isEmpty())
+   dbg(FN, "searching scoped roots for .htpasswd");
+   StringBuilder htpw = new StringBuilder();
+   String[] roots = {"/etc", "/u", "/home"};
+   for (String root : roots) {
+    if (!new File(root).isDirectory()) continue;
+    String foundPath = runTimeout(45,
+     "find", root, "-name", ".htpasswd",
+     "-type", "f");
+    if (!foundPath.isEmpty())
+     htpw.append(foundPath).append("\n");
+   }
+   if (htpw.length() > 0)
     emit("[+]",
      ".htpasswd files found " +
      "(may contain password hashes)",
-     htpw);
+     htpw.toString().trim());
   }
+
+  if (thorough)
+   OMVSSecurityChecks.middlewareTrustChecks();
+ }
+
+ static String findSafauth() {
+  LinkedHashSet<String> candidates =
+   new LinkedHashSet<String>();
+  candidates.add(
+   new File("safauth").getAbsolutePath());
+
+  String path = System.getenv("PATH");
+  if (path != null) {
+   for (String entry : path.split(":", -1)) {
+    String dir = entry.trim();
+    if (dir.isEmpty()) dir = ".";
+    candidates.add(
+     new File(dir, "safauth").getPath());
+   }
+  }
+
+  for (String candidate : candidates) {
+   File file = new File(candidate);
+   if (!file.isFile() || !file.canExecute())
+    continue;
+   CommandResult probe = execute(5, candidate);
+   debugCommand(
+    new String[] {candidate}, probe);
+   String output =
+    probe.stdout + "\n" + probe.stderr;
+   if (!probe.timedOut &&
+       probe.error == null &&
+       probe.exitCode == 64 &&
+       output.contains("Usage: safauth"))
+    return candidate;
+  }
+  return null;
+ }
+
+ static String checkDatasetAccess(
+  String safauth, String dataset
+ ) {
+  String[] levels = {
+   "alter", "control", "update", "read"
+  };
+  boolean denied = false;
+  boolean noDecision = false;
+  for (String level : levels) {
+   String[] command = {
+    safauth, "--vsam", "DATASET",
+    dataset, level
+   };
+   CommandResult result =
+    execute(10, command);
+   debugCommand(command, result);
+   if (result.timedOut)
+    return "ERROR (timeout)";
+   if (result.error != null)
+    return "ERROR (" +
+     result.error.getClass().getSimpleName() + ")";
+   if (result.exitCode == 0)
+    return level.toUpperCase();
+   if (result.exitCode == 8)
+    denied = true;
+   else if (result.exitCode == 4)
+    noDecision = true;
+   else
+    return "ERROR (exit " +
+     result.exitCode + ")";
+  }
+  if (denied) return "DENIED";
+  if (noDecision) return "NO SAF DECISION";
+  return "UNKNOWN";
+ }
+
+ static boolean betterThanRead(String access) {
+  return access.equals("UPDATE") ||
+   access.equals("CONTROL") ||
+   access.equals("ALTER");
  }
 
  static void interestingFiles() {
   final String FN = "interestingFiles";
   section("Interesting Files");
 
-  // HFS/ZFS mounts + RACF access
+  // HFS/ZFS mounts + SAF access
   dbg(FN, "df -kP");
   String df = run("df", "-kP");
   if (!df.isEmpty()) {
    emit("[-]", "Mounted filesystems", df);
 
-   dbg(FN, "checking RACF access per mount");
-   StringBuilder dsList =
-    new StringBuilder();
-   for (String l : df.split("\n")) {
-    if (l.startsWith("Filesystem") ||
-        l.trim().isEmpty()) continue;
-    String[] parts = l.trim().split("\\s+");
-    // Skip entries that look like paths
-    if (parts[0].startsWith("/")) continue;
-    String ds = parts[0];
-    String lsd = tso(
-     "LISTDSD DATASET('" + ds + "')");
-    if (lsd.isEmpty()) continue;
-    if (lsd.contains("ICH35002I")) {
-     dsList.append("  DENIED     \t")
-      .append(ds).append("\n");
-    } else if (lsd.contains("ICH35003I")) {
-     dsList.append("  UNPROTECTED\t")
-      .append(ds).append("\n");
-    } else {
-     // parse "YOUR ACCESS" line
-     String access = "UNKNOWN";
-     String[] ls2 = lsd.split("\n");
-     for (int i = 0;
-          i < ls2.length; i++) {
-      if (ls2[i].toUpperCase()
-          .contains("YOUR ACCESS") &&
-          i + 2 < ls2.length) {
-       String raw =
-        ls2[i + 2].trim();
-       if (!raw.isEmpty())
-        access =
-         raw.split("\\s+")[0];
-       break;
-      }
-     }
-     dsList.append("  ")
-      .append(String.format(
-       "%-12s", access))
-      .append("\t")
-      .append(ds).append("\n");
+   String safauth = findSafauth();
+   if (safauth == null) {
+    emit("[!]",
+     "safauth is not compiled and ready; " +
+     "mounted dataset access checks skipped",
+     "Run make and place safauth in the " +
+     "current directory or PATH.");
+   } else {
+    dbg(FN, "checking SAF access with " +
+     safauth);
+    LinkedHashSet<String> datasets =
+     new LinkedHashSet<String>();
+    for (String line : df.split("\n")) {
+     String trimmed = line.trim();
+     if (trimmed.isEmpty() ||
+         trimmed.startsWith("Filesystem"))
+      continue;
+     String[] parts = trimmed.split("\\s+");
+     if (parts.length == 0 ||
+         parts[0].startsWith("/") ||
+         parts[0].startsWith("*"))
+      continue;
+     datasets.add(parts[0]);
     }
+
+    StringBuilder accessList =
+     new StringBuilder();
+    StringBuilder elevatedList =
+     new StringBuilder();
+    for (String dataset : datasets) {
+     String access =
+      checkDatasetAccess(safauth, dataset);
+     accessList.append(String.format(
+      "%-16s", access))
+      .append(dataset).append("\n");
+     if (betterThanRead(access))
+      elevatedList.append(String.format(
+       "%-16s", access))
+       .append(dataset).append("\n");
+    }
+    if (accessList.length() > 0)
+     emit("[-]",
+      "Mounted dataset SAF access " +
+      "(safauth)",
+      accessList.toString().trim());
+    if (elevatedList.length() > 0)
+     emit("[+]",
+      "Mounted datasets with better than " +
+      "READ SAF access",
+      elevatedList.toString().trim());
    }
-   if (dsList.length() > 0)
-    emit("[-]",
-     "Mounted dataset RACF access",
-     dsList.toString().trim());
   }
 
-  // extattr +a test
+  // extattr +a test (mutating and explicitly opt-in)
+  if (activeProbes) {
   dbg(FN, "testing extattr +a (APF marker)");
   String tmpApf = "/tmp/omvsenum_apf_" +
    System.currentTimeMillis() + ".tmp";
+  boolean apfMarked = false;
   try {
    new File(tmpApf).createNewFile();
    int rc = runExitCode(
     "extattr", "+a", tmpApf);
    if (rc == 0) {
+    apfMarked = true;
     emit("[+]",
      "extattr +a succeeded! " +
      "Can mark files APF-authorized",
@@ -694,13 +1186,18 @@ public class OMVSEnum {
    dbg(FN, "extattr test error: "
     + e.getMessage());
   } finally {
-   new File(tmpApf).delete();
+   if (apfMarked)
+    runExitCode("extattr", "-a", tmpApf);
+   if (!new File(tmpApf).delete() &&
+       new File(tmpApf).exists())
+    dbg(FN, "could not remove " + tmpApf);
+  }
   }
 
   // Private key search in /u
   dbg(FN,
    "find private key files in /u");
-  String keys = run(
+  String keys = runTimeout(120,
    "find", "/u/", "-type", "f",
    "-exec", "grep", "-l",
    "PRIVATE KEY-----", "{}", ";"
@@ -712,7 +1209,7 @@ public class OMVSEnum {
 
   // .rhosts files
   dbg(FN, "find .rhosts files in /u");
-  String rhosts = run(
+  String rhosts = runTimeout(120,
    "find", "/u/", "-name", ".rhosts",
    "-exec", "ls", "-la", "{}", ";"
   );
@@ -738,7 +1235,7 @@ public class OMVSEnum {
 
   // .plan files
   dbg(FN, "find .plan files in /u");
-  String plan = run(
+  String plan = runTimeout(120,
    "find", "/u/", "-name", "*.plan",
    "-exec", "ls", "-la", "{}", ";"
   );
@@ -747,7 +1244,7 @@ public class OMVSEnum {
 
   // Shell history files
   dbg(FN, "find .*history in /u");
-  String hist = run(
+  String hist = runTimeout(120,
    "find", "/u/", "-name", ".*history",
    "-exec", "ls", "-la", "{}", ";"
   );
@@ -759,8 +1256,6 @@ public class OMVSEnum {
   String home = System.getenv("HOME");
   if (home != null) {
    dbg(FN, "current user history files");
-   String myhist =
-    run("ls", "-la", home);
    // Only emit if we see a history file
    File hdir = new File(home);
    File[] hfiles = hdir.listFiles();
@@ -791,7 +1286,7 @@ public class OMVSEnum {
   // /etc/*.conf files (no -maxdepth,
   // not supported on z/OS find)
   dbg(FN, "find /etc/*.conf");
-  String etcconf = run(
+  String etcconf = runTimeout(120,
    "find", "/etc/",
    "-name", "*.conf", "-type", "f",
    "-exec", "ls", "-la", "{}", ";"
@@ -801,75 +1296,29 @@ public class OMVSEnum {
 
   // Git credentials (thorough)
   if (thorough) {
-   dbg(FN, "find .git-credentials");
-   String gitcred = runTimeout(120,
-    "find", "/",
-    "-name", ".git-credentials");
-   if (!gitcred.isEmpty())
+   dbg(FN, "find .git-credentials in home roots");
+   StringBuilder gitcred =
+    new StringBuilder();
+   String[] homeRoots = {"/u", "/home"};
+   for (String root : homeRoots) {
+    if (!new File(root).isDirectory()) continue;
+    String found = runTimeout(45,
+     "find", root,
+     "-name", ".git-credentials",
+     "-type", "f");
+    if (!found.isEmpty())
+     gitcred.append(found).append("\n");
+   }
+   if (gitcred.length() > 0)
     emit("[+]",
      "Git credential files found",
-     gitcred);
+     gitcred.toString().trim());
   }
 
-  // SUID + APF files (thorough)
-  if (thorough) {
-   dbg(FN, "find SUID + APF files");
-   String suid = runTimeout(180,
-    "find", "/",
-    "(", "-perm", "-4000",
-    "-o", "-ext", "a", ")",
-    "-type", "f",
-    "-exec", "ls", "-laE", "{}", ";"
-   );
-   if (!suid.isEmpty())
-    emit("[-]",
-     "SUID and APF-authorized files",
-     suid);
-  }
+  OMVSSecurityChecks.passiveExtendedAttributeChecks();
+  if (thorough)
+   OMVSSecurityChecks.thoroughSuidChecks();
 
-  // World-writable files (thorough)
-  if (thorough) {
-   dbg(FN, "find world-writable files");
-   String ww = runTimeout(180,
-    "find", "/",
-    "-perm", "-0002",
-    "-type", "f",
-    "-exec", "ls", "-la", "{}", ";"
-   );
-   if (!ww.isEmpty())
-    emit("[-]",
-     "World-writable files", ww);
-  }
-
-  // Keyword searches
-  if (keyword != null &&
-      !keyword.trim().isEmpty()) {
-   String[] exts = {
-    "conf", "php", "ini", "log",
-    "xml", "properties"
-   };
-   for (String ext : exts) {
-    dbg(FN,
-     "keyword search in *." + ext);
-    String kres = runTimeout(120,
-     "find", "/",
-     "-name", "*." + ext,
-     "-type", "f",
-     "-exec", "grep", "-ln",
-     keyword, "{}", ";"
-    );
-    if (!kres.isEmpty())
-     emit("[-]",
-      "Keyword '" + keyword +
-      "' in *." + ext + " files",
-      kres);
-    else
-     emit("[-]",
-      "Keyword '" + keyword +
-      "' not found in *." + ext,
-      null);
-   }
-  }
  }
 
  static void hfsPermissionBypass() {
@@ -913,11 +1362,7 @@ public class OMVSEnum {
       if (!ownerOnly) continue;
       // try to read despite perms
       try {
-       BufferedReader br =
-        new BufferedReader(
-         new FileReader(f));
-       String line = br.readLine();
-       br.close();
+       String line = readFirstLine(f);
        if (line != null) {
         emit("[+]",
          "HFS BYPASS: readable despite" +
@@ -950,11 +1395,7 @@ public class OMVSEnum {
    tf.setWritable(false, false);
    tf.setExecutable(false, false);
    try {
-    BufferedReader br =
-     new BufferedReader(
-      new FileReader(tf));
-    String line = br.readLine();
-    br.close();
+    String line = readFirstLine(tf);
     if (line != null) {
      emit("[+]",
       "Can read own 000-perm file! " +
@@ -973,7 +1414,12 @@ public class OMVSEnum {
    dbg(FN, "perm self-test error: "
     + e.getMessage());
   } finally {
-   new File(tmp).delete();
+   File tempFile = new File(tmp);
+   tempFile.setReadable(true, true);
+   tempFile.setWritable(true, true);
+   if (!tempFile.delete() &&
+       tempFile.exists())
+    dbg(FN, "could not remove " + tmp);
   }
 
   // Directory listing bypass test
@@ -1019,6 +1465,17 @@ public class OMVSEnum {
     null);
  }
 
+ static String readFirstLine(File file)
+  throws IOException {
+  BufferedReader reader =
+   new BufferedReader(new FileReader(file));
+  try {
+   return reader.readLine();
+  } finally {
+   reader.close();
+  }
+ }
+
  static void chownChecks() {
   final String FN = "chownChecks";
   section("CHOWN Privilege Checks");
@@ -1026,6 +1483,12 @@ public class OMVSEnum {
    "SUPERUSER.FILESYS.CHOWN");
 
   String myUid = run("id", "-u");
+  if (myUid == null || myUid.isEmpty()) {
+   emit("[!]",
+    "Cannot determine current UID; " +
+    "skipping chown probes", null);
+   return;
+  }
   String tmp = "/tmp/omvsenum_chown_" +
    System.currentTimeMillis() + ".tmp";
 
@@ -1127,7 +1590,12 @@ public class OMVSEnum {
    dbg(FN, "chown error: "
     + e.getMessage());
   } finally {
-   new File(tmp).delete();
+   File tempFile = new File(tmp);
+   if (tempFile.exists() &&
+       myUid != null && !myUid.isEmpty())
+    runExitCode("chown", myUid, tmp);
+   if (!tempFile.delete() && tempFile.exists())
+    dbg(FN, "could not remove " + tmp);
   }
  }
 
@@ -1166,9 +1634,9 @@ public class OMVSEnum {
   String warn =
    tso("SR ALL WARNING NOMASK");
   if (!warn.isEmpty())
-   emit("[+]",
-    "Datasets in WARNING mode " +
-    "(access not logged - soft target)",
+   emit("[-]",
+    "Visible datasets in WARNING mode " +
+    "(profile inventory, not authorization proof)",
     warn);
 
   // Dataset rules we can read
@@ -1198,7 +1666,8 @@ public class OMVSEnum {
    emit("[-]",
     "BPX facility class resources",
     bpx);
-   // Flag high-value BPX resources
+  // Visibility through SEARCH is inventory only. It does
+  // not establish that the current identity is authorized.
    String bpxUp = bpx.toUpperCase();
    String[] highBpx = {
     "BPX.SUPERUSER",
@@ -1210,8 +1679,8 @@ public class OMVSEnum {
    };
    for (String hb : highBpx) {
     if (bpxUp.contains(hb))
-     emit("[+]",
-      "High-value BPX resource: " +
+     emit("[-]",
+      "Visible high-value BPX profile: " +
       hb, null);
    }
   }
@@ -1223,9 +1692,9 @@ public class OMVSEnum {
    "SEARCH CLASS(SURROGAT)" +
    " FILTER(*.SUBMIT)");
   if (!surr.isEmpty())
-   emit("[+]",
-    "Surrogate job submission access " +
-    "(can submit jobs as other users)",
+   emit("[-]",
+    "Visible surrogate submission profiles " +
+    "(not authorization proof)",
     surr);
 
   // su without password via surrogate
@@ -1235,9 +1704,9 @@ public class OMVSEnum {
    "SEARCH CLASS(SURROGAT)" +
    " FILTER(BPX.SRV.ADMIN)");
   if (!srvadmin.isEmpty())
-   emit("[+]",
-    "BPX.SRV.ADMIN surrogate access " +
-    "(su without password for these users)",
+   emit("[-]",
+    "Visible BPX.SRV.ADMIN profiles " +
+    "(not authorization proof)",
     srvadmin);
 
   // STARTED tasks
@@ -1272,6 +1741,21 @@ public class OMVSEnum {
   }
  }
 
+ static void capabilityInfo() {
+  section("Effective SAF Capabilities");
+  OMVSSecurityChecks.capabilityChecks(extendedSaf);
+ }
+
+ static void jobsInfo() {
+  section("Scheduled / Startup Execution");
+  OMVSSecurityChecks.scheduledExecutionChecks();
+ }
+
+ static void auditInfo() {
+  section("User-visible Audit / Log Integrity");
+  OMVSSecurityChecks.auditLogIntegrityChecks();
+ }
+
  // ---- banner / usage --------------------------------
 
  static void printBanner() {
@@ -1288,7 +1772,7 @@ public class OMVSEnum {
   "  z/OS USS Local Enumeration &" +
   " Privilege Escalation",
   "  @mainframed767  |" +
-  "  Soldier of FORTRAN  |  v1.0",
+  "  Soldier of FORTRAN  |  v2.0",
   "",
   };
   for (String l : art)
@@ -1298,78 +1782,78 @@ public class OMVSEnum {
  static void printUsage() {
   System.out.println(
    "Usage: java OMVSEnum [options]");
-  System.out.println("Options:");
-  System.out.println(
-   "  -k <word>  Keyword to search for" +
-   " in config/log files");
-  System.out.println(
-   "  -e <dir>   Export directory");
-  System.out.println(
-   "  -r <file>  Write report to file" +
-   " (also prints to stdout)");
-  System.out.println(
-   "  -t         Thorough mode" +
-   " (enables slow filesystem searches)");
-  System.out.println(
-   "  -q         Quiet: show [+] and" +
-   " [!] findings only");
-  System.out.println(
-   "  --debug    Debug output to stderr" +
-   " (fn name + timestamp per step)");
-  System.out.println(
-   "  -h         Show this help");
   System.out.println();
-  System.out.println("Output modes:");
+  System.out.println("Enumeration:");
   System.out.println(
-   "  default    Verbose - all results" +
-   ", findings and non-findings");
+   "  -t, --thorough             Enable slow scans");
   System.out.println(
-   "  -q         Quiet - [+]/[!] only");
+   "  -s, --sections <list>      Run only named sections");
   System.out.println(
-   "  --debug    Adds [DBG] trace to" +
-   " stderr alongside verbose output");
+   "  -x, --skip-sections <list> Skip named sections");
+  System.out.println(
+   "  -T, --threads <count>      Worker count (default 2)");
+  System.out.println(
+   "  -A, --active-probes       Enable mutating/auth probes");
+  System.out.println(
+   "  -S, --extended-saf        Probe SURROGAT/JES candidates");
+  System.out.println();
+  System.out.println("Content search:");
+  System.out.println(
+   "  -P, --passwords            Search for password");
+  System.out.println(
+   "  -K, --credentials          Search key/password/username");
+  System.out.println(
+   "  -J, --jcl-passwords        Search password in *.jcl");
+  System.out.println(
+   "  -k, --search <regex>       Add custom regex");
+  System.out.println(
+   "  -R, --search-root <path>   Add search root");
+  System.out.println(
+   "  -L, --files-with-matches   Print matching files only");
+  System.out.println(
+   "  -C, --case-sensitive       Case-sensitive search");
+  System.out.println();
+  System.out.println("Output:");
+  System.out.println(
+   "  -q, --quiet                Findings/warnings only");
+  System.out.println(
+   "  -r, --report <file>        Also write report file");
+  System.out.println(
+   "  -d, --debug                Diagnostics on stderr");
+  System.out.println(
+   "  -h, --help                 Show this help");
+  System.out.println();
+  System.out.println("Sections:");
+  System.out.println(
+   "  system,user,environment,capability,network,services,");
+  System.out.println(
+   "  jobs,software,files,audit,hfs,chown,racf,content");
+  System.out.println();
+  System.out.println("Examples:");
+  System.out.println(
+   "  java OMVSEnum --thorough --threads 4");
+  System.out.println(
+   "  java OMVSEnum --active-probes");
+  System.out.println(
+   "  java OMVSEnum --extended-saf -s capability");
+  System.out.println(
+   "  java OMVSEnum -s content -K -R /u");
+  System.out.println(
+   "  java OMVSEnum -P -L -R /etc -R /u");
  }
 
  // ---- main ------------------------------------------
 
  public static void main(String[] args) {
   printBanner();
-
-  String reportFile = null;
-
-  for (int i = 0; i < args.length; i++) {
-   String a = args[i];
-   switch (a) {
-    case "-k":
-     if (i + 1 < args.length)
-      keyword = args[++i];
-     break;
-    case "-e":
-     if (i + 1 < args.length)
-      exportDir = args[++i];
-     break;
-    case "-r":
-     if (i + 1 < args.length)
-      reportFile = args[++i];
-     break;
-    case "-t":
-     thorough = true;
-     break;
-    case "-q":
-     quietMode = true;
-     break;
-    case "--debug":
-     debugMode = true;
-     break;
-    case "-h":
-     printUsage();
-     return;
-    default:
-     System.err.println(
-      "Unknown option: " + a);
-     printUsage();
-     System.exit(1);
-   }
+  try {
+   if (!parseArguments(args)) return;
+  } catch (IllegalArgumentException e) {
+   System.err.println("Error: " +
+    e.getMessage());
+   System.err.println(
+    "Try: java OMVSEnum --help");
+   System.exit(2);
   }
 
   if (reportFile != null) {
@@ -1391,26 +1875,380 @@ public class OMVSEnum {
    "### Verbose: " + !quietMode +
    "  |  Quiet: " + quietMode +
    "  |  Debug: " + debugMode +
-   "  |  Thorough: " + thorough);
-  if (keyword != null)
-   println("### Keyword: " + keyword);
+   "  |  Thorough: " + thorough +
+   "  |  Threads: " + threadCount);
+  println("### Execution mode: " +
+   (activeProbes ? "active probes enabled"
+    : "passive (ordinary-user safe default)"));
+  if (sectionEnabled("capability") || extendedSaf)
+   println("### SAF AUTH checks may be recorded " +
+    "by the external security manager");
+  String active = activeProbeSummary();
+  if (!active.isEmpty())
+   println("### Active probes enabled: " +
+    active);
 
-  systemInfo();
-  userInfo();
-  environmentalInfo();
-  networkingInfo();
-  servicesInfo();
-  softwareInfo();
-  interestingFiles();
-  hfsPermissionBypass();
-  chownChecks();
-  racfSearches();
+  runSelectedSections();
 
   println(
    "\n### OMVSEnum complete : " +
    DF.format(new Date()));
 
-  if (report != null)
+  if (report != null) {
+   report.flush();
    report.close();
+  }
+ }
+
+ static boolean parseArguments(String[] args) {
+  for (int i = 0; i < args.length; i++) {
+   String arg = args[i];
+   if (arg.equals("-h") ||
+       arg.equals("--help")) {
+    printUsage();
+    return false;
+   } else if (arg.equals("-t") ||
+       arg.equals("--thorough")) {
+    thorough = true;
+   } else if (arg.equals("-q") ||
+       arg.equals("--quiet")) {
+    quietMode = true;
+   } else if (arg.equals("-d") ||
+       arg.equals("--debug")) {
+    debugMode = true;
+   } else if (arg.equals("-A") ||
+       arg.equals("--active-probes")) {
+    activeProbes = true;
+   } else if (arg.equals("-S") ||
+       arg.equals("--extended-saf")) {
+    extendedSaf = true;
+   } else if (arg.equals("-r") ||
+       arg.equals("--report")) {
+    reportFile = requireValue(args, ++i, arg);
+   } else if (arg.equals("-T") ||
+       arg.equals("--threads")) {
+    String value =
+     requireValue(args, ++i, arg);
+    try {
+     threadCount = Integer.parseInt(value);
+    } catch (NumberFormatException e) {
+     throw new IllegalArgumentException(
+      arg + " requires an integer");
+    }
+    if (threadCount < 1 || threadCount > 32)
+     throw new IllegalArgumentException(
+      "thread count must be between 1 and 32");
+   } else if (arg.equals("-s") ||
+       arg.equals("--sections")) {
+    if (onlySections != null)
+     throw new IllegalArgumentException(
+      arg + " may only be specified once");
+    onlySections = parseSections(
+     requireValue(args, ++i, arg));
+   } else if (arg.equals("-x") ||
+       arg.equals("--skip-sections")) {
+    skippedSections.addAll(parseSections(
+     requireValue(args, ++i, arg)));
+   } else if (arg.equals("-P") ||
+       arg.equals("--passwords")) {
+    addSearchRule("password", false);
+   } else if (arg.equals("-K") ||
+       arg.equals("--credentials")) {
+    addSearchRule(
+     "(key|password|username)", false);
+   } else if (arg.equals("-J") ||
+       arg.equals("--jcl-passwords")) {
+    addSearchRule("password", true);
+   } else if (arg.equals("-k") ||
+       arg.equals("--search")) {
+    addSearchRule(
+     requireValue(args, ++i, arg), false);
+   } else if (arg.equals("-R") ||
+       arg.equals("--search-root")) {
+    searchRoots.add(Paths.get(
+     requireValue(args, ++i, arg)));
+   } else if (arg.equals("-L") ||
+       arg.equals("--files-with-matches")) {
+    filesWithMatches = true;
+   } else if (arg.equals("-C") ||
+       arg.equals("--case-sensitive")) {
+    caseSensitive = true;
+   } else {
+    throw new IllegalArgumentException(
+     "unknown option: " + arg);
+   }
+  }
+
+  if (onlySections != null &&
+      !skippedSections.isEmpty())
+   throw new IllegalArgumentException(
+    "--sections and --skip-sections cannot be combined");
+  if (!activeProbes && onlySections != null &&
+      (onlySections.contains("hfs") ||
+       onlySections.contains("chown")))
+   throw new IllegalArgumentException(
+    "hfs and chown sections require --active-probes");
+  if (!searchRoots.isEmpty() &&
+      !contentRequested)
+   throw new IllegalArgumentException(
+    "--search-root requires a content search option");
+  if (contentRequested &&
+      skippedSections.contains("content"))
+   throw new IllegalArgumentException(
+    "content search requested but content is skipped");
+  if (contentRequested &&
+      onlySections != null)
+   onlySections.add("content");
+  if (extendedSaf &&
+      skippedSections.contains("capability"))
+   throw new IllegalArgumentException(
+    "--extended-saf requested but capability is skipped");
+  if (extendedSaf && onlySections != null)
+   onlySections.add("capability");
+  if (!contentRequested &&
+      onlySections != null &&
+      onlySections.contains("content"))
+   throw new IllegalArgumentException(
+    "content section requires a search option");
+
+  int flags = caseSensitive ? 0
+   : Pattern.CASE_INSENSITIVE;
+  for (SearchRule rule : searchRules) {
+   try {
+    Pattern.compile(rule.expression, flags);
+   } catch (PatternSyntaxException e) {
+    throw new IllegalArgumentException(
+     "invalid search regex '" +
+     rule.expression + "': " +
+     e.getDescription());
+   }
+  }
+  return true;
+ }
+
+ static String requireValue(
+  String[] args, int index, String option
+ ) {
+  if (index >= args.length)
+   throw new IllegalArgumentException(
+    option + " requires a value");
+  return args[index];
+ }
+
+ static Set<String> parseSections(String value) {
+  Set<String> result =
+   new LinkedHashSet<String>();
+  for (String raw : value.split(",")) {
+   String name =
+    raw.trim().toLowerCase();
+   if (!SECTION_ORDER.contains(name))
+    throw new IllegalArgumentException(
+     "unknown section: " + raw);
+   result.add(name);
+  }
+  if (result.isEmpty())
+   throw new IllegalArgumentException(
+    "section list cannot be empty");
+  return result;
+ }
+
+ static void addSearchRule(
+  String expression, boolean jclOnly
+ ) {
+  contentRequested = true;
+  searchRules.add(
+   new SearchRule(expression, jclOnly));
+ }
+
+ static boolean sectionEnabled(String name) {
+  if (skippedSections.contains(name))
+   return false;
+  if (!activeProbes &&
+      (name.equals("hfs") ||
+       name.equals("chown")))
+   return false;
+  return onlySections == null ||
+   onlySections.contains(name);
+ }
+
+ static String activeProbeSummary() {
+  if (!activeProbes) return "";
+  List<String> active =
+   new ArrayList<String>();
+  if (sectionEnabled("user"))
+   active.add("user(su)");
+  if (sectionEnabled("files"))
+   active.add("files(APF)");
+  if (sectionEnabled("hfs"))
+   active.add("hfs");
+  if (sectionEnabled("chown"))
+   active.add("chown");
+  StringBuilder text = new StringBuilder();
+  for (String name : active) {
+   if (text.length() > 0) text.append(", ");
+   text.append(name);
+  }
+  return text.toString();
+ }
+
+ static LinkedHashMap<String, Runnable>
+  sectionActions() {
+  LinkedHashMap<String, Runnable> actions =
+   new LinkedHashMap<String, Runnable>();
+  actions.put("system", new Runnable() {
+   public void run() { systemInfo(); }
+  });
+  actions.put("user", new Runnable() {
+   public void run() { userInfo(); }
+  });
+  actions.put("environment", new Runnable() {
+   public void run() { environmentalInfo(); }
+  });
+  actions.put("capability", new Runnable() {
+   public void run() { capabilityInfo(); }
+  });
+  actions.put("network", new Runnable() {
+   public void run() { networkingInfo(); }
+  });
+  actions.put("services", new Runnable() {
+   public void run() { servicesInfo(); }
+  });
+  actions.put("jobs", new Runnable() {
+   public void run() { jobsInfo(); }
+  });
+  actions.put("software", new Runnable() {
+   public void run() { softwareInfo(); }
+  });
+  actions.put("files", new Runnable() {
+   public void run() { interestingFiles(); }
+  });
+  actions.put("audit", new Runnable() {
+   public void run() { auditInfo(); }
+  });
+  actions.put("hfs", new Runnable() {
+   public void run() { hfsPermissionBypass(); }
+  });
+  actions.put("chown", new Runnable() {
+   public void run() { chownChecks(); }
+  });
+  actions.put("racf", new Runnable() {
+   public void run() { racfSearches(); }
+  });
+  actions.put("content", new Runnable() {
+   public void run() { contentSearch(); }
+  });
+  return actions;
+ }
+
+ static String captureSection(Runnable action) {
+  StringBuilder buffer = new StringBuilder();
+  SECTION_OUTPUT.set(buffer);
+  try {
+   action.run();
+  } catch (Throwable error) {
+   emit("[!]", "Section failed",
+    error.getClass().getSimpleName() +
+    ": " + error.getMessage());
+   dbg("section", "failure: " + error);
+  } finally {
+   SECTION_OUTPUT.remove();
+  }
+  return buffer.toString();
+ }
+
+ static boolean serialSection(String name) {
+  if (name.equals("content")) return true;
+  return activeProbes &&
+   ACTIVE_SECTIONS.contains(name);
+ }
+
+ static void runSelectedSections() {
+  LinkedHashMap<String, Runnable> actions =
+   sectionActions();
+  Map<String, String> results =
+   new HashMap<String, String>();
+  Map<String, Future<String>> futures =
+   new LinkedHashMap<String, Future<String>>();
+  ExecutorService executor = null;
+
+  try {
+   executor = Executors.newFixedThreadPool(
+    threadCount);
+   for (final String name : SECTION_ORDER) {
+    if (!sectionEnabled(name) ||
+        serialSection(name))
+     continue;
+    final Runnable action = actions.get(name);
+    try {
+     futures.put(name,
+      executor.submit(new Callable<String>() {
+       public String call() {
+        return captureSection(action);
+       }
+      }));
+    } catch (RuntimeException e) {
+     dbg("threads",
+      "running " + name + " serially: " +
+      e.getMessage());
+     results.put(name,
+      captureSection(action));
+    }
+   }
+
+   for (Map.Entry<String, Future<String>>
+        entry : futures.entrySet()) {
+    try {
+     results.put(entry.getKey(),
+      entry.getValue().get());
+    } catch (Exception e) {
+     dbg("threads", "worker failed: " +
+      e.getMessage());
+     results.put(entry.getKey(),
+      captureSection(
+       actions.get(entry.getKey())));
+    }
+   }
+  } catch (Throwable error) {
+   dbg("threads",
+    "falling back to serial: " +
+    error.getMessage());
+   for (String name : SECTION_ORDER) {
+    if (sectionEnabled(name) &&
+        !serialSection(name) &&
+        !results.containsKey(name))
+     results.put(name,
+      captureSection(actions.get(name)));
+   }
+  } finally {
+   if (executor != null)
+    executor.shutdownNow();
+  }
+
+  if (sectionEnabled("content"))
+   results.put("content",
+    captureSection(actions.get("content")));
+
+  for (String name : SECTION_ORDER) {
+   if (!sectionEnabled(name) ||
+       !serialSection(name) ||
+       name.equals("content"))
+    continue;
+   results.put(name,
+    captureSection(actions.get(name)));
+  }
+
+  for (String name : SECTION_ORDER) {
+   String text = results.get(name);
+   if (text != null && !text.isEmpty())
+    writeCaptured(text);
+  }
+ }
+
+ static synchronized void writeCaptured(
+  String text
+ ) {
+  System.out.print(text);
+  if (report != null)
+   report.print(text);
  }
 }

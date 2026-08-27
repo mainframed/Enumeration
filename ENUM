@@ -1,30 +1,8 @@
 /* REXX */
 
-/*
-$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-$$$$$$$$$$$7'`         `'!$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-$$$$$$$7'                  `$$$$$$$$$       $     Y$$   $   $$$   $    YP    $$
-$$$$7'              $$$:.   :$$$$$$$$   $$$$$   L  ?$   $   $$$   $   s  s   $$
-$$$'                 '7$'    `$$$$$$$      $$   $L  ?   $   $$$   $   $$$$   $$
-$$          .4$$$a           :$$$$$$$   $$$$$   $$L     $   Y$P   $   $$$$   $$
-$        .4$$$$$$$    $$    .$$$$$$$$       $   $$$L    $L       J$   $$$$   $$
-:       :$$$$$$$$'   $$$$     ~'$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-!        '!:$$$7'                 '$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-                                   `+$$$$$$$$$$$P     Y$$$$$P       Y$$$$$$$$$$
-.                                    l$$$$$$$$$$  Y$P  $$$$$   $$$   $$$$$$$$$$
-::                                .4$$$$$$$$$$$$$$P  S$$$$$$   $$$   $$$$$$$$$$
-$$a.             .$             .4$$$$$$$$$$$$$$P  l$$$$$$$$   Y$P   $$$$$$$$$$
-$$$$b.          $$$$b.       .4$$$$$$$$$$$$$$$$$       $$  $L       J$$$$$$$$$$
-$$$$$$$$A.   .4$$$$$$$A.   .4$$$$$$$$$$$$$$$$$$$$$$$$$$$$ss$$$$$$$$$$$$$$$$$$$$
-$$$$$$$$$$$$$$$$$$$$$$$$$.$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-$$Y'                                                                       '?$$
-$$                    z/OS Enumeration Pentesting Tool                       $$
-$$                                                                           $$
-$$   Arguments: HELP, ALL, APF, CAT, JOB, PATH, SEC, SVC, TSTA, TSOT,        $$
-$$              USSU, VERS, WHO                                              $$
-$$b.                                                                       .d$$
-$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$SoF!
-*/
+/* z/OS Enumeration Pentesting Tool                            */
+/* Arguments: ALL, APF, AUTH, CAT, JOB, LIBS, LNK, LPA, PATH,  */
+/* SEC, SMF, SVC, TSTA, TSOT, USSU, VERS, WHO, HELP            */
 
 /*------------------------------------------------------------------*\
 |* z/OS System Enumeration Tool                                     *|
@@ -37,8 +15,12 @@ $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$SoF!
 |*   APF  - APF authorized datasets                                 *|
 |*   CAT  - Display master catalog                                  *|
 |*   JOB  - Display executing job name                              *|
+|*   LIBS - Display PARMLIB and current library DD datasets         *|
+|*   LNK  - Display the current LINKLIST set                         *|
+|*   LPA  - Display LPA library datasets                            *|
 |*   PATH - Display dataset concatenations                          *|
 |*   SEC  - Security manager information                            *|
+|*   SMF  - Display SMF recording datasets                          *|
 |*   SVC  - Display SVC information                                 *|
 |*   TSTA - Display TESTAUTH authorization                          *|
 |*   TSOT - Display TSO AUTHCMD/AUTHPGM tables                      *|
@@ -74,13 +56,20 @@ findingtemplate.0 = 0
 verificationcaption.0 = 0
 verificationsteps.0 = 0
 
+/* Optional TSO load module used for ESM-agnostic SAF checks.       */
+/* Set to '' to disable dataset and resource access checks.         */
+accessProgram = 'PHIL.LOAD(ACCESS)'
+accessProgramState = 'UNKNOWN'
+
 /* Global variables for AddToArray */
-globalVars = 'tsoUsers. tasks. tasksUsers. omvs. omvsUsers.',
+globalVars = 'tsoUsers. tsoUsersOwners. tasks. tasksUsers.',
+  'omvs. omvsUsers.',
   'jobs. jobsUsers. system.'
 
 /* Global variables for findings */
 findingsVars = 'assessMode findings. findingtemplate.',
-  'verificationcaption. verificationsteps. ipAddress smfid VSTEP_DELIM'
+  'verificationcaption. verificationsteps. ipAddress smfid VSTEP_DELIM',
+  'accessProgram accessProgramState'
 
 /* Delimiter for verification steps */
 VSTEP_DELIM = '|~~|'
@@ -121,13 +110,15 @@ ELSE
 /* Main dispatch logic */
 SELECT
   WHEN type == 'APF'  THEN CALL EnumApf
+  WHEN type == 'AUTH' THEN CALL EnumAuth restArgs
   WHEN type == 'CAT'  THEN CALL EnumCatalog
   WHEN type == 'JOB'  THEN CALL EnumJobname
-  WHEN type == 'PATH' THEN DO
-    IF space /== 'OMVS' THEN CALL EnumPath
-    ELSE SAY 'DDNAME not supported in OMVS'
-  END
+  WHEN type == 'LIBS' THEN CALL EnumLibraries
+  WHEN type == 'LNK'  THEN CALL EnumLinklist
+  WHEN type == 'LPA'  THEN CALL EnumLpa
+  WHEN type == 'PATH' THEN CALL EnumPath
   WHEN type == 'SEC'  THEN CALL EnumSecurity
+  WHEN type == 'SMF'  THEN CALL EnumSmf
   WHEN type == 'SVC'  THEN CALL EnumSvc
   WHEN type == 'TSTA' THEN CALL EnumTestauth
   WHEN type == 'TSOT' THEN CALL EnumTsoTables
@@ -141,6 +132,7 @@ SELECT
     SAY ''
     CALL EnumVersion
     CALL EnumSecurity
+    CALL EnumAuth
     CALL EnumJobname
     CALL EnumUsers
     CALL EnumApf
@@ -148,9 +140,12 @@ SELECT
     CALL EnumTestauth
     CALL EnumUssUsers
     CALL EnumTsoTables
-    IF space /== 'OMVS' THEN DO
-      CALL EnumPath 1
-    END
+    CALL EnumCatalog
+    CALL EnumLinklist
+    CALL EnumLpa
+    CALL EnumSmf
+    IF space == 'OMVS' THEN CALL EnumLibraries
+    ELSE CALL EnumLibraries 1
   END
 
   WHEN type == 'ASSESS' THEN DO
@@ -162,6 +157,7 @@ SELECT
     SAY ''
     CALL EnumVersion
     CALL EnumSecurity
+    CALL EnumAuth
     CALL EnumJobname
     CALL EnumUsers
     CALL EnumApf
@@ -169,9 +165,12 @@ SELECT
     CALL EnumTestauth
     CALL EnumUssUsers
     CALL EnumTsoTables
-    IF space /== 'OMVS' THEN DO
-      CALL EnumPath 1
-    END
+    CALL EnumCatalog
+    CALL EnumLinklist
+    CALL EnumLpa
+    CALL EnumSmf
+    IF space == 'OMVS' THEN CALL EnumLibraries
+    ELSE CALL EnumLibraries 1
     /* Output JSON assessment results at the end */
     CALL OutputAssessmentJSON
   END
@@ -234,9 +233,10 @@ SAY "$$                    z/OS Enumeration "||,
 "Pentesting Tool                       $$"
 SAY "$$                                     "||,
 "                                      $$"
-SAY "$$   Arguments: HELP, ALL, APF, CAT, JO"||,
-"B, PATH, SEC, SVC, TSTA, TSOT,        $$"
-SAY "$$              USSU, VERS, WHO        "||,
+SAY "$$   Arguments: ALL, APF, AUTH, CAT, JOB"||,
+", LIBS, LNK, LPA, PATH, SEC,          $$"
+SAY "$$              SMF, SVC, TSTA, TSOT, U"||,
+"SSU, VERS, WHO, HELP                  $$"
 "                                      $$"
 SAY "$$b.                                   "||,
 "                                    .d$$"
@@ -253,10 +253,15 @@ ShowHelp: PROCEDURE EXPOSE prgname space
   SAY "  'HELP' - Display help information"
   SAY "  'ALL'  - Display all information"
   SAY "  'APF'  - Display APF authorized datasets"
+  SAY "  'AUTH' - Check curated SAF resources; add ALL for denials"
   SAY "  'CAT'  - Display master catalog"
   SAY "  'JOB'  - Display executing job name"
+  SAY "  'LIBS' - Display PARMLIB and current library DDs"
+  SAY "  'LNK'  - Display the current LINKLIST set"
+  SAY "  'LPA'  - Display LPA library datasets"
   SAY "  'PATH' - Display dataset concatenations"
   SAY "  'SEC'  - Display security manager info"
+  SAY "  'SMF'  - Display SMF recording datasets"
   SAY "  'SVC'  - Display all SVCs"
   SAY "  'TSTA' - Display TESTAUTH authorization"
   SAY "  'TSOT' - Display TSO AUTHCMD/AUTHPGM tables"
@@ -273,15 +278,50 @@ RETURN
 /*------------------------------------------------------------------*/
 /* Enumerate executing job name                                     */
 /*------------------------------------------------------------------*/
-EnumJobname: PROCEDURE
+EnumJobname: PROCEDURE EXPOSE prgname space
 
-  CALL PrintSectionBanner 'Job Information'
+  CALL PrintSectionBanner 'Execution Context'
   cvt = GetPtr(16)
   tcbp = GetPtr(cvt)
   tcb = GetPtr(tcbp+4)
   tiot = GetPtr(tcb+12)
   jobname = STRIP(GetStorage(tiot, 8))
-  SAY 'Executing Job Name:' jobname
+  stepname = STRIP(GetStorage(tiot+8, 8))
+  procstep = STRIP(GetStorage(tiot+16, 8))
+  ascb = GetPtr(X2D('224'))
+  asid = 0
+  owner = ''
+  IF ascb \== 0 THEN DO
+    asid = C2D(GetStorage(ascb+36, 2))
+    owner = STRIP(GetUserid(ascb))
+  END
+  IF owner == '' THEN owner = USERID()
+  terminal = 'N/A'
+  account = 'N/A'
+  IF space \== 'OMVS' & ascb \== 0 THEN DO
+    terminal = STRIP(SYSVAR('SYSTERMID'))
+    asxb = GetPtr(ascb+108)
+    IF asxb \== 0 THEN DO
+      lwa = GetPtr(asxb+20)
+      IF lwa \== 0 THEN DO
+        accountData = GetStorage(lwa+400, 40)
+        nullAt = POS('00'x, accountData)
+        IF nullAt > 0 THEN accountData = LEFT(accountData, nullAt-1)
+        account = STRIP(accountData)
+      END
+    END
+  END
+  IF terminal == '' THEN terminal = 'N/A'
+  IF account == '' THEN account = 'N/A'
+
+  SAY 'Executing from:' prgname
+  SAY 'User ID:' owner
+  SAY 'Account:' account
+  SAY 'Terminal:' terminal
+  SAY 'ASID:' asid
+  SAY 'Job/session:' jobname
+  SAY 'Step:' stepname
+  SAY 'Procedure step:' procstep
 RETURN
 
 /*------------------------------------------------------------------*/
@@ -296,6 +336,7 @@ EnumUsers: PROCEDURE EXPOSE (globalvars)
 
   /* Initialize arrays */
   tsoUsers.0 = 0
+  tsoUsersOwners.0 = 0
   tasks.0 = 0
   tasksUsers.0 = 0
   omvs.0 = 0
@@ -330,7 +371,9 @@ EnumUsers: PROCEDURE EXPOSE (globalvars)
 
       /* TSO user */
       IF ascbjbns <> 0 & chtrkid == '01'x THEN DO
+        usid = GetUserid(ascb)
         CALL AddToArray 'tsoUsers', GetStorage(ascbjbns, 8)
+        CALL AddToArray 'tsoUsersOwners', usid
       END
 
       /* System */
@@ -363,7 +406,7 @@ EnumUsers: PROCEDURE EXPOSE (globalvars)
   SAY ''
   SAY '**** TSO Users - Owner ****'
   DO i = 1 TO tsoUsers.0
-    SAY tsoUsers.i '-' tsoUsers.i
+    SAY tsoUsers.i '-' tsoUsersOwners.i
   END
 
   SAY ''
@@ -378,6 +421,146 @@ EnumUsers: PROCEDURE EXPOSE (globalvars)
     SAY jobs.i '-' jobsUsers.i
   END
 RETURN
+
+/*------------------------------------------------------------------*/
+/* Check curated SAF resource authorizations                        */
+/*------------------------------------------------------------------*/
+EnumAuth: PROCEDURE EXPOSE (findingsVars)
+  PARSE UPPER ARG options
+  CALL PrintSectionBanner 'SAF Resource Authorization'
+  PARSE SOURCE . . . . . . . authEnvironment .
+  IF authEnvironment == 'OMVS' THEN DO
+    SAY 'The configured ACCESS load module requires a TSO environment.'
+    RETURN
+  END
+
+  showAll = 0
+  target = ''
+  DO i = 1 TO WORDS(options)
+    option = WORD(options, i)
+    IF option == 'ALL' THEN showAll = 1
+    ELSE target = option
+  END
+  IF target == '' THEN target = USERID()
+
+  SAY 'Uses RACROUTE STATUS=ACCESS; no command or write is performed.'
+  SAY 'Target user for SURROGAT/JESJOBS checks:' target
+  SAY ''
+  SAY 'CLASS    | ACCESS  | RESULT      | RESOURCE'
+  SAY '---------|---------|-------------|' || COPIES('-', 34)
+
+  count = 0
+  CALL AddAuthSpec 'FACILITY', 'READ', 'BPX.SUPERUSER'
+  CALL AddAuthSpec 'FACILITY', 'READ', 'BPX.DAEMON'
+  CALL AddAuthSpec 'FACILITY', 'READ', 'BPX.SERVER'
+  CALL AddAuthSpec 'FACILITY', 'READ', 'BPX.FILEATTR.APF'
+  CALL AddAuthSpec 'FACILITY', 'READ', 'BPX.FILEATTR.PROGCTL'
+  CALL AddAuthSpec 'FACILITY', 'READ', 'BPX.FILEATTR.SHARELIB'
+  CALL AddAuthSpec 'UNIXPRIV', 'READ', 'SUPERUSER.FILESYS.CHOWN'
+  CALL AddAuthSpec 'UNIXPRIV', 'READ', 'SUPERUSER.FILESYS.DIRSRCH'
+  CALL AddAuthSpec 'UNIXPRIV', 'READ', 'SUPERUSER.FILESYS.MOUNT'
+  CALL AddAuthSpec 'UNIXPRIV', 'UPDATE', 'SUPERUSER.FILESYS.MOUNT'
+  CALL AddAuthSpec 'UNIXPRIV', 'READ', 'SUPERUSER.PROCESS.KILL'
+  CALL AddAuthSpec 'UNIXPRIV', 'READ', 'SUPERUSER.PROCESS.GETPSENT'
+  CALL AddAuthSpec 'UNIXPRIV', 'READ', 'SUPERUSER.SETPRIORITY'
+  CALL AddAuthSpec 'UNIXPRIV', 'READ', 'SHARED.IDS'
+  CALL AddAuthSpec 'TSOAUTH', 'READ', 'CONSOLE'
+  CALL AddAuthSpec 'TSOAUTH', 'READ', 'CONOPER'
+  CALL AddAuthSpec 'TSOAUTH', 'READ', 'OPER'
+  CALL AddAuthSpec 'TSOAUTH', 'READ', 'MOUNT'
+  CALL AddAuthSpec 'TSOAUTH', 'READ', 'JCL'
+  CALL AddAuthSpec 'TSOAUTH', 'READ', 'ACCT'
+  CALL AddAuthSpec 'TSOAUTH', 'READ', 'TESTAUTH'
+  CALL AddAuthSpec 'TSOAUTH', 'UPDATE', 'PARMLIB'
+  CALL AddAuthSpec 'OPERCMDS', 'READ', 'MVS.DISPLAY.JOB'
+  CALL AddAuthSpec 'OPERCMDS', 'READ', 'MVS.DISPLAY.PROG'
+  CALL AddAuthSpec 'OPERCMDS', 'READ', 'MVS.DISPLAY.U'
+  CALL AddAuthSpec 'OPERCMDS', 'READ', 'MVS.DISPLAY.IPLINFO'
+  CALL AddAuthSpec 'OPERCMDS', 'READ', 'MVS.MCSOPER.'USERID()
+  CALL AddAuthSpec 'OPERCMDS', 'ALTER', 'MVS.SETPROG.LNKLST'
+  CALL AddAuthSpec 'OPERCMDS', 'ALTER', 'MVS.SETPROG.APF'
+  CALL AddAuthSpec 'OPERCMDS', 'ALTER', 'MVS.START.STC'
+  CALL AddAuthSpec 'SURROGAT', 'READ', target'.SUBMIT'
+  CALL AddAuthSpec 'SURROGAT', 'READ', 'BPX.SRV.'target
+
+  node = SYSVAR('SYSNODE')
+  IF node == '' THEN node = MVSVAR('SYSNAME')
+  resource = 'SUBMIT.'node'.ENUMTEST.'target
+  CALL AddAuthSpec 'JESJOBS', 'READ', resource
+  resource = 'CANCEL.'node'.'target'.ENUMTEST'
+  CALL AddAuthSpec 'JESJOBS', 'ALTER', resource
+
+  shown = 0
+  grantedResults = ''
+  DO i = 1 TO count
+    result = CheckResourceAccess(authClass.i, authAccess.i,
+      authResource.i)
+    IF result == 'GRANTED' THEN
+      grantedResults = grantedResults || authClass.i authAccess.i,
+        authResource.i || '/n'
+    IF showAll | result == 'GRANTED' THEN DO
+      SAY LEFT(authClass.i, 8) '|' LEFT(authAccess.i, 7) '|',
+        LEFT(result, 11) '|' authResource.i
+      shown = shown + 1
+    END
+  END
+  IF shown == 0 THEN SAY 'No granted authorizations were found.'
+  IF assessMode == 1 & grantedResults \== '' THEN DO
+    CALL AddFinding 'SAF-SENSITIVE-AUTHORIZATIONS'
+    CALL AddVerificationCaption 'Run ENUM in ASSESS mode and observe',
+      'that the testing account has these sensitive SAF authorizations:'
+    CALL AddVerificationContent grantedResults
+  END
+RETURN
+
+/* Add one resource to the local EnumAuth inventory. */
+AddAuthSpec:
+  PARSE ARG authClassValue, authAccessValue, authResourceValue
+  count = count + 1
+  authClass.count = authClassValue
+  authAccess.count = authAccessValue
+  authResource.count = authResourceValue
+RETURN
+
+/* Invoke the generic mode of the configured SAF helper. */
+CheckResourceAccess: PROCEDURE EXPOSE accessProgram accessProgramState
+  PARSE UPPER ARG resourceClass, requestedAccess, resource
+
+  IF STRIP(accessProgram) == '' THEN RETURN 'UNAVAILABLE'
+  IF accessProgramState == 'UNAVAILABLE' THEN RETURN 'UNAVAILABLE'
+  program = STRIP(accessProgram, 'B', "'")
+  IF accessProgramState == 'UNKNOWN' THEN DO
+    programStatus = SYSDSN("'"program"'")
+    IF programStatus \== 'OK' THEN DO
+      accessProgramState = 'UNAVAILABLE'
+      RETURN 'UNAVAILABLE'
+    END
+    accessProgramState = 'READY'
+  END
+
+  parm = 'RESOURCE' resourceClass requestedAccess resource
+  ADDRESS 'TSO'
+  trapRc = OUTTRAP('accessOut.')
+  "CALL '"program"' '"parm"'"
+  callRc = RC
+  trapRc = OUTTRAP('OFF')
+
+  SELECT
+    WHEN requestedAccess == 'READ' THEN required = 4
+    WHEN requestedAccess == 'UPDATE' THEN required = 8
+    WHEN requestedAccess == 'CONTROL' THEN required = 12
+    WHEN requestedAccess == 'ALTER' THEN required = 16
+    OTHERWISE RETURN 'ERROR'
+  END
+  IF callRc == 20 THEN RETURN 'NO DECISION'
+  IF callRc == 64 | callRc < 0 THEN RETURN 'ERROR'
+  IF callRc == 0 | callRc == 4 | callRc == 8 |,
+     callRc == 12 | callRc == 16 THEN DO
+    IF callRc >= required THEN RETURN 'GRANTED'
+    RETURN 'DENIED'
+  END
+
+RETURN 'ERROR'
 
 /*------------------------------------------------------------------*/
 /* Enumerate security manager (RACF/ACF2/Top Secret)               */
@@ -418,12 +601,12 @@ EnumRacf: PROCEDURE EXPOSE (findingsVars) warningDatasets,
   SAY 'Datasets:'
   SAY ''
 
-  /* Always show access since we're on RACF */
-  SAY 'UACC | WARN | ACCESS | DATASET'
-  SAY '-----|------|--------|' || COPIES('-', 44)
+  excessiveAccessDatasets = ''
+  SAY 'ACCESS      | DATASET'
+  SAY '------------|' || COPIES('-', 44)
 
   IF dsdtNum == 1 THEN DO
-    /* Check access for primary and backup - READ access is a finding */
+    /* Check primary and backup; READ access is a finding */
     /* Pass empty strings for volume/missing to get simple format */
     outputprim = CheckAndReportDatasetAccess(dsdtPrim, '', '', 1)
     SAY outputprim
@@ -436,7 +619,7 @@ EnumRacf: PROCEDURE EXPOSE (findingsVars) warningDatasets,
       prim = STRIP(GetStorage(rcvtDsdt+177+offset, 44), 'T')
       back = STRIP(GetStorage(rcvtDsdt+353+offset, 44), 'T')
       offset = offset + 352
-      /* Check access for primary and backup - READ access is a finding */
+      /* Check primary and backup; READ access is a finding */
       /* Pass empty strings for volume/missing to get simple format */
       outputprim = CheckAndReportDatasetAccess(prim, '', '', 1)
       SAY outputprim
@@ -445,50 +628,12 @@ EnumRacf: PROCEDURE EXPOSE (findingsVars) warningDatasets,
     END
   END
 
-  /* Check if we need to add findings for RACF dataset security */
-  /* Parse all fields from the output: UACC | WARN | ACCESS | DATASET */
-  PARSE VAR outputprim primuacc '|' primwarn '|' primaccess '|' .
-  PARSE VAR outputback backuacc '|' backwarn '|' backaccess '|' .
-  primuacc = STRIP(primuacc)
-  primwarn = STRIP(primwarn)
-  primaccess = STRIP(primaccess)
-  backuacc = STRIP(backuacc)
-  backwarn = STRIP(backwarn)
-  backaccess = STRIP(backaccess)
-
-  IF assessMode == 1 THEN DO
-    /* Check for user access to RACF datasets */
-    IF primaccess \== 'NONE' | backaccess \== 'NONE' THEN DO
-      CALL AddFinding 'RACF-DATASET-ACCESS'
-      CALL AddVerificationCaption 'Run the REXX script ENUM with the',
-        'SEC argument and observe that the testing account has READ or',
-        'greater access to the RACF datasets.'
-      CALL AddVerificationContent 'UACC | WARN | ACCESS | DATASET'||,
-        ' -----|------|--------|---------------------------------'||,
-        ' '||outputprim||' '||outputback
-    END
-
-    /* Check for excessive UACC on RACF datasets */
-    IF primuacc \== 'NONE' | backuacc \== 'NONE' THEN DO
-      CALL AddFinding 'RACF-DATASET-EXCESSIVE-UACC'
-      CALL AddVerificationCaption 'Run the REXX script ENUM with the',
-        'SEC argument and observe that the RACF datasets have a UACC',
-        'of READ or greater.'
-      CALL AddVerificationContent 'UACC | WARN | ACCESS | DATASET'||,
-        ' -----|------|--------|---------------------------------'||,
-        ' '||outputprim||' '||outputback
-    END
-
-    /* Check for WARNING mode on RACF datasets */
-    IF primwarn == 'YES' | backwarn == 'YES' THEN DO
-      CALL AddFinding 'RACF-DATASET-WARNING-MODE'
-      CALL AddVerificationCaption 'Run the REXX script ENUM with the',
-        'SEC argument and observe that the RACF datasets are configured',
-        'with WARNING mode enabled.'
-      CALL AddVerificationContent 'UACC | WARN | ACCESS | DATASET'||,
-        ' -----|------|--------|---------------------------------'||,
-        ' '||outputprim||' '||outputback
-    END
+  IF assessMode == 1 & excessiveAccessDatasets \== '' THEN DO
+    CALL AddFinding 'RACF-DATASET-ACCESS'
+    CALL AddVerificationCaption 'Run ENUM with SEC and observe that',
+      'the testing account has READ or greater effective access to',
+      'the RACF database datasets.'
+    CALL AddVerificationContent excessiveAccessDatasets
   END
 
   SAY ''
@@ -504,10 +649,16 @@ EnumTopSecret: PROCEDURE EXPOSE (findingsVars) warningDatasets,
 
   rcvtDsn = STRIP(GetStorage(cvtrac+56, 44))
   SAY 'Product: Top Secret'
-  SAY 'Dataset:' rcvtDsn
-  SAY ''
-  SAY 'Note: Access checking for Top Secret datasets requires'
-  SAY '      Top Secret-specific commands (not yet implemented)'
+  SAY 'ACCESS      | DATASET'
+  SAY '------------|' || COPIES('-', 44)
+  access = CheckDatasetAccess(rcvtDsn, '')
+  SAY LEFT(access, 11) '|' rcvtDsn
+  IF assessMode == 1 & AccessAtLeastRead(access) THEN DO
+    CALL AddFinding 'TSS-DATABASE-ACCESS'
+    CALL AddVerificationCaption 'Run ENUM with SEC and observe that',
+      'the testing account can access the Top Secret database.'
+    CALL AddVerificationContent access rcvtDsn
+  END
 RETURN
 
 /*------------------------------------------------------------------*/
@@ -535,17 +686,26 @@ EnumAcf2: PROCEDURE EXPOSE (findingsVars) warningDatasets,
       SAY 'Product: ACF2'
       SAY 'Version:' accpids
       SAY 'Dataset(s):'
+      SAY 'TYPE     | ACCESS      | DATASET'
+      SAY '---------|-------------|' || COPIES('-', 44)
+      accessible = ''
 
       DO i = 1 TO acf2Dnum
         adsOff = acf2Dsns + 24 + ((i-1)*64)
-        acf2Type = GetStorage(adsOff, 8)
-        acf2Dsn = GetStorage(adsOff+16, 44)
-        SAY ' ' acf2Type '-' acf2Dsn
+        acf2Type = STRIP(GetStorage(adsOff, 8))
+        acf2Dsn = STRIP(GetStorage(adsOff+16, 44))
+        access = CheckDatasetAccess(acf2Dsn, '')
+        SAY LEFT(acf2Type, 8) '|' LEFT(access, 11) '|' acf2Dsn
+        IF AccessAtLeastRead(access) THEN
+          accessible = accessible access acf2Dsn
       END
 
-      SAY ''
-      SAY 'Note: Access checking for ACF2 datasets requires'
-      SAY '      ACF2-specific commands (not yet implemented)'
+      IF assessMode == 1 & accessible \== '' THEN DO
+        CALL AddFinding 'ACF2-DATABASE-ACCESS'
+        CALL AddVerificationCaption 'Run ENUM SEC and observe that',
+          'the testing account can access an ACF2 database dataset.'
+        CALL AddVerificationContent accessible
+      END
 
       LEAVE
     END
@@ -557,7 +717,8 @@ RETURN
 /*------------------------------------------------------------------*/
 /* Enumerate APF authorized libraries                              */
 /*------------------------------------------------------------------*/
-EnumApf: PROCEDURE EXPOSE space (findingsVars)
+EnumApf: PROCEDURE EXPOSE space accessProgram accessProgramState,
+  (findingsVars)
 
   CALL PrintSectionBanner 'APF Authorized Datasets/Libraries'
 
@@ -567,11 +728,8 @@ EnumApf: PROCEDURE EXPOSE space (findingsVars)
     SAY ''
   END
 
-  /* Check if we're on RACF to determine if we show access columns */
   cvt = GetPtr(16)
-  cvtrac = GetPtr(cvt+992)
-  id = GetStorage(cvtrac, 4)
-  showAccess = (id == 'RCVT')
+  showAccess = STRIP(accessProgram) \== ''
 
   /* Initialize finding tracking arrays */
   warningDatasets = ''
@@ -579,8 +737,8 @@ EnumApf: PROCEDURE EXPOSE space (findingsVars)
   excessiveAccessDatasets = ''
 
   IF showAccess THEN DO
-    SAY 'VOLUME | EXISTS | UACC | WARN | ACCESS | DATASET'
-    SAY '-------|--------|------|------|--------|' || COPIES('-', 20)
+    SAY 'VOLUME | EXISTS | ACCESS      | DATASET'
+    SAY '-------|--------|-------------|' || COPIES('-', 32)
   END
   ELSE DO
     SAY 'VOLUME | EXISTS | DATASET'
@@ -597,29 +755,13 @@ EnumApf: PROCEDURE EXPOSE space (findingsVars)
     CALL EnumStaticApf cvtAuthl, showAccess
   END
 
-  /* Add findings if any issues were found */
+  /* Add findings for effective UPDATE+ or unprotected datasets. */
   IF showAccess & assessMode == 1 THEN DO
-    IF warningDatasets \== '' THEN DO
-      CALL AddFinding 'APF-WARNING-MODE-ENABLED'
-      CALL AddVerificationCaption 'Run the REXX script ENUM and observe',
-        'that the following datasets were configured with WARNING mode',
-        'enabled:'
-      CALL AddVerificationContent warningDatasets
-    END
-
-    IF excessiveUaccDatasets \== '' THEN DO
-      CALL AddFinding 'APF-EXCESSIVE-UACC'
-      CALL AddVerificationCaption 'Run the REXX script ENUM and observe',
-        'that the following datasets were configured with a UACC of',
-        'UPDATE, CONTROL, or ALTER:'
-      CALL AddVerificationContent excessiveUaccDatasets
-    END
-
     IF excessiveAccessDatasets \== '' THEN DO
       CALL AddFinding 'APF-EXCESSIVE-USER-ACCESS'
-      CALL AddVerificationCaption 'Run the REXX script ENUM and observe',
-        'that the testing account had UPDATE, CONTROL, or ALTER access',
-        'to the following datasets:'
+      CALL AddVerificationCaption 'Run ENUM and observe',
+        'UPDATE, CONTROL, ALTER, or UNPROTECTED access for these',
+        'APF datasets:'
       CALL AddVerificationContent excessiveAccessDatasets
     END
   END
@@ -628,8 +770,8 @@ RETURN
 /*------------------------------------------------------------------*/
 /* Enumerate dynamic APF table                                      */
 /*------------------------------------------------------------------*/
-EnumDynamicApf: PROCEDURE EXPOSE space warningDatasets,
-  excessiveUaccDatasets excessiveAccessDatasets
+EnumDynamicApf: PROCEDURE EXPOSE space accessProgram accessProgramState,
+  warningDatasets excessiveUaccDatasets excessiveAccessDatasets
   PARSE ARG cvt, showAccess
 
   cvtEcvt = GetPtr(cvt+140)
@@ -641,6 +783,8 @@ EnumDynamicApf: PROCEDURE EXPOSE space warningDatasets,
   DO FOREVER
     dataset = GetStorage(cur+24, 44)
     missing = '  Yes '
+    retcode = 0
+    IF space == 'OMVS' THEN missing = '  N/A '
 
     IF SUBSTR(dataset, 1, 1) \== '00'x THEN DO
       volSms = GetStorage(cur+4, 1)
@@ -681,8 +825,8 @@ RETURN
 /*------------------------------------------------------------------*/
 /* Enumerate static APF table                                       */
 /*------------------------------------------------------------------*/
-EnumStaticApf: PROCEDURE EXPOSE warningDatasets,
-  excessiveUaccDatasets excessiveAccessDatasets
+EnumStaticApf: PROCEDURE EXPOSE accessProgram accessProgramState,
+  warningDatasets excessiveUaccDatasets excessiveAccessDatasets
   PARSE ARG cvtAuthl, showAccess
 
   numApf = C2D(GetStorage(cvtAuthl, 2))
@@ -762,7 +906,7 @@ RETURN
 /*------------------------------------------------------------------*/
 /* Enumerate JES information                                        */
 /*------------------------------------------------------------------*/
-EnumJes: PROCEDURE
+EnumJes: PROCEDURE EXPOSE space
   PARSE ARG cvtJesct
 
   jesSsct = GetPtr(cvtJesct+24)
@@ -780,8 +924,14 @@ EnumJes: PROCEDURE
   END
 
   IF jesPjesn == 'JES3' THEN DO
-    jesVers = SYSVAR('SYSJES')
-    jesNode = SYSVAR('SYSNODE')
+    IF space == 'OMVS' THEN DO
+      jesVers = 'JES3'
+      jesNode = MVSVAR('SYSNAME')
+    END
+    ELSE DO
+      jesVers = SYSVAR('SYSJES')
+      jesNode = SYSVAR('SYSNODE')
+    END
   END
   ELSE IF jesPjesn == 'JES2' THEN DO
     jesVers = STRIP(GetStorage(ssctSuse, 8))
@@ -823,7 +973,7 @@ GetJes2Node: PROCEDURE
          SUBSTR(jesVers,1,5) == 'OS 2.' THEN
       jesNode = STRIP(GetStorage(ssctSus2+372, 8))
     OTHERWISE
-      jesNode = SYSVAR('SYSNODE')
+      jesNode = MVSVAR('SYSNAME')
   END
 
 RETURN jesNode
@@ -928,56 +1078,411 @@ EnumSvc: PROCEDURE EXPOSE (findingsVars)
 RETURN
 
 /*------------------------------------------------------------------*/
-/* Enumerate dataset concatenations (PATH)                         */
+/* Enumerate PARMLIB plus library DD concatenations                 */
 /*------------------------------------------------------------------*/
-EnumPath: PROCEDURE EXPOSE (globalvars)
+EnumLibraries: PROCEDURE EXPOSE accessProgram accessProgramState,
+  (findingsVars)
+  PARSE ARG detail
+
+  CALL EnumParmlib
+  IF detail >= 1 THEN
+    CALL EnumTiotLibraries 'ALL', 1
+  ELSE
+    CALL EnumTiotLibraries 'LIBS', 0
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate the logical PARMLIB list from the IPA                  */
+/* Based on Mark Zelden's IPLINFO mapping                           */
+/*------------------------------------------------------------------*/
+EnumParmlib: PROCEDURE EXPOSE accessProgram accessProgramState,
+  (findingsVars)
+  CALL PrintSectionBanner 'Logical PARMLIB Concatenation'
+
+  cvt = GetPtr(16)
+  IF cvt == 0 THEN DO
+    SAY 'PARMLIB unavailable: CVT pointer is zero.'
+    RETURN
+  END
+
+  ecvt = GetPtr(cvt+140)
+  IF ecvt == 0 THEN DO
+    SAY 'PARMLIB unavailable: ECVT pointer is zero.'
+    RETURN
+  END
+
+  ipa = GetPtr(ecvt+392)
+  IF ipa == 0 THEN DO
+    SAY 'PARMLIB unavailable: IPA pointer is zero.'
+    RETURN
+  END
+
+  cvtOslv2 = GetStorage(cvt+1266, 1)
+  IF BITAND(cvtOslv2, '01'x) == '01'x THEN
+    count = C2D(GetStorage(ipa+2134, 2))
+  ELSE
+    count = C2D(GetStorage(ipa+2148, 2))
+
+  IF count < 1 | count > 16 THEN DO
+    SAY 'PARMLIB unavailable: implausible IPA entry count' count'.'
+    RETURN
+  END
+
+  SAY 'ORDER | VOLUME | ACCESS      | DATASET Name'
+  SAY '------|--------|-------------|' || COPIES('-', 31)
+  offset = 0
+  shown = 0
+  risky = ''
+  DO i = 1 TO count
+    card = GetStorage(ipa+416+offset, 63)
+    flag = GetStorage(ipa+479+offset, 1)
+    dataset = STRIP(SUBSTR(card, 1, 44), 'T')
+    volume = STRIP(SUBSTR(card, 46, 6))
+
+    IF BITAND(flag, '20'x) == '20'x THEN volume = '*CATLG'
+    IF volume == '' THEN volume = '-'
+    IF dataset \== '' THEN DO
+      access = CheckDatasetAccess(dataset, volume)
+      SAY RIGHT(i, 5) '|' LEFT(volume, 6) '|',
+        LEFT(access, 11) '|' dataset
+      IF access == 'UPDATE' | access == 'CONTROL' |,
+         access == 'ALTER' | access == 'UNPROTECTED' THEN
+        risky = risky dataset
+      shown = shown + 1
+    END
+    offset = offset + 64
+  END
+
+  IF shown == 0 THEN
+    SAY 'No PARMLIB dataset names were present in the IPA.'
+  SAY ''
+  SAY 'IPA memory view; verify sites that changed PARMLIB with SETLOAD.'
+  IF assessMode == 1 & risky \== '' THEN DO
+    CALL AddFinding 'PARMLIB-EXCESSIVE-USER-ACCESS'
+    CALL AddVerificationCaption 'Run ENUM with LIBS and observe that',
+      'the testing account can modify a PARMLIB dataset.'
+    CALL AddVerificationContent risky
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate dataset concatenations (PATH)                          */
+/*------------------------------------------------------------------*/
+EnumPath: PROCEDURE EXPOSE accessProgram accessProgramState
   PARSE ARG lvl
-  
-  CALL PrintSectionBanner 'DDNAME Concatenations'
+  CALL EnumTiotLibraries 'PATH', lvl
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Walk current address-space TIOT library allocations              */
+/*------------------------------------------------------------------*/
+EnumTiotLibraries: PROCEDURE EXPOSE accessProgram accessProgramState
+  PARSE UPPER ARG mode, lvl
 
   IF lvl < 1 THEN lvl = 0
+  IF mode == 'LIBS' THEN DO
+    CALL PrintSectionBanner 'Current Address-Space Library DDs'
+    SAY 'PARMLIB is system-wide; rows below are current TIOT only.'
+    SAY 'JES2 dynamic and other address-space PROCLIBs are not shown.'
+  END
+  ELSE
+    CALL PrintSectionBanner 'DDNAME Concatenations'
 
-  psAlccav = C2D(STORAGE('21C', 4))
-  tcbTio = GetPtr(psAlccav+12)
+  IF mode == 'PATH' & lvl < 1 THEN DO
+    SAY 'Only displaying SYSPROC/SYSEXEC'
+    SAY ''
+    SAY 'DD       | ACCESS      | DATASET Name'
+    SAY '---------|-------------|' || COPIES('-', 31)
+  END
+  ELSE DO
+    SAY ''
+    SAY 'DD       | VOLUME | ACCESS      | DATASET Name'
+    SAY '---------|--------|-------------|' || COPIES('-', 22)
+  END
+
+  tcb = C2D(STORAGE('21C', 4))
+  IF tcb == 0 THEN DO
+    SAY 'TIOT unavailable: current TCB pointer is zero.'
+    RETURN
+  END
+  tcbTio = GetPtr(tcb+12)
+  IF tcbTio == 0 THEN DO
+    SAY 'TIOT unavailable: current TIOT pointer is zero.'
+    RETURN
+  END
+
   tiot = tcbTio + 24
   tioElngh = 0
   dd = ''
+  entries = 0
+  shown = 0
+  seen = '|'
 
-  IF lvl < 1 THEN DO
-    SAY 'Only displaying SYSPROC/SYSEXEC'
-    SAY ''
-    SAY 'DD       | DATASET Name'
-    SAY '---------|' || COPIES('-', 44)
-  END
-  ELSE DO
-    SAY 'DD       | VOLUME | DATASET Name'
-    SAY '---------|--------|' || COPIES('-', 44)
-  END
-
-  DO FOREVER
+  DO WHILE entries < 4096
     tiot = tiot + tioElngh
     tioElngh = C2D(GetStorage(tiot, 1))
     IF tioElngh == 0 THEN LEAVE
+    IF tioElngh < 16 THEN DO
+      SAY 'TIOT walk stopped: implausible entry length' tioElngh'.'
+      LEAVE
+    END
+    entries = entries + 1
 
     tioEddnm = GetStorage(tiot+4, 8)
-    IF tioEddnm \== '        ' THEN dd = tioEddnm
+    IF tioEddnm \== '        ' THEN dd = STRIP(tioEddnm)
+    token = GetStorage(tiot+12, 3)
+    IF C2X(token) == '000000' THEN ITERATE
 
-    dsnAddr = Swareq(GetStorage(tiot+12, 3))
+    dsnAddr = Swareq(token)
+    IF dsnAddr <= 0 THEN ITERATE
     dataset = STRIP(GetStorage(dsnAddr, 44))
-    volume = GetStorage(X2D(dsnAddr)+118, 6)
+    volume = STRIP(GetStorage(dsnAddr+118, 6))
+    IF dataset == '' THEN ITERATE
+    IF volume == '' THEN volume = '-'
 
-    IF lvl < 1 THEN DO
-      IF dd == 'SYSPROC ' | dd == 'SYSEXEC ' THEN
-        SAY dd '|' dataset
+    show = 0
+    IF mode == 'ALL' | lvl >= 1 THEN show = 1
+    ELSE IF dd == 'SYSPROC' | dd == 'SYSEXEC' THEN show = 1
+    ELSE IF mode == 'LIBS' THEN DO
+      IF dd == 'IEFPDSI' | dd == 'IEFJOBS' THEN show = 1
+      ELSE IF LEFT(dd, 4) == 'PROC' THEN show = 1
     END
-    ELSE SAY dd '|' volume '|' dataset
+
+    key = dd'/'volume'/'dataset
+    IF show == 1 & POS('|'key'|', seen) == 0 THEN DO
+      access = CheckDatasetAccess(dataset, volume)
+      IF mode == 'PATH' & lvl < 1 THEN
+        SAY LEFT(dd, 8) '|' LEFT(access, 11) '|' dataset
+      ELSE
+        SAY LEFT(dd, 8) '|' LEFT(volume, 6) '|',
+          LEFT(access, 11) '|' dataset
+      seen = seen || key || '|'
+      shown = shown + 1
+    END
+  END
+
+  IF entries >= 4096 THEN
+    SAY 'TIOT walk stopped at the 4096-entry safety limit.'
+  IF shown == 0 THEN
+    SAY 'No requested library DD datasets are allocated here.'
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate LPA library datasets                                   */
+/*------------------------------------------------------------------*/
+EnumLpa: PROCEDURE EXPOSE accessProgram accessProgramState,
+  (findingsVars)
+  CALL PrintSectionBanner 'LPA Library Datasets'
+
+  cvt = GetPtr(16)
+  smext = GetPtr(cvt+1196)
+  IF smext == 0 THEN DO
+    SAY 'LPA list unavailable: storage-map extension is absent.'
+    RETURN
+  END
+  lpa = GetPtr(smext+56)
+  IF lpa == 0 THEN DO
+    SAY 'LPA list unavailable: ELPA table pointer is zero.'
+    RETURN
+  END
+  count = GetPtr(lpa+4)
+  IF count < 1 | count > 4096 THEN DO
+    SAY 'LPA list unavailable: implausible entry count' count'.'
+    RETURN
+  END
+
+  SAY 'ORDER | ACCESS      | DATASET Name'
+  SAY '------|-------------|' || COPIES('-', 38)
+  offset = 8
+  risky = ''
+  DO i = 1 TO count
+    len = C2D(GetStorage(lpa+offset, 1))
+    IF len < 1 | len > 44 THEN DO
+      SAY 'LPA walk stopped: implausible dataset length' len'.'
+      LEAVE
+    END
+    dataset = STRIP(GetStorage(lpa+offset+1, len))
+    access = CheckDatasetAccess(dataset, '')
+    SAY RIGHT(i, 5) '|' LEFT(access, 11) '|' dataset
+    IF access == 'UPDATE' | access == 'CONTROL' | access == 'ALTER' |,
+       access == 'UNPROTECTED' THEN risky = risky dataset
+    offset = offset + 45
+  END
+  IF assessMode == 1 & risky \== '' THEN DO
+    CALL AddFinding 'LPA-EXCESSIVE-USER-ACCESS'
+    CALL AddVerificationCaption 'Run ENUM with LPA and observe that',
+      'the testing account can modify an LPA library dataset.'
+    CALL AddVerificationContent risky
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate the current address-space LINKLIST set                 */
+/*------------------------------------------------------------------*/
+EnumLinklist: PROCEDURE EXPOSE accessProgram accessProgramState,
+  (findingsVars)
+  CALL PrintSectionBanner 'Current LINKLIST Set'
+
+  cvt = GetPtr(16)
+  cvtOslv1 = GetStorage(cvt+1265, 1)
+  modern = BITAND(cvtOslv1, '01'x) == '01'x
+  setname = 'LEGACY'
+  volumeTable = 0
+
+  IF modern THEN DO
+    ascb = GetPtr(X2D('224'))
+    IF ascb == 0 THEN DO
+      SAY 'LINKLIST unavailable: current ASCB pointer is zero.'
+      RETURN
+    END
+    assb = GetPtr(ascb+336)
+    IF assb == 0 THEN DO
+      SAY 'LINKLIST unavailable: current ASSB pointer is zero.'
+      RETURN
+    END
+    dlcb = GetPtr(assb+236)
+    IF dlcb == 0 THEN DO
+      SAY 'LINKLIST unavailable: CSVDLCB pointer is zero.'
+      RETURN
+    END
+    flags = GetStorage(dlcb+32, 1)
+    setname = STRIP(GetStorage(dlcb+36, 16))
+    linkTable = GetPtr(dlcb+16)
+    volumeTable = GetPtr(dlcb+20)
+    IF BITAND(flags, '10'x) == '10'x THEN lnkauth = 'LNKLST'
+    ELSE lnkauth = 'APFTAB'
+  END
+  ELSE DO
+    linkTable = GetPtr(cvt+1244)
+    lnkauth = 'UNKNOWN'
+  END
+
+  IF linkTable == 0 THEN DO
+    SAY 'LINKLIST unavailable: library table pointer is zero.'
+    RETURN
+  END
+  count = GetPtr(linkTable+4)
+  IF count < 1 | count > 4096 THEN DO
+    SAY 'LINKLIST unavailable: implausible entry count' count'.'
+    RETURN
+  END
+
+  SAY 'Set:' setname 'LNKAUTH='lnkauth
+  SAY 'ORDER | APF | VOLUME | ACCESS      | DATASET Name'
+  SAY '------|-----|--------|-------------|' || COPIES('-', 20)
+  entryOffset = 8
+  volumeOffset = 8
+  apfTable = linkTable + 8 + (count*45)
+  risky = ''
+  DO i = 1 TO count
+    len = C2D(GetStorage(linkTable+entryOffset, 1))
+    IF len < 1 | len > 44 THEN DO
+      SAY 'LINKLIST walk stopped: implausible dataset length' len'.'
+      LEAVE
+    END
+    dataset = STRIP(GetStorage(linkTable+entryOffset+1, len))
+    apfFlag = GetStorage(apfTable+i-1, 1)
+    IF BITAND(apfFlag, '80'x) == '80'x THEN apf = 'Y'
+    ELSE apf = '-'
+    volume = '-'
+    IF volumeTable \== 0 THEN
+      volume = STRIP(GetStorage(volumeTable+volumeOffset, 6))
+    IF volume == '' THEN volume = '-'
+    access = CheckDatasetAccess(dataset, volume)
+    SAY RIGHT(i, 5) '|' LEFT(apf, 3) '|' LEFT(volume, 6) '|',
+      LEFT(access, 11) '|' dataset
+    IF access == 'UPDATE' | access == 'CONTROL' | access == 'ALTER' |,
+       access == 'UNPROTECTED' THEN risky = risky dataset
+    entryOffset = entryOffset + 45
+    volumeOffset = volumeOffset + 8
+  END
+  IF assessMode == 1 & risky \== '' THEN DO
+    CALL AddFinding 'LINKLIST-EXCESSIVE-USER-ACCESS'
+    CALL AddVerificationCaption 'Run ENUM with LNK and observe that',
+      'the testing account can modify a LINKLIST library dataset.'
+    CALL AddVerificationContent risky
+  END
+RETURN
+
+/*------------------------------------------------------------------*/
+/* Enumerate active SMF recording datasets                          */
+/*------------------------------------------------------------------*/
+EnumSmf: PROCEDURE EXPOSE accessProgram accessProgramState,
+  (findingsVars)
+  CALL PrintSectionBanner 'SMF Recording Datasets'
+
+  cvt = GetPtr(16)
+  smcaRaw = GetStorage(cvt+196, 4)
+  smca = C2D(BITAND(smcaRaw, '7FFFFFFF'x))
+  IF smca == 0 THEN DO
+    SAY 'SMF information unavailable: SMCA pointer is zero.'
+    RETURN
+  END
+  misc = GetStorage(smca+1, 1)
+  IF BITAND(misc, '80'x) \== '80'x THEN DO
+    SAY 'SMF recording is not active.'
+    RETURN
+  END
+
+  first = GetPtr(smca+244)
+  last = GetPtr(smca+248)
+  smcx = GetPtr(smca+376)
+  logstream = 0
+  IF smcx \== 0 THEN DO
+    logBits = GetStorage(smcx+88, 1)
+    logstream = BITAND(logBits, '80'x) == '80'x
+  END
+  IF logstream THEN
+    SAY 'SMF logstream is active; names unavailable.'
+  IF first == 0 | last == 0 | first == last THEN DO
+    SAY 'No active SMF recording datasets are available.'
+    RETURN
+  END
+
+  SAY 'VOLUME | USED | STATUS         | ACCESS      | DATASET'
+  SAY '-------|------|----------------|-------------|---------------'
+  cur = first
+  entries = 0
+  risky = ''
+  DO WHILE cur \== last & cur \== 0 & entries < 256
+    dataset = STRIP(GetStorage(cur+16, 44))
+    volume = STRIP(GetStorage(cur+60, 6))
+    capacity = GetPtr(cur+76)
+    nextBlock = GetPtr(cur+80)
+    IF capacity > 0 THEN percent = TRUNC((nextBlock/capacity)*100)
+    ELSE percent = 0
+    flags = GetStorage(cur+12, 1)
+    SELECT
+      WHEN BITAND(flags, '10'x) == '10'x THEN status = 'FREE REQUIRED'
+      WHEN BITAND(flags, '08'x) == '08'x THEN status = 'DUMP REQUIRED'
+      WHEN BITAND(flags, '04'x) == '04'x THEN status = 'ALTERNATE'
+      WHEN BITAND(flags, '02'x) == '02'x THEN status = 'CLOSE PENDING'
+      WHEN BITAND(flags, '01'x) == '01'x THEN status = 'OPEN REQUIRED'
+      OTHERWISE status = 'ACTIVE'
+    END
+    access = CheckDatasetAccess(dataset, volume)
+    SAY LEFT(volume, 6) '|' RIGHT(percent, 4)'% |',
+      LEFT(status, 14) '|' LEFT(access, 11) '|' dataset
+    IF access == 'UPDATE' | access == 'CONTROL' | access == 'ALTER' |,
+       access == 'UNPROTECTED' THEN risky = risky dataset
+    cur = GetPtr(cur+4)
+    entries = entries + 1
+  END
+  IF entries >= 256 THEN SAY 'SMF walk stopped at 256-entry limit.'
+
+  IF assessMode == 1 & risky \== '' THEN DO
+    CALL AddFinding 'SMF-DATASET-EXCESSIVE-USER-ACCESS'
+    CALL AddVerificationCaption 'Run ENUM with SMF and observe that',
+      'the testing account can modify an SMF recording dataset.'
+    CALL AddVerificationContent risky
   END
 RETURN
 
 /*------------------------------------------------------------------*/
 /* Enumerate master catalog                                         */
 /*------------------------------------------------------------------*/
-EnumCatalog: PROCEDURE
+EnumCatalog: PROCEDURE EXPOSE accessProgram accessProgramState,
+  (findingsVars)
   cvt = GetPtr(16)
   ecvt = GetPtr(cvt+140)
   ecvtIpa = GetPtr(ecvt+392)
@@ -985,7 +1490,17 @@ EnumCatalog: PROCEDURE
   mcatDsn = STRIP(SUBSTR(ipaScat, 11, 44))
   mcatVol = SUBSTR(ipaScat, 1, 6)
 
-  SAY 'Master Catalog:' mcatDsn 'Volume:' mcatVol
+  access = CheckDatasetAccess(mcatDsn, mcatVol)
+  SAY 'Master Catalog:' mcatDsn
+  SAY 'Volume:' mcatVol 'Effective access:' access
+  IF assessMode == 1 &,
+     (access == 'UPDATE' | access == 'CONTROL' | access == 'ALTER' |,
+      access == 'UNPROTECTED') THEN DO
+    CALL AddFinding 'MASTER-CATALOG-EXCESSIVE-USER-ACCESS'
+    CALL AddVerificationCaption 'Run ENUM with CAT and observe that',
+      'the testing account can modify the master catalog.'
+    CALL AddVerificationContent access mcatVol mcatDsn
+  END
 RETURN
 
 /*------------------------------------------------------------------*/
@@ -1039,13 +1554,8 @@ EnumTsoTables: PROCEDURE EXPOSE (findingsVars)
 
     /* Determine if we should show this table */
     showTable = 1
-    IF assessMode == 0 THEN DO
-      /* Not in assess mode - only show AUTHCMD and AUTHTSF (if IDCAMS present) */
-      IF POS('AUTHCMD', name) == 0 & POS('AUTHTSF', name) == 0 THEN DO
-        showTable = 0
-      END
-      /* For AUTHTSF, check if IDCAMS is present before showing */
-      ELSE IF POS('AUTHTSF', name) > 0 THEN DO
+    IF assessMode == 0 & POS('AUTHTSF', name) > 0 THEN DO
+      /* AUTHTSF is shown only when IDCAMS is present. */
         hasIdcams = 0
         DO j = 2 TO entries
           ent = GetStorage(X2D(table)+(length*j), length)
@@ -1055,7 +1565,6 @@ EnumTsoTables: PROCEDURE EXPOSE (findingsVars)
           END
         END
         IF hasIdcams == 0 THEN showTable = 0
-      END
     END
 
     IF showTable == 1 THEN DO
@@ -1087,7 +1596,7 @@ EnumTsoTables: PROCEDURE EXPOSE (findingsVars)
       /* Add finding if IDCAMS found in AUTHTSF */
       IF idcamsFound == 1 & assessMode == 1 THEN DO
         CALL AddFinding 'TSO-IDCAMS-IN-AUTHTSF'
-        CALL AddVerificationCaption 'Using REXX execute the program ENUM',
+        CALL AddVerificationCaption 'Run the REXX program ENUM',
           'available at http://github.com/mainframed/ and observe that',
           'IDCAMS is present in the IKJEFTAP/AUTHTSF table.'
         CALL AddVerificationContent '(TRUNCATED)/n',
@@ -1149,52 +1658,26 @@ EnumSetropts: PROCEDURE EXPOSE (findingsVars) warningDatasets,
   rcvtUads = STRIP(GetStorage(rcvt+100, 44))
   SAY ''
   SAY 'UADS Dataset:'
-  SAY 'UACC | WARN | ACCESS | DATASET'
-  SAY '-----|------|--------|' || COPIES('-', 44)
+  SAY 'ACCESS      | DATASET'
+  SAY '------------|' || COPIES('-', 44)
 
   /* Check access for UADS dataset - READ access is a finding */
   outputUads = CheckAndReportDatasetAccess(rcvtUads, '', '', 1)
   SAY outputUads
-
-  /* Parse fields for findings */
-  PARSE VAR outputUads uadsUacc '|' uadsWarn '|' uadsAccess '|' .
-  uadsUacc = STRIP(uadsUacc)
-  uadsWarn = STRIP(uadsWarn)
+  PARSE VAR outputUads uadsAccess '|' .
   uadsAccess = STRIP(uadsAccess)
 
   /* Add findings for UADS dataset */
   IF assessMode == 1 THEN DO
     /* Check for user access to UADS dataset */
-    IF uadsAccess \== 'NONE' THEN DO
+    IF uadsAccess == 'READ' | uadsAccess == 'UPDATE' |,
+       uadsAccess == 'CONTROL' | uadsAccess == 'ALTER' |,
+       uadsAccess == 'UNPROTECTED' THEN DO
       CALL AddFinding 'RACF-UADS-DATASET-ACCESS'
       CALL AddVerificationCaption 'Run the REXX script ENUM with the',
         'SEC argument and observe that the testing account has READ or',
         'greater access to the UADS dataset.'
-      CALL AddVerificationContent 'UACC | WARN | ACCESS | DATASET'||,
-        ' -----|------|--------|---------------------------------'||,
-        ' '||outputUads
-    END
-
-    /* Check for excessive UACC on UADS dataset */
-    IF uadsUacc \== 'NONE' THEN DO
-      CALL AddFinding 'RACF-UADS-EXCESSIVE-UACC'
-      CALL AddVerificationCaption 'Run the REXX script ENUM with the',
-        'SEC argument and observe that the UADS dataset has a UACC',
-        'of READ or greater.'
-      CALL AddVerificationContent 'UACC | WARN | ACCESS | DATASET'||,
-        ' -----|------|--------|---------------------------------'||,
-        ' '||outputUads
-    END
-
-    /* Check for WARNING mode on UADS dataset */
-    IF uadsWarn == 'YES' THEN DO
-      CALL AddFinding 'RACF-UADS-WARNING-MODE'
-      CALL AddVerificationCaption 'Run the REXX script ENUM with the',
-        'SEC argument and observe that the UADS dataset is configured',
-        'with WARNING mode enabled.'
-      CALL AddVerificationContent 'UACC | WARN | ACCESS | DATASET'||,
-        ' -----|------|--------|---------------------------------'||,
-        ' '||outputUads
+      CALL AddVerificationContent outputUads
     END
   END
   SAY ''
@@ -1229,8 +1712,8 @@ EnumSetropts: PROCEDURE EXPOSE (findingsVars) warningDatasets,
       SAY ' PROTECT-ALL WARNING mode'
       IF assessMode == 1 THEN DO
         CALL AddFinding 'RACF-PROTECT-ALL-WARNING-MODE'
-        CALL AddVerificationCaption 'Using REXX execute the program ENUM',
-          'available at http://github.com/mainframed/ with the argument',
+        CALL AddVerificationCaption 'Run the REXX program ENUM',
+          'from github.com/mainframed with the argument',
           'SEC and observe that PROTECT-ALL is in WARNING mode.'
         CALL AddVerificationContent '(TRUNCATED)/n',
           'PROTECT-ALL is on/n PROTECT-ALL WARNING mode/n(TRUNCATED)'
@@ -1451,7 +1934,7 @@ EnumPasswordSettings: PROCEDURE EXPOSE (findingsVars)
     CALL AddFinding 'RACF-MIN-PASSWORD-CHANGE-INTERVAL-WEAK'
     CALL AddVerificationCaption 'Using REXX execute the program ENUM',
       'available at http://github.com/mainframed/ with the argument',
-      'SEC and observe that the minimum password change interval is less',
+      'SEC; minimum password change interval is less',
       'than 1 day.'
     CALL AddVerificationContent '(TRUNCATED)/n',
       'Minimum password change interval:' rcvtPmin 'days/n(TRUNCATED)'
@@ -1468,7 +1951,7 @@ EnumPasswordSettings: PROCEDURE EXPOSE (findingsVars)
     CALL AddFinding 'RACF-MIN-PASSWORD-LENGTH-WEAK'
     CALL AddVerificationCaption 'Using REXX execute the program ENUM',
       'available at http://github.com/mainframed/ with the argument',
-      'SEC and observe that the minimum possible password length is less',
+      'SEC; minimum possible password length is less',
       'than 8 characters.'
     CALL AddVerificationContent '(TRUNCATED)/n',
       'Minimum possible password length:' rcvtSlen'/n(TRUNCATED)'
@@ -1486,7 +1969,7 @@ EnumPasswordSettings: PROCEDURE EXPOSE (findingsVars)
     CALL AddFinding 'RACF-INVALID-LOGON-ATTEMPTS-EXCESSIVE'
     CALL AddVerificationCaption 'Using REXX execute the program ENUM',
       'available at http://github.com/mainframed/ with the argument',
-      'SEC and observe that the invalid logon attempts allowed is greater',
+      'SEC; invalid logon attempts allowed is greater',
       'than 5 or unlimited.'
     CALL AddVerificationContent '(TRUNCATED)/n',
       'Invalid logon attempts allowed:' rcvtRvok'/n(TRUNCATED)'
@@ -1555,8 +2038,9 @@ EnumPasswordRules: PROCEDURE EXPOSE (findingsVars)
       CALL AddVerificationCaption 'Using REXX execute the program ENUM',
         'available at http://github.com/mainframed/ with the argument',
         'SEC and observe that no password syntax rules are defined.'
-      CALL AddVerificationContent '(TRUNCATED)/n',
-        'Password syntax rules:/n ** No password rules defined! **/n(TRUNCATED)'
+      CALL AddVerificationContent '(TRUNCATED)/n' ||,
+        'Password syntax rules:/n No password rules defined!' ||,
+        '/n(TRUNCATED)'
     END
   END
   ELSE
@@ -1582,7 +2066,7 @@ EnumPasswordOptions: PROCEDURE EXPOSE (findingsVars)
     CALL AddFinding 'RACF-MIXED-CASE-DISABLED'
     CALL AddVerificationCaption 'Using REXX execute the program ENUM',
       'available at http://github.com/mainframed/ with the argument',
-      'SEC and observe that in RACF mixed case passwords are not enabled.'
+      'SEC; RACF mixed case passwords are not enabled.'
     CALL AddVerificationContent '(TRUNCATED)/n',
       'Mixed case passwords disabled/n(TRUNCATED)'
 
@@ -1617,7 +2101,7 @@ EnumPasswordOptions: PROCEDURE EXPOSE (findingsVars)
       CALL AddFinding 'RACF-LEGACY-ENCRYPTION-ACTIVE'
       CALL AddVerificationCaption 'Using REXX execute the program ENUM',
         'available at http://github.com/mainframed/ with the argument',
-        'SEC and observe that RACF is using legacy encryption instead of',
+        'SEC; RACF uses legacy encryption instead of',
         'KDFAES encryption.'
       CALL AddVerificationContent '(TRUNCATED)/n',
         'Legacy encryption is active/n(TRUNCATED)'
@@ -1640,116 +2124,62 @@ RETURN
 /*==================================================================*/
 
 /*------------------------------------------------------------------*/
-/* Check dataset access (RACF only)                                */
-/* Returns: 'UACC WARNING ACCESS' (e.g., 'NONE NO ALTER')          */
-/*          or error message if checks fail                         */
+/* Check effective dataset access through the configured SAF helper */
+/* Returns NONE, READ, UPDATE, CONTROL, ALTER, UNPROTECTED, or N/A  */
 /*------------------------------------------------------------------*/
-CheckDatasetAccess: PROCEDURE
-  PARSE ARG dataset
+CheckDatasetAccess: PROCEDURE EXPOSE accessProgram accessProgramState
+  PARSE UPPER ARG dataset, volume
+  PARSE SOURCE . . . . . . . accessEnvironment .
 
-  /* First check if we're on RACF */
-  cvt = GetPtr(16)
-  cvtrac = GetPtr(cvt+992)
-  id = GetStorage(cvtrac, 4)
+  IF STRIP(accessProgram) == '' THEN RETURN 'N/A'
+  IF accessEnvironment == 'OMVS' THEN RETURN 'N/A'
+  IF accessProgramState == 'UNAVAILABLE' THEN RETURN 'N/A'
+  dataset = STRIP(dataset)
+  volume = STRIP(volume)
+  IF dataset == '' THEN RETURN 'N/A'
+  IF volume == '-' | volume == 'SMS' | volume == '*CATLG' THEN
+    volume = ''
 
-  IF id \== 'RCVT' THEN DO
-    RETURN 'ERROR: Not a RACF system'
+  program = STRIP(accessProgram, 'B', "'")
+  IF accessProgramState == 'UNKNOWN' THEN DO
+    programStatus = SYSDSN("'"program"'")
+    IF programStatus \== 'OK' THEN DO
+      accessProgramState = 'UNAVAILABLE'
+      RETURN 'N/A'
+    END
+    accessProgramState = 'READY'
   END
 
-  /* Check if we can run LISTDSD */
+  parm = 'DATASET' dataset
+  IF volume \== '' THEN parm = parm volume
+
   ADDRESS 'TSO'
-  rc = OUTTRAP('checkOut.')
-  'LISTDSD'
-  rc = OUTTRAP('OFF')
+  trapRc = OUTTRAP('accessOut.')
+  "CALL '"program"' '"parm"'"
+  callRc = RC
+  trapRc = OUTTRAP('OFF')
 
-  /* If command not found or not authorized */
-  IF checkOut.0 > 0 THEN DO
-    DO i = 1 TO checkOut.0
-      IF POS('NOT AUTHORIZED', checkOut.i) > 0 |,
-         POS('COMMAND NOT FOUND', checkOut.i) > 0 THEN DO
-        RETURN 'ERROR: Cannot run LISTDSD command'
-      END
-    END
+  SELECT
+    WHEN callRc == 0 THEN RETURN 'NONE'
+    WHEN callRc == 4 THEN RETURN 'READ'
+    WHEN callRc == 8 THEN RETURN 'UPDATE'
+    WHEN callRc == 12 THEN RETURN 'CONTROL'
+    WHEN callRc == 16 THEN RETURN 'ALTER'
+    WHEN callRc == 20 THEN RETURN 'UNPROTECTED'
+    OTHERWISE RETURN 'N/A'
   END
-
-  /* Try LISTDSD with the dataset */
-  rc = OUTTRAP('out.')
-  "LISTDSD da('"||STRIP(dataset)||"')"
-  cmdRc = RC
-  rc = OUTTRAP('OFF')
-
-  /* Check if we got the "NO RACF DESCRIPTION FOUND" error */
-  IF cmdRc \== 0 THEN DO
-    foundNoDesc = 0
-    DO i = 1 TO out.0
-      IF POS('ICH35003I', out.i) > 0 THEN DO
-        foundNoDesc = 1
-        LEAVE
-      END
-    END
-
-    /* Try with GENERIC option */
-    IF foundNoDesc == 1 THEN DO
-      rc = OUTTRAP('out.')
-      "LISTDSD da('"||STRIP(dataset)||"') GENERIC"
-      cmdRc = RC
-      rc = OUTTRAP('OFF')
-
-      /* If still fails, dataset is not RACF protected */
-      IF cmdRc \== 0 THEN DO
-        RETURN 'ERROR: Dataset not RACF protected'
-      END
-    END
-    ELSE DO
-      /* Different error */
-      RETURN 'ERROR: LISTDSD command failed'
-    END
-  END
-
-  /* Parse the output */
-  uacc = ''
-  warning = ''
-  access = ''
-
-  DO i = 1 TO out.0
-    /* Look for the LEVEL line with UNIVERSAL ACCESS and WARNING */
-    IF POS('UNIVERSAL ACCESS', out.i) > 0 THEN DO
-      /* Next line should have the actual values */
-      IF i < out.0 THEN DO
-        n = i + 2
-        nextLine = out.n
-        /* Parse: " 00    PHIL            NONE          NO      NO" */
-        PARSE VAR nextLine . . uacc warning .
-        uacc = STRIP(uacc)
-        warning = STRIP(warning)
-      END
-    END
-
-    /* Look for YOUR ACCESS line */
-    IF POS('YOUR ACCESS', out.i) > 0 THEN DO
-      /* Next line should have the access value */
-      IF i < out.0 THEN DO
-        n = i + 2
-        nextLine = out.n
-        /* Parse: "   ALTER        SYS1           NON-VSAM" */
-        PARSE VAR nextLine access .
-        access = STRIP(access)
-      END
-    END
-  END
-
-  /* Validate we found all values */
-  IF uacc == '' | warning == '' | access == '' THEN DO
-    RETURN 'ERROR: Could not parse LISTDSD output'
-  END
-
-RETURN uacc || ' ' || warning || ' ' || access
 
 /*------------------------------------------------------------------*/
-/* Check dataset access and track findings                          */
+/* Return true for effective READ or greater access                 */
+/*------------------------------------------------------------------*/
+AccessAtLeastRead: PROCEDURE
+  PARSE UPPER ARG access
+RETURN access == 'READ' | access == 'UPDATE' |,
+  access == 'CONTROL' | access == 'ALTER' | access == 'UNPROTECTED'
+
+/*------------------------------------------------------------------*/
+/* Check dataset access and track effective-access findings         */
 /* Returns: formatted output string for display                     */
-/* Side effects: Updates warningDatasets, excessiveUaccDatasets,    */
-/*               and excessiveAccessDatasets variables              */
 /* Parameters:                                                      */
 /*   dataset - Dataset name to check                               */
 /*   volume  - Volume name for display                             */
@@ -1757,79 +2187,32 @@ RETURN uacc || ' ' || warning || ' ' || access
 /*   checkRead - If 1, READ access is also a finding (default 0)   */
 /*------------------------------------------------------------------*/
 CheckAndReportDatasetAccess: PROCEDURE EXPOSE warningDatasets,
-  excessiveUaccDatasets excessiveAccessDatasets
+  excessiveUaccDatasets excessiveAccessDatasets accessProgram,
+  accessProgramState
   PARSE ARG dataset, volume, missing, checkRead
 
   /* Default checkRead to 0 if not specified */
   IF checkRead == '' THEN checkRead = 0
 
-  accessInfo = CheckDatasetAccess(STRIP(dataset))
+  access = CheckDatasetAccess(STRIP(dataset), volume)
+  accessDisp = LEFT(access, 11)
 
-  IF POS('ERROR:', accessInfo) == 0 THEN DO
-    /* Parse the result: 'UACC WARNING ACCESS' */
-    PARSE VAR accessInfo uacc warning access
-    uaccDisp = LEFT(uacc, 4)
-    warnDisp = LEFT(warning, 4)
-    accessDisp = LEFT(access, 6)
+  IF volume == '' & missing == '' THEN
+    output = accessDisp '|' STRIP(dataset)
+  ELSE
+    output = LEFT(STRIP(volume),6) '|' STRIP(LEFT(missing,6)),
+      '|' accessDisp '|' STRIP(dataset)
 
-    /* If volume/missing are empty, use simplified format */
-    IF volume == '' & missing == '' THEN DO
-      output = uaccDisp '|' warnDisp '|' accessDisp '|' STRIP(dataset)
-    END
-    ELSE DO
-      output = LEFT(STRIP(volume),6) '|' STRIP(LEFT(missing,6)),
-        '|' uaccDisp '|' warnDisp '|' accessDisp '|' STRIP(dataset)
-    END
-
-    /* Track findings */
-    dsName = STRIP(dataset)
-
-    /* Check for WARNING mode */
-    IF warning == 'YES' THEN DO
-      IF warningDatasets == '' THEN
-        warningDatasets = ' ' || dsName
-      ELSE
-        warningDatasets = warningDatasets || ', ' || dsName
-    END
-
-    /* Check for excessive UACC - always check UPDATE/CONTROL/ALTER */
-    /* For sensitive datasets (checkRead=1), also check READ */
-    IF uacc == 'UPDATE' | uacc == 'CONTROL' | uacc == 'ALTER' THEN DO
-      IF excessiveUaccDatasets == '' THEN
-        excessiveUaccDatasets = ' ' || dsName
-      ELSE
-        excessiveUaccDatasets = excessiveUaccDatasets || ', ' || dsName
-    END
-    ELSE IF checkRead == 1 & uacc == 'READ' THEN DO
-      IF excessiveUaccDatasets == '' THEN
-        excessiveUaccDatasets = ' ' || dsName
-      ELSE
-        excessiveUaccDatasets = excessiveUaccDatasets || ', ' || dsName
-    END
-
-    /* Check for excessive user access */
-    IF access == 'UPDATE' | access == 'CONTROL' | access == 'ALTER' THEN DO
-      IF excessiveAccessDatasets == '' THEN
-        excessiveAccessDatasets = ' ' || dsName
-      ELSE
-        excessiveAccessDatasets = excessiveAccessDatasets || ', ' || dsName
-    END
-    ELSE IF checkRead == 1 & access == 'READ' THEN DO
-      IF excessiveAccessDatasets == '' THEN
-        excessiveAccessDatasets = ' ' || dsName
-      ELSE
-        excessiveAccessDatasets = excessiveAccessDatasets || ', ' || dsName
-    END
-  END
-  ELSE DO
-    /* Error occurred, display placeholder */
-    IF volume == '' & missing == '' THEN DO
-      output = ' ??  |  ??  |   ??   |' STRIP(dataset)
-    END
-    ELSE DO
-      output = LEFT(STRIP(volume),6) '|' STRIP(LEFT(missing,6)),
-        '|  ??  |  ??  |   ??   |' STRIP(dataset)
-    END
+  dsName = STRIP(dataset)
+  excessive = access == 'UPDATE' | access == 'CONTROL' |,
+    access == 'ALTER' | access == 'UNPROTECTED'
+  IF checkRead == 1 & access == 'READ' THEN excessive = 1
+  IF excessive THEN DO
+    IF excessiveAccessDatasets == '' THEN
+      excessiveAccessDatasets = ' ' || dsName
+    ELSE
+      excessiveAccessDatasets = excessiveAccessDatasets ||,
+        ', ' || dsName
   END
 
 RETURN output
@@ -1870,7 +2253,9 @@ RETURN C2X(STORAGE(D2X(X2D(addr)+X2D(disp)), 4))
 GetUserid: PROCEDURE
   PARSE ARG ascb
 
+  IF ascb == 0 THEN RETURN ''
   assb = GetPtr(ascb+336)
+  IF assb == 0 THEN RETURN ''
   jsab = GetPtr(assb+168)
 
   IF jsab == 0 THEN usid = ''
@@ -1895,9 +2280,14 @@ RETURN
 /*------------------------------------------------------------------*/
 Swareq: PROCEDURE
   sva = C2D(ARG(1))
+  IF sva == 0 THEN RETURN 0
+
   tcb = C2D(STORAGE('21C', 4))
+  IF tcb == 0 THEN RETURN 0
   jscb = GetPtr(tcb+180)
+  IF jscb == 0 THEN RETURN 0
   qmpl = GetPtr(jscb+244)
+  IF qmpl == 0 THEN RETURN 0
 
   /* Check if QMAT can be above the bar */
   qmsta = C2X(GetStorage(qmpl+16, 1))
@@ -1911,7 +2301,10 @@ Swareq: PROCEDURE
       C2D(GetStorage(qmpl+18, 2)) * (2**32) +,
       GetPtr(qmpl+24)
 
-    RETURN GetPtr(qmat+(sva*12)+64) + 16
+    IF qmat == 0 THEN RETURN 0
+    swaAddr = GetPtr(qmat+(sva*12)+64)
+    IF swaAddr == 0 THEN RETURN 0
+    RETURN swaAddr + 16
   END
   ELSE DO
     /* QMAT is BTB */
@@ -1919,13 +2312,20 @@ Swareq: PROCEDURE
       RETURN C2D(ARG(1)) + 16
 
     qmat = GetPtr(qmpl+24)
+    IF qmat == 0 THEN RETURN 0
 
-    DO WHILE sva > 65536
+    hops = 0
+    DO WHILE sva > 65536 & hops < 256
       qmat = GetPtr(qmat+12)
+      IF qmat == 0 THEN RETURN 0
       sva = sva - 65536
+      hops = hops + 1
     END
 
-    RETURN GetPtr(qmat+sva+1) + 16
+    IF hops >= 256 THEN RETURN 0
+    swaAddr = GetPtr(qmat+sva+1)
+    IF swaAddr == 0 THEN RETURN 0
+    RETURN swaAddr + 16
   END
 
 /*------------------------------------------------------------------*/
@@ -2017,7 +2417,8 @@ AddVerificationCaption: PROCEDURE EXPOSE (findingsVars)
   IF verificationcaption.idx == '' THEN
     verificationcaption.idx = caption
   ELSE
-    verificationcaption.idx = verificationcaption.idx||VSTEP_DELIM||caption
+    verificationcaption.idx = verificationcaption.idx ||,
+      VSTEP_DELIM || caption
 RETURN
 
 /*------------------------------------------------------------------*/

@@ -15,9 +15,18 @@ username=`logname`
 
 
 version="version 0.1b"
+
+maintenance_notice()
+{
+echo "##################################################################"
+echo "# WARNING: THIS SCRIPT IS NO LONGER MAINTAINED.                  #"
+echo "# Use OMVSEnum.java and OMVSSecurityChecks.java instead.         #"
+echo "##################################################################"
+}
+
 usage() 
 {
-    
+maintenance_notice
 echo "\n\
 ##################################################################\n\
 # Local USS Enumeration & Privilege Escalation Script            #\n\
@@ -60,6 +69,7 @@ xargs\|xxd\|zip\|zsh'
 
 header()
 {
+maintenance_notice
 echo "\n##############################################################"
 echo "# Local USS Enumeration & Privilege Escalation Script      #"
 echo "##############################################################"

@@ -1,0 +1,396 @@
+/* REXX */
+/* A startup mapper to identify startup files and concatenation */
+/* by Soldier of FORTRAN */
+SAY ''
+SAY ''
+SAY '   .dP"Y8 8888888   d8b    88"""Yb 8888888'
+SAY '   "Ybo."   888    dP8Yb   88___dP   888'
+SAY '   o."Y8b   888   dP___Yb  88""Yb    888'
+SAY '   8bodP"   888  dP"",""Yb 88   Yb   888'
+SAY '  ------------------,N,--------------------'
+SAY " |: NNN,    ,N :::',NNN,`::: NNNNNNNNN#y,':|"
+SAY " |: NNNN,  ,NN ::',NNNNN,`:: NNNNNNNNNNNNi |"
+SAY " |: NNNNN,,NNN :',NNN'NNN,`: NNNNNNNNNNNNl |"
+SAY " |: NNNNNbdNNN ',NNN' `NNN,' NNNNNNNNNN7''.|"
+SAY " |: NNN NNNN N ,NNN'   `NNN, NNNNNN :::::::|"
+SAY "  ------------,NNN',NNNNNNNN,--------------"
+SAY '  M A I N F R A M E    I P L    M A P P E R'
+SAY ''
+SAY ''
+/* Step 1 Identify the IPL Parm member */
+SAY "> Identifying Load Parameters in storage"
+CVT  = C2d(Storage(10,4))
+ECVT = C2d(Storage(D2x(CVT + 140),4))
+ECVTLOAD = Storage(D2x(ECVT+160),8)
+IPLPARM = strip(ECVTLOAD)
+IPL_VOLUME = Substr(IPLPARM,1,4)
+IPL_MEMBER = LOAD || Substr(IPLPARM,5,2)
+DO I = 0 TO 9
+  IF SYSDSN("'SYS"||I||".IPLPARM("|| IPL_MEMBER ||")'") == "OK" THEN DO
+    IPL_DATASET = "SYS"||I||".IPLPARM"
+    LEAVE 
+  END
+END
+IPL_DSN = IPL_DATASET ||"("||IPL_MEMBER||")"
+SAY " + IPL Dataset:" IPL_DSN
+SAY " + VOLUME:" IPL_VOLUME
+/* Step 2 Find SYSPARM, Symbols and concatenation */
+/* The system uses the definitions in all IEASYMxx members for which 
+   suffixes are specified. If the system finds duplicate definitions, the 
+   last definition overrides any previous definitions */
+ADDRESS TSO 
+"ALLOC F(INFILE) DSN('"||IPL_DSN||"') SHR REU"
+"EXECIO * DISKR INFILE ( FINIS STEM IPLPARM."
+"FREE F(INFILE)"
+PARMNUM = 0
+DO I = 1 TO IPLPARM.0 
+    IF INDEX(IPLPARM.I,"SYSPARM") >0 THEN DO
+        PARSE VAR IPLPARM.I . PARM .
+        SPARM = strip(PARM)
+        SPARM = strip(SPARM,'L',"(")
+        SPARM = strip(SPARM,'T',")")
+        SAY " + SYSPARM:" SPARM
+    END
+    IF INDEX(IPLPARM.I,"IEASYM") >0 THEN DO
+        PARSE VAR IPLPARM.I . PARM
+        SYM = strip(PARM)
+        SYM = strip(SYM,'L',"(")
+        SYM = strip(SYM,'T',")")
+        SAY " + IEASYM:" SYM
+    END
+    IF INDEX(IPLPARM.I,"PARMLIB") >0 THEN DO
+        PARMNUM = PARMNUM + 1
+        PARSE VAR IPLPARM.I . PARM .
+        PARMLIB.PARMNUM = strip(PARM)
+        SAY " + PARMLIB #"||PARMNUM "is" PARMLIB.PARMNUM
+    END
+END 
+PARMLIB.0 = PARMNUM
+/* Getting symbols, courtesy of IPLINFO */
+SAY "> System Symbols"
+ECVTSYMT = C2d(Storage(D2x(ECVT + 296),4))
+NUMSYMBS = C2d(Storage(D2x(ECVTSYMT + 2),2))
+Do I = 1 to NUMSYMBS
+    SOFF = I*16-16
+    NAMOFF  = C2d(Storage(D2x(ECVTSYMT+4+SOFF),4))
+    NAMLEN  = C2d(Storage(D2x(ECVTSYMT+8+SOFF),4))
+    VALOFF  = C2d(Storage(D2x(ECVTSYMT+12+SOFF),4))
+    VALLEN  = C2d(Storage(D2x(ECVTSYMT+16+SOFF),4))
+    SYMNAME = Storage(D2x(ECVTSYMT+4+NAMOFF),NAMLEN)
+    If VALLEN = 0 then VALNAME = ''
+    Else VALNAME = Storage(D2x(ECVTSYMT+4+VALOFF),VALLEN)
+    NAMED = substr(SYMNAME, 2, max(0, length(SYMNAME) -2))
+    interpret NAMED||'="'||VALNAME||'"'
+    SAY " + " NAMED "=" VALNAME
+End  
+/* Now lets parse out these values. Starting with SYSPARM */
+/* We do this because SYM/SYS could look like */
+/* this: (00,21,56,L) but we've already removed the () */
+/* https://www.ibm.com/support/knowledgecenter/en/
+   SSLTBW_2.1.0/com.ibm.zos.v2r1.ieae200/stpldx.htm */
+do i = 1 by 1 while SPARM <> ''
+    parse var SPARM SYSPARM.i ',' SPARM
+end
+SYSPARM.0 = i-1
+do i = 1 to SYSPARM.0
+    IF INDEX(SYSPARM.0,"L") >0 THEN
+        SYSPARM.0 = SYSPARM.0 - 1
+end
+/* Next we'll do IEASYM */
+do i = 1 by 1 while SYM <> ''
+    parse var SYM IEASYM.i ',' SYM
+end
+IEASYM.0 = i-1
+do i = 1 to IEASYM.0
+    IF INDEX(IEASYM.0,"L") >0 THEN
+        IEASYM.0 = IEASYM.0 - 1
+end
+/* Now lets find IEASYS */
+Say "> Searching for IEASYSxx:"
+/* This loop will set the first item */
+DO i = 1 TO SYSPARM.0
+  DO j = 1 to PARMLIB.0
+    IF SYSDSN("'"||PARMLIB.j||"(IEASYS"|| SYSPARM.i||")'") == "OK" THEN DO
+      IEASYSxx = PARMLIB.j||"(IEASYS"|| SYSPARM.i||")"
+      SAY " + Setting IEASYSxx to" IEASYSxx
+      LEAVE
+    END
+  END
+END
+
+
+SAY " + ORDER | EXISTS | DATASET"
+DO i = 1 TO SYSPARM.0
+  DO j = 1 to PARMLIB.0
+    IF SYSDSN("'"||PARMLIB.j||"(IEASYS"|| SYSPARM.i||")'") == "OK" THEN 
+      SAY "     "|| right(j,2,0) || "  |  YES   | " ||,
+          PARMLIB.j||"(IEASYS"|| SYSPARM.i||")"
+    ELSE
+      SAY "     "|| right(j,2,0) || "  |  NO    | " ||,
+          PARMLIB.j||"(IEASYS"|| SYSPARM.i||")"
+  END
+END
+Say "> Searching for IEASYMxx:"
+/* This loop will set the first item */
+DO i = 1 TO IEASYM.0
+  DO j = 1 to PARMLIB.0
+    IF SYSDSN("'"||PARMLIB.j||"(IEASYM"|| IEASYM.i||")'") == "OK" THEN DO
+      IEASYMxx = PARMLIB.j||"(IEASYM"|| IEASYM.i||")"
+      SAY " + Setting IEASYMxx to" IEASYMxx
+      LEAVE
+    END
+  END
+END
+/* This is just for information to the user */
+
+SAY " + ORDER | EXISTS | DATASET"
+DO i = 1 TO IEASYM.0
+  DO j = 1 to PARMLIB.0
+    IF SYSDSN("'"||PARMLIB.j||"(IEASYM"|| IEASYM.i||")'") == "OK" THEN 
+      SAY "     "|| right(j,2,0) || "  |  YES   | " ||,
+          PARMLIB.j||"(IEASYM"|| IEASYM.i||")"
+    ELSE
+      SAY "     "|| right(j,2,0) || "  |  NO    | " ||,
+          PARMLIB.j||"(IEASYM"|| IEASYM.i||")"
+  END
+END
+
+/* Now that we have IEASYSxx and IEASYMxx we can look for other parms */
+/* https://www.ibm.com/support/knowledgecenter/en/
+   SSLTBW_2.3.0/com.ibm.zos.v2r3.ieae200/ieae200266.htm */
+SAY "> Parsing" SYSPARM
+ADDRESS TSO 
+"ALLOC F(INFILE) DSN('"||IEASYSxx||"') SHR REU"
+"EXECIO * DISKR INFILE ( FINIS STEM IEASYS."
+"FREE F(INFILE)"
+/* Set the values you're searching for here */
+/* This is some cleverness. What happens is */
+/* each of the 'SEARCH_ITEMS' will create   */
+/* a stem of the datasets identified for    */
+/* That symbol. For example, CMD becomes    */
+/* CMD.0 = #, CMD.1='00', etc               */
+/* CMD.dsn1 becomes the dataset used        */
+SEARCH_ITEMS ="CMD PROG LPA OMVS MSTRJCL"
+do ix = 1 While Length(SEARCH_ITEMS) > 0
+  Parse Var SEARCH_ITEMS ITEMS.ix SEARCH_ITEMS
+end
+ITEMS.0 = ix - 1
+DO I = 1 TO IEASYS.0 
+  DO J = 1 TO ITEMS.0
+    IF INDEX(IEASYS.I,ITEMS.J||"=") == 1 THEN DO
+        SAY " +" ITEMS.J "Found"
+        vals = POPTION(IEASYS.I)
+        do ix = 1 While Length(vals) > 0
+          interpret "Parse Var vals "||ITEMS.J||".ix vals"
+        end
+        interpret ITEMS.J||".0 = ix - 1"
+    END
+  END
+END
+DO J = 1 to ITEMS.0
+    Say "> Searching for "||ITEMS.j||":"
+    interpret "item = "||ITEMS.j||".0"
+    DO k = 1 TO item
+      interpret "PDS = "||ITEMS.j||".k"
+      SAY " +" ITEMS.j "-" PDS
+      SAY " + ORDER | EXISTS | DATASET"
+      DO i = 1 to PARMLIB.0
+        /* Some parms dont point to the name but something else */
+        /* So we change them here */
+        IF ITEMS.j == "CMD" THEN
+            DSN = "'"||PARMLIB.i||"(COMMND"||PDS||")'"
+        ELSE IF ITEMS.j == "OMVS" THEN 
+            DSN = "'"||PARMLIB.i||"(BPXPRM"||PDS||")'"
+        ELSE IF ITEMS.j == "MSTRJCL" THEN 
+            DSN = "'"||PARMLIB.i||"(MSTJCL"||PDS||")'"
+        ELSE IF ITEMS.j == "LPA" THEN
+            DSN = "'"||PARMLIB.i||"(LPALST"||PDS||")'"
+        ELSE
+            DSN = "'"||PARMLIB.i||"("||ITEMS.j||PDS||")'"
+        /* Now we search for the DSN */
+        IF SYSDSN(DSN) == "OK" THEN DO
+          SAY "     "|| right(i,2,0) || "  |  YES   | " || DSN
+          if SYMBOL((interpret ITEMS.j||".dsn")) == "BAD" THEN
+            interpret ITEMS.j||".dsn1 =" || DSN
+        END
+        ELSE
+          SAY "     "|| right(i,2,0) || "  |  NO    | " || DSN
+      END
+    END
+END
+
+Say "> Parsing MSTJCL (Master JCL File)" 
+Say " + using:" MSTRJCL.dsn1
+ADDRESS TSO 
+"ALLOC F(INFILE) DSN('"||MSTRJCL.dsn1||"') SHR REU"
+"EXECIO * DISKR INFILE ( FINIS STEM MSTJCL."
+"FREE F(INFILE)"
+FOUND = 0
+t = 0
+DO i = 1 TO MSTJCL.0
+    IF POS("IEFPDSI",MSTJCL.i) > 0 THEN DO
+        LOC1 = POS("DSN=",MSTJCL.i) + 4
+        LOC2 = POS(",",MSTJCL.i,LOC1)
+        jdsn = Substr(MSTJCL.i,LOC1,LOC2-LOC1)
+        FOUND = 1
+        x = SYMBOLS(jdsn)
+        t = t + 1
+        procs.t = x
+    END
+    ELSE IF FOUND == 1 & Substr(MSTJCL.i,3,7) == "       " THEN DO
+        LOC1 = POS("DSN=",MSTJCL.i) + 4
+        LOC2 = POS(",",MSTJCL.i,LOC1)
+        jdsn = Substr(MSTJCL.i,LOC1,LOC2-LOC1)
+        x = SYMBOLS(jdsn)
+        t = t + 1
+        procs.t = x
+    END
+    ELSE IF FOUND == 1 & Substr(MSTJCL.i,3,7) <> "       " THEN
+        FOUND = 0
+end
+procs.0 = t
+SAY " + ORDER | EXISTS | DATASET"
+DO i = 1 TO procs.0
+    IF SYSDSN("'"||procs.i||"'") == "OK" THEN
+      SAY "     "|| right(i,2,0) || "  |  YES   | " ||procs.i
+    ELSE
+      SAY "     "|| right(i,2,0) || "  |  NO    | " ||procs.i
+END
+Say "> Parsing COMMNDxx (commands automatically issued at initialization)"
+Say " + Using:" CMD.dsn1
+ADDRESS TSO 
+"ALLOC F(INFILE) DSN('"||CMD.dsn1||"') SHR REU"
+"EXECIO * DISKR INFILE ( FINIS STEM COMMND."
+"FREE F(INFILE)"
+say " + Listing contents of" CMD.dsn1
+DO i = 1 by 1 to COMMND.0
+    say "     + " strip(COMMND.i)
+end
+DO i = 1 to COMMND.0
+    command = strip(COMMND.i)
+    if substr(command,1,6) == "COM='S" THEN DO
+        say ' + Parsing Command:' substr(command,5)
+        if pos(",",command,6) > 0 THEN 
+            sproc = symbols(substr(command,8,pos(",",command,6)-8))
+        else 
+            sproc = symbols(strip(substr(command,8),,"'"))
+        say "  + Searching for proc:" sproc
+        do j = 1 to procs.0
+            IF SYSDSN("'"||procs.j ||"("sproc||")'") == "OK" THEN
+            say "     Found" procs.j ||"("sproc||")" 
+        end
+    end
+end
+say "> Parsing OMVS Parmlibs BPXPRMxx"
+do i = 1 to OMVS.0
+    do j = 1 to PARMLIB.0
+        DSN = "'"||PARMLIB.j||"(BPXPRM"||OMVS.i||")'"
+        if SYSDSN(DSN) == "OK" THEN DO
+            SAY " + Dataset:" DSN
+            ADDRESS TSO 
+            "ALLOC F(INFILE) DSN("||DSN||") SHR REU"
+            "EXECIO * DISKR INFILE ( FINIS STEM BPXPRM."
+            "FREE F(INFILE)"
+            DO k = 1 by 1 to BPXPRM.0
+                if pos('ROOT',BPXPRM.k) > 0 | pos('MOUNT',BPXPRM.k) > 0 THEN
+                    say "     + " symbols(strip(BPXPRM.k))
+            end
+        END
+    END
+end
+EXIT(0)
+
+
+/* Dirty function to parse config options like: PROG=(00,01,02,04,L) */
+/* Input: Takes a parmlib option and parses out the values */
+/* Output: stem with the values */
+
+POPTION: procedure
+  PARSE ARG opts . /* lose the comments */
+  eqls = pos("=",opts)
+  open = pos("(",opts)
+  close = pos(")",opts)
+  if open > 0 THEN DO /* Multiple Options to parse through */
+    t = ''
+    opts = Substr(opts,open+1,close-open-1)
+    do i = 1 by 1 while opts <> ''
+      parse var opts temp ',' opts
+      if temp == "L" THEN ITERATE /* We don't need those Ls */
+      t = t || " " || temp
+    end
+    SAY "     " strip(t)
+    return strip(t)
+  END
+  ELSE DO /* Just one entry */
+    SAY "     " Substr(opts,eqls+1,2)
+    return (Substr(opts,eqls+1,2))
+  END
+return -1
+
+/* REPLACE SYMBOLS */
+/* Symbols look like &SYM */
+/* This function finds all symbols in a string and replaces them */
+SYMBOLS: 
+parse arg text
+totals = FINDALL(text)
+l = length(strip(text))
+start = 0
+do SI = 1 to totals by 1
+    start = pos('&',text, start+1)
+    if start == 0 then return text
+    E1 = pos('&',text,start+1)
+    E2 = pos('.',text,start+1)
+    E3 = pos(',',text,start+1)
+    E4 = pos(')',text,start+1)
+    E5 = pos("'",text,start+1)
+    TMP = E1||" "||E2||" "||E3||" "||E4||" "||E5
+    ending = smallest(TMP)
+    if ending == 0 THEN
+        ENDING = length(text) + 1
+    IF ending /= length(text) + 1 THEN
+      nameds = substr(text,start+1,ending-start-1)
+    ELSE
+      nameds = substr(text,start+1,ending-start)
+    interpret "val = " || nameds
+    if substr(text,ending,1) == '.' THEN
+        ending = ending + 1
+    text = substr(text,1,start-1)||val||substr(text,ending)
+end
+return text
+
+FINDALL: procedure
+PARSE ARG string
+position = 0
+count = 0
+DO WHILE POS('&',string,position+1) > 0
+    count = count + 1
+    position = POS('&',string,position+1)
+end
+return count
+
+LISTMEMBERS: procedure
+parse arg pdsname
+say "+ Listing Members of:" pdsname
+X=OUTTRAP("RES.") 
+ADDRESS TSO "LISTDS ('"pdsname"') MEMBERS" 
+X=OUTTRAP("OFF") 
+DO I = 7 TO RES.0 
+ RES.I = STRIP(RES.I) 
+ DS = pdsname || "(" || RES.I || ")" 
+ SAY " + " DS
+END 
+return
+
+smallest: procedure 
+    parse arg barf
+    do i = 1 by 1 while barf <> ''
+        parse var barf sortme.i ' ' barf
+    end
+    sortme.0 = i-1
+    tmp = 10000
+    do i = 1 to sortme.0
+        if tmp > sortme.i & sortme.i /= 0 then 
+            tmp = sortme.i
+    end
+    if tmp == 10000 then tmp = 0
+return tmp
