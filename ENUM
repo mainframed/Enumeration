@@ -46,7 +46,7 @@ verificationsteps.0 = 0
 
 /* Optional TSO load module used for ESM-agnostic SAF checks.       */
 /* Set to '' to disable dataset and resource access checks.         */
-accessProgram = 'PHIL.LOAD(ACCESS)'
+accessProgram = USERID() || '.ENUM.LOADLIB(ACCESS)'
 accessProgramState = 'UNKNOWN'
 
 /* Global variables for AddToArray */

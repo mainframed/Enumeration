@@ -1,0 +1,44 @@
+{
+  "SOURCE": {
+    "ACCESS": "ACCESS",
+    "APFCHECK": "APFCHECK.hlasm",
+    "OMVSENUM": "Unix/OMVSEnum.java",
+    "OMVSSEC": "Unix/OMVSSecurityChecks.java",
+    "GHOST": "Unix/GhostWalker.java",
+    "PORTJAVA": "Unix/portscan.java",
+    "PORTC": "Unix/portscan.c",
+    "SAFAUTH": "Unix/safauth.c",
+    "RACF2J": "Unix/racf2john.java",
+    "MAKEFILE": "Unix/Makefile",
+    "CMPACC": "release/compile_access.jcl",
+    "CMPAPF": "release/compile_apfcheck.jcl",
+    "CMPUNIX": "release/compile_unix.jcl"
+  },
+  "JCLLIB": {
+    "CMPACC": "release/compile_access.jcl",
+    "CMPAPF": "release/compile_apfcheck.jcl",
+    "CMPUNIX": "release/compile_unix.jcl",
+    "RUNENUM": "release/run_enum.jcl",
+    "RUNACC": "release/run_access.jcl",
+    "RUNAPF": "release/run_apfcheck.jcl",
+    "RUNUSS": "release/run_unix.jcl",
+    "PACKAGE": "release/package.jcl",
+    "UNIXENUM": "Unix/UNIXENUM.jcl",
+    "OMVSSH": "Unix/OMVSEnum.sh",
+    "LICENSE": "LICENSE",
+    "ALLOC": "release/allocate.jcl"
+  },
+  "REXXLIB": {
+    "ENUM": "ENUM",
+    "PDSTEST": "PDSTEST.rexx",
+    "PDSATST": "PDSACCESSTEST.rexx",
+    "SEARCHRX": "Legacy/SEARCHRX.rx",
+    "SYS0WN": "Legacy/SYS0WN.rx",
+    "STARTMAP": "Legacy/startmap.rx",
+    "DSNSRCH": "Legacy/dsnsrch.rx",
+    "EXFIL": "Legacy/exfil.rx"
+  },
+  "XMILIB": {
+    "INSTALL": "release/INSTALL.clist"
+  }
+}

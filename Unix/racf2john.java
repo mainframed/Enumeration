@@ -30,8 +30,11 @@ public class RACF2John {
     /**
      * Process user record to find DES or KDFAES password hash
      */
-    private static void processUserRec(byte[] userProfile, int length, byte[] profileName, int profileNameLen) {
-        byte[] passFields = {12, 100}; // Fields for password types (DES and KDFAES)
+    private static void processUserRec(byte[] userProfile, int length,
+                                       byte[] profileName,
+                                       int profileNameLen) {
+        // Fields for password types (DES and KDFAES)
+        byte[] passFields = {12, 100};
         byte fieldNumber;
         int fieldLength;
         int position = 0;
@@ -57,13 +60,15 @@ public class RACF2John {
                 repeating = true;
             }
             
-            if (!repeating && fieldNumber == passFields[0]) { // DES password field
+            // DES password field
+            if (!repeating && fieldNumber == passFields[0]) {
                 if (fieldLength == 8) {
                     h1Offset = position + 2;
                     h1Len = 8;
                     found = T_DES;
                 }
-            } else if (!repeating && fieldNumber == passFields[1]) { // KDFAES password field
+            // KDFAES password field
+            } else if (!repeating && fieldNumber == passFields[1]) {
                 if (fieldLength == 40) {
                     found = T_KDFAES;
                     h2Offset = position + 2;
@@ -112,15 +117,22 @@ public class RACF2John {
             // Start at i=7 since our check looks 7 chars ahead
             for (int i = 7; i < size; i++) {
                 // Look for profile markers
-                if (buffer[i-7] == (byte)0xc2 && buffer[i-6] == (byte)0xc1 &&  // "BA"
-                    buffer[i-5] == (byte)0xe2 && buffer[i-4] == (byte)0xc5 &&  // "SE"
-                    buffer[i-3] == (byte)0x40 && buffer[i-2] == (byte)0x40 &&  // "  "
-                    buffer[i-1] == (byte)0x40 && buffer[i] == (byte)0x40 &&    // "  "
-                    buffer[i+1] == 0 && (buffer[i+2] & 0xFF) < 9 &&            // null + total namelen < 9
-                    buffer[i+3] == 0) {                                        // null
+                // "BA"
+                if (buffer[i-7] == (byte)0xc2 && buffer[i-6] == (byte)0xc1 &&
+                    // "SE"
+                    buffer[i-5] == (byte)0xe2 && buffer[i-4] == (byte)0xc5 &&
+                    // "  "
+                    buffer[i-3] == (byte)0x40 && buffer[i-2] == (byte)0x40 &&
+                    // "  "
+                    buffer[i-1] == (byte)0x40 && buffer[i] == (byte)0x40 &&
+                    // null + total namelen < 9
+                    buffer[i+1] == 0 && (buffer[i+2] & 0xFF) < 9 &&
+                    // null
+                    buffer[i+3] == 0) {
                     
                     int userRecAddr = i - 16;
-                    int userRecLen = ((buffer[i-9] & 0xFF) << 8) + (buffer[i-8] & 0xFF);
+                    int userRecLen = ((buffer[i-9] & 0xFF) << 8)
+                        + (buffer[i-8] & 0xFF);
                     int profileNameLen = buffer[i+2] & 0xFF;
                     int profileNameOffset = i + 4;
                     int headerLen = (i + 4 + profileNameLen) - userRecAddr;
@@ -130,12 +142,15 @@ public class RACF2John {
                     // Check if the profile is active
                     if (buffer[userProfOffset] == 0x02) {
                         byte[] profileName = new byte[profileNameLen];
-                        System.arraycopy(buffer, profileNameOffset, profileName, 0, profileNameLen);
+                        System.arraycopy(buffer, profileNameOffset, profileName,
+                            0, profileNameLen);
                         
                         byte[] userProfile = new byte[profileLen];
-                        System.arraycopy(buffer, userProfOffset, userProfile, 0, profileLen);
+                        System.arraycopy(buffer, userProfOffset, userProfile,
+                            0, profileLen);
                         
-                        processUserRec(userProfile, profileLen, profileName, profileNameLen);
+                        processUserRec(userProfile, profileLen,
+                            profileName, profileNameLen);
                     }
                 }
             }

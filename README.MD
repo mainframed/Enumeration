@@ -63,7 +63,7 @@ Requirements vary by tool:
 - z/OS TSO/E REXX and permission to run the required TSO services
 - JES submission access for JCL tools
 - HLASM and a linker for `ACCESS` and `APFCHECK`
-- a site HLASM cataloged procedure such as `HLASMCL`, or equivalent local JCL
+- ASMA90, HEWL, SYS1.MACLIB and SYS1.MODGEN for the supplied compile jobs
 - z/OS UNIX and Java 8 or newer for Java tools
 - a 31-bit IBM C compiler for the optional USS `safauth` helper
 - appropriate read access to control blocks, configuration members, data sets,
@@ -74,49 +74,91 @@ sufficient command authority. `ENUM` and the SAF helpers are designed to
 remain useful with RACF, ACF2, or Top Secret, although available evidence
 varies by ESM.
 
-## TSO quick start
+## Install the release
 
-1. Upload REXX sources to a suitable REXX library. Repository filename
-   extensions are not part of the member name:
+The release is [ENUM.XMI](ENUM.XMI), a nested TSO TRANSMIT package.
+Verify [ENUM.XMI.sha256](ENUM.XMI.sha256) locally:
 
-   ```text
-   Legacy/SEARCHRX.rx -> YOUR.REXX.LIB(SEARCHRX)
-   Legacy/startmap.rx -> YOUR.REXX.LIB(STARTMAP)
-   PDSACCESSTEST.rexx -> YOUR.REXX.LIB(PDSACCESSTEST)
-   ```
+```sh
+shasum -a 256 -c ENUM.XMI.sha256
+```
 
-2. Upload `ACCESS` to an FB 80 assembler source member. Keep source content
-   within columns 1-72; columns 73-80 are reserved for sequence information.
-   Then assemble and link it:
+Upload **in binary mode**, without ASCII/EBCDIC conversion, to a new
+sequential FB 80 dataset named `yourid.ENUM.XMI`. Do not upload as text,
+add newlines, or use a browser/editor to save its contents. Allocate enough
+space for the complete artifact. With configured Zowe credentials:
 
-   ```jcl
-   //ACCESS JOB (1),'ACCESS',CLASS=A,MSGCLASS=Y,
-   //         NOTIFY=&SYSUID,MSGLEVEL=(1,1)
-   //ASM      EXEC PROC=HLASMCL,PARM.L='MAP,LET,LIST',
-   //         PARM.C='OBJECT,NODECK'
-   //SYSIN    DD DSN=YOUR.SOURCE(ACCESS),DISP=SHR
-   //L.SYSLMOD DD DSN=YOUR.LOAD(ACCESS),DISP=SHR
-   //L.SYSPRINT DD SYSOUT=*
-   ```
+```sh
+zowe zos-files create data-set-sequential YOURID.ENUM.XMI \
+  --record-format FB --record-length 80 --block-size 27920 \
+  --primary-space 20 --secondary-space 5
+zowe zos-files upload file-to-data-set ENUM.XMI YOURID.ENUM.XMI --binary
+```
 
-   Adapt the cataloged procedure and DD overrides to local standards.
+At the TSO READY prompt (replace YOURID with your executing TSO ID):
 
-3. Set the helper location near the top of `ENUM`:
+```text
+RECEIVE INDATASET('YOURID.ENUM.XMI')
+```
 
-   ```rexx
-   accessProgram = 'YOUR.LOAD(ACCESS)'
-   ```
+At RECEIVE's restore-parameters prompt enter:
 
-   Set it to `''` to disable SAF access checks.
+```text
+DATASET('YOURID.ENUM.XMILIB')
+```
 
-4. Upload `ENUM` as a REXX member and run:
+Then execute the packaged installer:
 
-   ```text
-   EX 'YOUR.REXX.LIB(ENUM)' 'ALL'
-   ```
+```text
+EX 'YOURID.ENUM.XMILIB(INSTALL)'
+```
 
-`ENUM` currently ships with `PHIL.LOAD(ACCESS)` as its example site value; it
-must be changed when that library is unavailable.
+Before receiving the outer package, ensure `YOURID.ENUM.XMILIB` is absent;
+rename any existing copy to an unused backup name. INSTALL checks **all five**
+destination datasets before receiving any of them and refuses existing or
+indeterminate destinations. It never merges or replaces installed libraries.
+If a later RECEIVE fails, successfully received earlier libraries remain;
+inspect and preserve partial results before retrying.
+
+| Dataset suffix | Contents |
+|---|---|
+| `LOADLIB` | ACCESS and APFCHECK MVS load modules |
+| `SOURCE` | Assembler, Java and C sources, Makefile, separate compile JCL |
+| `REXXLIB` | ENUM and all seven additional/legacy REXX utilities |
+| `JCLLIB` | All compile, run, allocation and packaging JCL; legacy USS shell and license |
+| `UNIXTAR` | Binary tar archive of USS JARs and native executables |
+| `XMILIB` | Five nested XMIT members and INSTALL CLIST |
+
+All installed dataset names use the executing user's ID. `PHIL` is only the
+build identity used for this release. `XMI/ENUM.XMI` (with `XMI/ENUM.XMI.sha256`)
+is the version-controlled copy of this current release artifact. Rebuilding
+locally with `release/package.jcl` produces the same content at the
+repository root as `ENUM.XMI`/`ENUM.XMI.sha256`; those root copies are
+gitignored working output, not a separate artifact.
+
+## TSO and batch quick start
+
+Run interactively:
+
+```text
+EX 'YOURID.ENUM.REXXLIB(ENUM)' 'ALL'
+```
+
+Or submit `YOURID.ENUM.JCLLIB(RUNENUM)` through JES. This runs ENUM under
+batch TSO with `IKJEFT1B`, uses `&SYSUID..ENUM.REXXLIB` as SYSEXEC and
+`&SYSUID..ENUM.LOADLIB` as STEPLIB, and writes output to spool. Change the
+argument from `ALL` to the desired ENUM option. No interactive TSO session
+or USS deployment is required for batch execution.
+
+ENUM resolves ACCESS with:
+
+```rexx
+accessProgram = USERID() || '.ENUM.LOADLIB(ACCESS)'
+```
+
+Set it to `''` only to disable SAF access checks. All REXX member names fit
+eight characters; `PDSACCESSTEST.rexx` maps to `PDSATST`.
+
 
 ## ENUM
 
@@ -189,14 +231,14 @@ included in ASSESS findings.
 Direct TSO examples:
 
 ```text
-CALL 'YOUR.LOAD(ACCESS)' 'DATASET SYS1.PARMLIB VOLSER'
-CALL 'YOUR.LOAD(ACCESS)' 'RESOURCE TSOAUTH READ CONSOLE'
+CALL 'YOURID.ENUM.LOADLIB(ACCESS)' 'DATASET SYS1.PARMLIB VOLSER'
+CALL 'YOURID.ENUM.LOADLIB(ACCESS)' 'RESOURCE TSOAUTH READ CONSOLE'
 ```
 
 The legacy data set form remains accepted:
 
 ```text
-CALL 'YOUR.LOAD(ACCESS)' 'SYS1.PARMLIB VOLSER'
+CALL 'YOURID.ENUM.LOADLIB(ACCESS)' 'SYS1.PARMLIB VOLSER'
 ```
 
 The requested RESOURCE access is a threshold used by ENUM; ACCESS returns the
@@ -230,22 +272,13 @@ document.
 
 ## APFCHECK
 
-`APFCHECK` is self-contained JCL with embedded HLASM. It calls
-`CSVAPF REQUEST=LIST`, checks effective data set access with SAF, and prints:
+`APFCHECK.hlasm` calls `CSVAPF REQUEST=LIST`, checks effective dataset access
+with SAF, and prints `ACCESS | VOLUME | DATASET` to SYSPRINT.
 
-```text
-ACCESS | VOLUME | DATASET
-```
+Submit `JCLLIB(CMPAPF)` to assemble/link, then `JCLLIB(RUNAPF)` when an
+application audit is intended. The root `APFCHECK` file is now the run-only
+JCL. Rebuilding no longer starts an APF audit.
 
-Before submission, change:
-
-```jcl
-//          SET LOADMOD=APFCHECK
-//          SET LOADLIB=YOUR.LOAD.LIB
-```
-
-The job assembles, links, and runs the module. The load library must already
-exist and be writable by the submitting identity.
 
 ## Legacy TSO utilities
 
@@ -325,7 +358,7 @@ Prompts before attempting to create or write a named member in each listed
 PDS:
 
 ```text
-EX 'YOUR.REXX.LIB(PDSACCESSTEST)' 'YOUR.DSN(LIST) TESTMEM'
+EX 'YOURID.ENUM.REXXLIB(PDSATST)' 'YOUR.DSN(LIST) TESTMEM'
 ```
 
 Successful tests create or alter `TESTMEM`. Use a disposable member name and
@@ -347,24 +380,39 @@ identify approved reachable listener ports.
 
 ## USS deployment summary
 
-From the `Unix` directory:
+`UNIXTAR` is a sequential binary tar archive, not an MVS load library.
+The old XMI carried OMVSEnum.jar, GhostWalker.jar, portscan.jar, safauth,
+and portscan-c. This release rebuilds those and adds RACF2John.jar.
+JARs and USS executable files require this separate layout; LOADLIB holds
+only MVS load modules.
+
+USS deployment is two jobs: `JCLLIB(CMPUNIX)` builds, and `JCLLIB(RUNUSS)`
+runs. Both create a private working directory under the submitting user's
+own OMVS home directory (`cd; home=$(pwd)`), never a hardcoded `/u/userid`
+path or `/tmp`, and remove it on exit.
+
+`CMPUNIX` exports sources from SOURCE into that private directory, builds
+every Java/C implementation, and replaces the contents of the allocated
+UNIXTAR dataset. It runs no application. Build output goes to spool.
+
+`RUNUSS` extracts UNIXTAR into its own private directory and runs OMVSEnum,
+then GhostWalker twice against `/`: once with `-r -m -u` (read/write-accessible
+paths, last-modified time, owner/group) and once with `-m -u` (writeable
+paths, same detail). Both GhostWalker reports are written to files and then
+`cat` to spool, since the private directory is removed on exit. The other
+UNIXTAR tools (both port scanners, safauth, RACF2John) are still built by
+CMPUNIX but are not run by RUNUSS; edit `release/run_unix.jcl` to invoke
+them. Supply absolute paths for reports you want to retain outside the job.
+
+`Unix/UNIXENUM.sh` now generates `Unix/UNIXENUM.jcl` from
+`release/run_unix.jcl`. It uses the installed package, does not embed
+thousands of source lines, and does not delete a shared USS deployment folder.
+Edit the release run job, then regenerate with:
 
 ```sh
-make
-./UNIXENUM.sh > UNIXENUM.jcl
+sh Unix/UNIXENUM.sh > Unix/UNIXENUM.jcl
 ```
 
-- `make` builds executable JARs for OMVSEnum, GhostWalker, and the Java port
-  scanner, plus `safauth`.
-- `UNIXENUM.sh` generates the checked-in deployment job.
-- The job embeds the root `ENUM` source as `ENUM.rexx`, uploads selected USS
-  sources and the Makefile, builds them on z/OS, and runs the default
-  enumeration workflow.
-- `.github/workflows/generate-jcl.yml` regenerates and commits
-  `Unix/UNIXENUM.jcl` after repository pushes.
-
-Do not edit `Unix/UNIXENUM.jcl` directly; configure `Unix/UNIXENUM.sh` and
-regenerate it.
 
 ### Experimental portscan parallelism
 
@@ -387,13 +435,13 @@ exit-code, and usage details.
   access value, and TSO execution environment.
 - **ENUM shows `N/A`:** confirm `accessProgram`, load-library access, and that
   ENUM is running under TSO rather than directly under OMVS.
-- **HLASMCL is unavailable:** substitute the site's assembler/link-edit
-  procedure and preserve the SYSIN/SYSLMOD intent.
+- **Assembler/linker dependencies are unavailable:** adapt the supplied
+  ASMA90/HEWL jobs and system macro-library names to local standards.
 - **RACF commands are rejected:** use ENUM/ACCESS where possible; the legacy
   SEARCHRX and SYS0WN tools require authorities not granted to many assessment
   identities.
 - **USS Java is not in PATH:** invoke `java` and `javac` by their full
-  `/usr/lpp/java/.../bin` paths or configure the generator variables.
+  `/usr/lpp/java/.../bin` paths or update CMPUNIX and RUNUSS.
 
 ## Generated and local-only artifacts
 
@@ -402,3 +450,33 @@ exit-code, and usage details.
 - Compiled `.class` and `.jar` files plus `safauth` are build products.
 - `.vscode` and `.claude` files are local editor/assistant configuration, not
   runtime dependencies.
+
+## Rebuild and repackage
+
+See [release/RELEASE_NOTES.md](release/RELEASE_NOTES.md) for the exact member
+mapping and build/deployment prerequisites, and
+[release/VALIDATION.md](release/VALIDATION.md) for measured results and limits.
+[release/members.json](release/members.json) is the machine-readable mapping.
+
+1. Inspect existing datasets and preserve them under checked unused names.
+   `release/allocate.jcl` allocates new libraries only and refuses collisions.
+2. Stage local members with `python3 release/stage.py /tmp/enum-stage-UNIQUE`.
+   The staging directory must not already exist. Upload SOURCE, JCLLIB,
+   REXXLIB and XMILIB directories into their corresponding allocated PDSs:
+   `zowe zos-files upload dir-to-pds /tmp/enum-stage-UNIQUE/SOURCE
+   YOURID.ENUM.SOURCE --encoding IBM-1047` (one shell line).
+   Repeat for the other three directories. Never use text transfer for XMITs.
+3. Submit CMPACC, CMPAPF and CMPUNIX; check individual compiler and binder
+   diagnostics and return codes. Compile JCL is identical in SOURCE and JCLLIB.
+   No run job is needed to build or validate packaging.
+4. Ensure `YOURID.ENUM.XMI` is absent or preserved under an unused name.
+   Submit `release/package.jcl` or JCLLIB(PACKAGE). It uses OUTDDNAME for
+   local XMIT output, including the sequential UNIXTAR archive.
+5. Download `YOURID.ENUM.XMI` with Zowe `--binary --file ENUM.XMI`, then run
+   `shasum -a 256 ENUM.XMI > ENUM.XMI.sha256`.
+6. Repeat the binary upload/receive/installer/member comparison protocol in
+   VALIDATION.md before publishing a changed artifact.
+
+The installer follows the references' DATA PROMPT/ENDDATA convention.
+USS jobs use STDPARM for shell commands; see
+[IBM's BPXBATCH documentation](https://www.ibm.com/docs/en/zos/3.1.0?topic=environments-bpxbatch).

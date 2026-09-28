@@ -10,14 +10,17 @@ import java.util.concurrent.Future;
 
 // Tool by Owen aka SirCICSAlot
 public class portscan {
- private static final int DEFAULT_TIMEOUT = 1000;
+ private static final int DEFAULT_START_PORT = 1;
+ private static final int DEFAULT_END_PORT = 65535;
+ private static final int DEFAULT_TIMEOUT = 100;
  private static final int DEFAULT_THREADS = 1;
  private static final int MAX_THREADS = 64;
+ private static final int PROGRESS_INTERVAL = 1000;
 
  private static class Config {
   String host;
-  int startPort;
-  int endPort;
+  int startPort = DEFAULT_START_PORT;
+  int endPort = DEFAULT_END_PORT;
   int timeout = DEFAULT_TIMEOUT;
   int threads = DEFAULT_THREADS;
   boolean debug;
@@ -40,7 +43,7 @@ public class portscan {
    config = parseArguments(args);
   } catch (IllegalArgumentException e) {
    System.err.println("portscan: " + e.getMessage());
-   System.err.println("Try 'java portscan --help' for usage.");
+   System.err.println("Try 'java -jar portscan.jar --help' for usage.");
    System.exit(2);
    return;
   }
@@ -61,47 +64,74 @@ public class portscan {
   }
 
   printScanHeader(config, address);
-  List<ScanResult> results;
+  int openCount;
+  int scanned;
   try {
+   Reporter reporter = new Reporter(config);
    if (config.threads == 1) {
-    results = scanSequential(config, address);
+    scanSequential(config, address, reporter);
    } else {
-    results = scanParallel(config, address);
+    scanParallel(config, address, reporter);
    }
+   openCount = reporter.openCount;
+   scanned = reporter.scanned;
   } catch (RuntimeException e) {
    System.err.println("portscan: parallel scan failed");
    System.exit(2);
    return;
   }
 
-  int openCount = printResults(results, config.debug);
   System.out.println(
-      "Scanned " + results.size() + " ports; " +
+      "Scanned " + scanned + " ports; " +
       openCount + " open.");
   System.exit(openCount > 0 ? 0 : 1);
  }
 
- private static List<ScanResult> scanSequential(
-     Config config, InetAddress address
- ) {
-  List<ScanResult> results =
-      new ArrayList<ScanResult>();
-  for (int port = config.startPort;
-       port <= config.endPort; port++) {
-   results.add(scanPort(address, port, config.timeout));
+ // Reports each result as soon as it is known, in port order.
+ private static class Reporter {
+  private final Config config;
+  int openCount;
+  int scanned;
+
+  Reporter(Config config) {
+   this.config = config;
   }
-  return results;
+
+  void report(ScanResult result) {
+   scanned++;
+   if (result.open) {
+    System.out.println("Port " + result.port + " is open");
+    openCount++;
+   } else if (config.debug) {
+    System.out.println("Port " + result.port + " is closed");
+   }
+   if (!config.debug &&
+       result.port % PROGRESS_INTERVAL == 0) {
+    System.out.println(
+        "[Timeout: " + config.timeout + " ms] [" +
+        config.host + "] Current Port: " + result.port);
+   }
+   System.out.flush();
+  }
  }
 
- private static List<ScanResult> scanParallel(
-     final Config config, final InetAddress address
+ private static void scanSequential(
+     Config config, InetAddress address, Reporter reporter
+ ) {
+  for (int port = config.startPort;
+       port <= config.endPort; port++) {
+   reporter.report(scanPort(address, port, config.timeout));
+  }
+ }
+
+ private static void scanParallel(
+     final Config config, final InetAddress address,
+     Reporter reporter
  ) {
   ExecutorService executor =
       Executors.newFixedThreadPool(config.threads);
   List<Future<ScanResult>> futures =
       new ArrayList<Future<ScanResult>>();
-  List<ScanResult> results =
-      new ArrayList<ScanResult>();
 
   try {
    for (int port = config.startPort;
@@ -118,16 +148,14 @@ public class portscan {
 
    for (Future<ScanResult> future : futures) {
     try {
-     results.add(future.get());
+     reporter.report(future.get());
     } catch (Exception e) {
-     executor.shutdownNow();
      throw new RuntimeException(e);
     }
    }
   } finally {
    executor.shutdownNow();
   }
-  return results;
  }
 
  private static ScanResult scanPort(
@@ -147,23 +175,6 @@ public class portscan {
     // Nothing else can be done during cleanup.
    }
   }
- }
-
- private static int printResults(
-     List<ScanResult> results, boolean debug
- ) {
-  int openCount = 0;
-  for (ScanResult result : results) {
-   if (result.open) {
-    System.out.println(
-        "Port " + result.port + " is open");
-    openCount++;
-   } else if (debug) {
-    System.out.println(
-        "Port " + result.port + " is closed");
-   }
-  }
-  return openCount;
  }
 
  private static void printScanHeader(
@@ -189,30 +200,25 @@ public class portscan {
 
  private static Config parseArguments(String[] args) {
   Config config = new Config();
-  if (args.length == 1 &&
-      (args[0].equals("-h") ||
-       args[0].equals("--help"))) {
-   config.help = true;
-   return config;
-  }
-  if (args.length < 3) {
-   throw new IllegalArgumentException(
-       "host, start port, and end port are required");
-  }
 
-  config.host = args[0];
-  config.startPort =
-      parseNumber(args[1], "start port", 1, 65535);
-  config.endPort =
-      parseNumber(args[2], "end port", 1, 65535);
-  if (config.startPort > config.endPort) {
-   throw new IllegalArgumentException(
-       "start port must not exceed end port");
-  }
-
-  for (int i = 3; i < args.length; i++) {
+  int positional = 0;
+  for (int i = 0; i < args.length; i++) {
    String arg = args[i];
-   if (arg.equals("-t") ||
+   if (!arg.startsWith("-")) {
+    if (positional == 0) {
+     config.host = arg;
+    } else if (positional == 1) {
+     config.startPort =
+         parseNumber(arg, "start port", 1, 65535);
+    } else if (positional == 2) {
+     config.endPort =
+         parseNumber(arg, "end port", 1, 65535);
+    } else {
+     throw new IllegalArgumentException(
+         "unexpected argument: " + arg);
+    }
+    positional++;
+   } else if (arg.equals("-t") ||
        arg.equals("--timeout")) {
     i = requireValue(args, i, arg);
     config.timeout = parseNumber(
@@ -232,6 +238,16 @@ public class portscan {
     throw new IllegalArgumentException(
         "unknown option: " + arg);
    }
+  }
+  if (config.help) {
+   return config;
+  }
+  if (config.host == null) {
+   throw new IllegalArgumentException("host is required");
+  }
+  if (config.startPort > config.endPort) {
+   throw new IllegalArgumentException(
+       "start port must not exceed end port");
   }
   return config;
  }
@@ -266,26 +282,29 @@ public class portscan {
 
  private static void printUsage() {
   System.out.println(
-      "Usage: java -jar portscan.jar <host> <start-port> " +
-      "<end-port> [options]");
+      "Usage: java -jar portscan.jar <host> " +
+      "[start-port [end-port]] [options]");
   System.out.println();
-  System.out.println("Required arguments:");
+  System.out.println("Arguments:");
   System.out.println(
       "  host                      Hostname or IP address");
   System.out.println(
-      "  start-port                First port (1-65535)");
+      "  start-port                First port " +
+      "(1-65535; default 1)");
   System.out.println(
-      "  end-port                  Last port (1-65535)");
+      "  end-port                  Last port " +
+      "(1-65535; default 65535)");
   System.out.println();
   System.out.println("Options:");
   System.out.println(
       "  -t, --timeout <ms>        Connect timeout " +
-      "(default 1000)");
+      "(default 100)");
   System.out.println(
       "  -T, --threads <count>     Experimental workers " +
       "(1-64; default 1)");
   System.out.println(
-      "  -d, --debug               Show closed ports");
+      "  -d, --debug               Show every port " +
+      "scanned, including closed");
   System.out.println(
       "  -h, --help                Show this help");
   System.out.println();
@@ -295,12 +314,14 @@ public class portscan {
   System.out.println();
   System.out.println("Examples:");
   System.out.println(
-      "  java portscan localhost 1 1024");
+      "  java -jar portscan.jar 192.0.2.10");
   System.out.println(
-      "  java portscan host.example 1 65535 " +
+      "  java -jar portscan.jar localhost 1 1024");
+  System.out.println(
+      "  java -jar portscan.jar host.example 1 65535 " +
       "--timeout 250");
   System.out.println(
-      "  java portscan 192.0.2.10 1 1024 " +
+      "  java -jar portscan.jar 192.0.2.10 1 1024 " +
       "--threads 8");
  }
 }
