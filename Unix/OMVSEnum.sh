@@ -245,24 +245,26 @@ fi
 
 # Display group information
 usernum=`/bin/tsocmd lg 2>/dev/null|grep -ni "USER(S)="|cut -d":" -f1`
-if [ "$usernum" -ne "" ]; then
+if [ -n "$usernum" ]; then
   total_lines=`/bin/tsocmd lg 2>/dev/null|wc|awk '{print $1}'`
   group_lines=`expr $total_lines - $usernum`
   group_users=`/bin/tsocmd lg 2>/dev/null|tail -n $group_lines|\
                grep -v CONNECT|grep -v REVOKE|awk '{print "\t"$1}'`
   echo "[-] Default RACF group users:\n$group_users" 
+else
+  echo "[-] Skipping group enum: 'lg' denied (GROUP.LISTGRP authorization)"
 fi
 
 # Display subgroup information
-if [ "$usernum" ]; then
+if [ -n "$usernum" ]; then
   sub_group=`/bin/tsocmd lg 2>/dev/null|\
              grep -ni "SUBGROUP(S)="|\
              cut -d":" -f1`
-  tail_num=`expr $usernum - $sub_group`
-  head_num=`expr $usernum - 1`
-  group_users=`/bin/tsocmd lg 2>/dev/null|head -n $head_num|\
-               tail -n $tail_num|sed 's/SUBGROUP(S)=/            /'`
-  if [ "$sub_group" ]; then
+  if [ -n "$sub_group" ]; then
+    tail_num=`expr $usernum - $sub_group`
+    head_num=`expr $usernum - 1`
+    group_users=`/bin/tsocmd lg 2>/dev/null|head -n $head_num|\
+                 tail -n $tail_num|sed 's/SUBGROUP(S)=/            /'`
     echo "[-] Current RACF Subgroups:\n$group_users"
   fi
   if [ "$thorough" = "1" ]; then
@@ -1108,7 +1110,7 @@ if [ "$mounteddataset" ]; then
         echo "\t NOT A DATASET \t $dataset"
         continue
       fi
-      if echo $listdsd|grep -q ICH35002I; then
+      if echo $listdsd|grep -q -e ICH35002I -e VPM021E -e IRRV022I -e "Not authorized"; then
         echo "LISTDSD ACCESS DENIED \t $dataset"
         continue
       fi  
@@ -1116,11 +1118,15 @@ if [ "$mounteddataset" ]; then
         echo "\t UNPROTECTED \t $dataset"
       else
         accessline=`/bin/tsocmd "listdsd dataset('$dataset') $generic" \
-        2>/dev/null|grep -ni "YOUR ACCESS"|cut -d":" -f1`
-        linnum=`expr $accessline + 2`
-        access=`/bin/tsocmd "listdsd dataset('$dataset') $generic" \
-        2>/dev/null|head -n $linnum|tail -n 1|awk '{print $1}'`
-        echo "\t $access \t\t $dataset"
+        2>/dev/null|grep -ni "YOUR ACCESS"|cut -d":" -f1|head -1`
+        if [ -n "$accessline" ]; then
+          linnum=`expr $accessline + 2`
+          access=`/bin/tsocmd "listdsd dataset('$dataset') $generic" \
+          2>/dev/null|head -n $linnum|tail -n 1|awk '{print $1}'`
+          echo "\t $access \t\t $dataset"
+        else
+          echo "\t UNKNOWN \t $dataset"
+        fi
       fi
     done
   fi
