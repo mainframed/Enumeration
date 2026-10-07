@@ -245,24 +245,26 @@ fi
 
 # Display group information
 usernum=`/bin/tsocmd lg 2>/dev/null|grep -ni "USER(S)="|cut -d":" -f1`
-if [ "$usernum" -ne "" ]; then
+if [ -n "$usernum" ]; then
   total_lines=`/bin/tsocmd lg 2>/dev/null|wc|awk '{print $1}'`
   group_lines=`expr $total_lines - $usernum`
   group_users=`/bin/tsocmd lg 2>/dev/null|tail -n $group_lines|\
                grep -v CONNECT|grep -v REVOKE|awk '{print "\t"$1}'`
   echo "[-] Default RACF group users:\n$group_users" 
+else
+  echo "[-] Skipping group enum: 'lg' denied (GROUP.LISTGRP authorization)"
 fi
 
 # Display subgroup information
-if [ "$usernum" ]; then
+if [ -n "$usernum" ]; then
   sub_group=`/bin/tsocmd lg 2>/dev/null|\
              grep -ni "SUBGROUP(S)="|\
              cut -d":" -f1`
-  tail_num=`expr $usernum - $sub_group`
-  head_num=`expr $usernum - 1`
-  group_users=`/bin/tsocmd lg 2>/dev/null|head -n $head_num|\
-               tail -n $tail_num|sed 's/SUBGROUP(S)=/            /'`
-  if [ "$sub_group" ]; then
+  if [ -n "$sub_group" ]; then
+    tail_num=`expr $usernum - $sub_group`
+    head_num=`expr $usernum - 1`
+    group_users=`/bin/tsocmd lg 2>/dev/null|head -n $head_num|\
+                 tail -n $tail_num|sed 's/SUBGROUP(S)=/            /'`
     echo "[-] Current RACF Subgroups:\n$group_users"
   fi
   if [ "$thorough" = "1" ]; then
