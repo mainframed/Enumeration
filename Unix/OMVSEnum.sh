@@ -1110,7 +1110,7 @@ if [ "$mounteddataset" ]; then
         echo "\t NOT A DATASET \t $dataset"
         continue
       fi
-      if echo $listdsd|grep -q ICH35002I; then
+      if echo $listdsd|grep -q -e ICH35002I -e VPM021E -e IRRV022I -e "Not authorized"; then
         echo "LISTDSD ACCESS DENIED \t $dataset"
         continue
       fi  
@@ -1118,11 +1118,15 @@ if [ "$mounteddataset" ]; then
         echo "\t UNPROTECTED \t $dataset"
       else
         accessline=`/bin/tsocmd "listdsd dataset('$dataset') $generic" \
-        2>/dev/null|grep -ni "YOUR ACCESS"|cut -d":" -f1`
-        linnum=`expr $accessline + 2`
-        access=`/bin/tsocmd "listdsd dataset('$dataset') $generic" \
-        2>/dev/null|head -n $linnum|tail -n 1|awk '{print $1}'`
-        echo "\t $access \t\t $dataset"
+        2>/dev/null|grep -ni "YOUR ACCESS"|cut -d":" -f1|head -1`
+        if [ -n "$accessline" ]; then
+          linnum=`expr $accessline + 2`
+          access=`/bin/tsocmd "listdsd dataset('$dataset') $generic" \
+          2>/dev/null|head -n $linnum|tail -n 1|awk '{print $1}'`
+          echo "\t $access \t\t $dataset"
+        else
+          echo "\t UNKNOWN \t $dataset"
+        fi
       fi
     done
   fi
