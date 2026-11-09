@@ -16,6 +16,7 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.Date;
+import java.util.EnumSet;
 import java.util.Set;
 
 // License: GPL 3.0
@@ -31,10 +32,19 @@ public class GhostWalker {
 
  private enum Selection {
   EFFECTIVE_WRITE, EFFECTIVE_READ_WRITE,
-  OWNER_WRITE, GROUP_WRITE, WORLD_WRITE
+  OWNER_WRITE, GROUP_WRITE, WORLD_WRITE,
+  SETUID_OR_SETGID, SETUID, SETGID
  }
 
- private static Selection selection = Selection.EFFECTIVE_WRITE;
+ // Special mode bits. NIO's PosixFilePermission omits these, so
+ // they are read from the provider's "unix:mode" attribute.
+ private static final int S_ISUID = 04000;
+ private static final int S_ISGID = 02000;
+ private static final int S_ISVTX = 01000;
+
+ // Selectors are ORed: a path is reported if any selector hits.
+ private static final EnumSet<Selection> selections =
+     EnumSet.noneOf(Selection.class);
  private static boolean includeFiles = true;
  private static boolean includeDirectories = true;
  private static boolean showOwner = false;
@@ -55,6 +65,13 @@ public class GhostWalker {
   int parseResult = parseArguments(args);
   if (parseResult >= 0) {
    System.exit(parseResult);
+  }
+
+  if (specialSelection() && !probeModeSupport()) {
+   System.err.println("Error: this JVM's file system provider does"
+       + " not expose the unix:mode attribute;");
+   System.err.println("       SUID/SGID detection is unavailable.");
+   System.exit(2);
   }
 
   try {
@@ -104,22 +121,32 @@ public class GhostWalker {
    } else if ("-w".equals(arg)
        || "--only-user-writeable".equals(arg)
        || "--only-user-writable".equals(arg)) {
-    selection = Selection.EFFECTIVE_WRITE;
+    selections.add(Selection.EFFECTIVE_WRITE);
    } else if ("-r".equals(arg)
        || "--read".equals(arg)) {
-    selection = Selection.EFFECTIVE_READ_WRITE;
+    selections.add(Selection.EFFECTIVE_READ_WRITE);
    } else if ("-O".equals(arg)
        || "--only-owner-writeable".equals(arg)
        || "--only-owner-writable".equals(arg)) {
-    selection = Selection.OWNER_WRITE;
+    selections.add(Selection.OWNER_WRITE);
    } else if ("-G".equals(arg)
        || "--only-group-writeable".equals(arg)
        || "--only-group-writable".equals(arg)) {
-    selection = Selection.GROUP_WRITE;
+    selections.add(Selection.GROUP_WRITE);
    } else if ("-W".equals(arg)
        || "--only-world-writeable".equals(arg)
        || "--only-world-writable".equals(arg)) {
-    selection = Selection.WORLD_WRITE;
+    selections.add(Selection.WORLD_WRITE);
+   } else if ("-s".equals(arg)
+       || "--suid-sgid".equals(arg)
+       || "--setid".equals(arg)) {
+    selections.add(Selection.SETUID_OR_SETGID);
+   } else if ("--suid".equals(arg)
+       || "--setuid".equals(arg)) {
+    selections.add(Selection.SETUID);
+   } else if ("--sgid".equals(arg)
+       || "--setgid".equals(arg)) {
+    selections.add(Selection.SETGID);
    } else if ("-u".equals(arg) || "--user".equals(arg)) {
     showOwner = true;
     showGroup = true;
@@ -158,7 +185,54 @@ public class GhostWalker {
   if (Roots.paths.isEmpty()) {
    return usageError("at least one start path is required");
   }
+  if (selections.isEmpty()) {
+   selections.add(Selection.EFFECTIVE_WRITE);
+  }
+  if (specialSelection()) {
+   // Who a SUID/SGID program runs as is the whole point.
+   showOwner = true;
+   showGroup = true;
+  }
   return -1;
+ }
+
+ private static boolean specialSelection() {
+  return selections.contains(Selection.SETUID_OR_SETGID)
+      || selections.contains(Selection.SETUID)
+      || selections.contains(Selection.SETGID);
+ }
+
+ private static boolean showMatched() {
+  return selections.size() > 1;
+ }
+
+ // Returns false only when the provider definitively lacks the
+ // unix attribute view. Unreadable roots are left to walk().
+ private static boolean probeModeSupport() {
+  for (Path root : Roots.paths) {
+   try {
+    Files.getAttribute(root.toAbsolutePath(), "unix:mode",
+        LinkOption.NOFOLLOW_LINKS);
+    return true;
+   } catch (UnsupportedOperationException e) {
+    debug("unix:mode unsupported: " + e.getMessage());
+    return false;
+   } catch (IllegalArgumentException e) {
+    debug("unix:mode unsupported: " + e.getMessage());
+    return false;
+   } catch (IOException e) {
+    debug("Mode probe failed on " + root + ": " + e.getMessage());
+   } catch (SecurityException e) {
+    debug("Mode probe failed on " + root + ": " + e.getMessage());
+   }
+  }
+  return true;
+ }
+
+ private static int modeBits(Path path) throws IOException {
+  Object mode = Files.getAttribute(path, "unix:mode",
+      LinkOption.NOFOLLOW_LINKS);
+  return ((Integer) mode).intValue();
  }
 
  private static int usageError(String message) {
@@ -286,19 +360,37 @@ public class GhostWalker {
     return;
    }
 
-   if (!matchesSelection(path, attrs.permissions())) {
+   // Special bits are only checked on regular files: SGID
+   // directories just control group inheritance. bits stays -1
+   // otherwise, so SUID/SGID selectors never match those.
+   int bits = -1;
+   if (specialSelection() && attrs.isRegularFile()) {
+    bits = modeBits(path);
+   }
+
+   StringBuilder hits = new StringBuilder();
+   for (Selection sel : selections) {
+    if (matches(sel, path, attrs.permissions(), bits)) {
+     if (hits.length() > 0) {
+      hits.append('|');
+     }
+     hits.append(label(sel));
+    }
+   }
+   if (hits.length() == 0) {
     return;
    }
 
    String mode = typeCharacter(attrs)
-       + permissionString(attrs.permissions());
+       + permissionString(attrs.permissions(), bits);
    String owner = attrs.owner().getName();
    String group = attrs.group().getName();
    String modified = DATE_FMT.format(
        new Date(attrs.lastModifiedTime().toMillis()));
 
    if (csvOutput) {
-    printCsvRow(mode, owner, group, modified, path.toString());
+    printCsvRow(mode, owner, group, modified, hits.toString(),
+        path.toString());
    } else {
     StringBuilder line = new StringBuilder(mode);
     if (showOwner) {
@@ -309,6 +401,9 @@ public class GhostWalker {
     }
     if (showLastModified) {
      line.append(" ").append(modified);
+    }
+    if (showMatched()) {
+     line.append(" [").append(hits).append("]");
     }
     line.append(" ").append(path);
     output.println(line.toString());
@@ -321,9 +416,36 @@ public class GhostWalker {
   }
  }
 
- private static boolean matchesSelection(
-     Path path, Set<PosixFilePermission> permissions) {
-  switch (selection) {
+ private static String label(Selection sel) {
+  switch (sel) {
+   case EFFECTIVE_READ_WRITE:
+    return "read";
+   case OWNER_WRITE:
+    return "owner-w";
+   case GROUP_WRITE:
+    return "group-w";
+   case WORLD_WRITE:
+    return "world-w";
+   case SETUID_OR_SETGID:
+    return "setid";
+   case SETUID:
+    return "suid";
+   case SETGID:
+    return "sgid";
+   default:
+    return "write";
+  }
+ }
+
+ private static boolean matches(Selection sel, Path path,
+     Set<PosixFilePermission> permissions, int bits) {
+  switch (sel) {
+   case SETUID_OR_SETGID:
+    return bits >= 0 && (bits & (S_ISUID | S_ISGID)) != 0;
+   case SETUID:
+    return bits >= 0 && (bits & S_ISUID) != 0;
+   case SETGID:
+    return bits >= 0 && (bits & S_ISGID) != 0;
    case EFFECTIVE_READ_WRITE:
     return Files.isReadable(path) || Files.isWritable(path);
    case OWNER_WRITE:
@@ -361,7 +483,7 @@ public class GhostWalker {
  }
 
  private static String permissionString(
-     Set<PosixFilePermission> permissions) {
+     Set<PosixFilePermission> permissions, int bits) {
   StringBuilder text = new StringBuilder(9);
   appendPermission(text, permissions,
       PosixFilePermission.OWNER_READ, 'r');
@@ -381,7 +503,22 @@ public class GhostWalker {
       PosixFilePermission.OTHERS_WRITE, 'w');
   appendPermission(text, permissions,
       PosixFilePermission.OTHERS_EXECUTE, 'x');
+  if (bits >= 0) {
+   applySpecial(text, 2, (bits & S_ISUID) != 0, 's');
+   applySpecial(text, 5, (bits & S_ISGID) != 0, 's');
+   applySpecial(text, 8, (bits & S_ISVTX) != 0, 't');
+  }
   return text.toString();
+ }
+
+ // ls(1) style: lowercase if execute is also set, else uppercase.
+ private static void applySpecial(
+     StringBuilder text, int index, boolean set, char lower) {
+  if (set) {
+   boolean exec = text.charAt(index) == 'x';
+   text.setCharAt(index,
+       exec ? lower : Character.toUpperCase(lower));
+  }
  }
 
  private static void appendPermission(
@@ -401,13 +538,16 @@ public class GhostWalker {
   if (showLastModified) {
    header.append(",last_modified");
   }
+  if (showMatched()) {
+   header.append(",matched");
+  }
   header.append(",path");
   output.println(header.toString());
  }
 
  private static void printCsvRow(
      String mode, String owner, String group,
-     String modified, String path) {
+     String modified, String hits, String path) {
   StringBuilder row = new StringBuilder(csv(mode));
   if (showOwner) {
    row.append(",").append(csv(owner));
@@ -417,6 +557,9 @@ public class GhostWalker {
   }
   if (showLastModified) {
    row.append(",").append(csv(modified));
+  }
+  if (showMatched()) {
+   row.append(",").append(csv(hits));
   }
   row.append(",").append(csv(path));
   output.println(row.toString());
@@ -452,7 +595,8 @@ public class GhostWalker {
   System.out.println(
       "Links found beneath that root are not shown or followed.");
   System.out.println();
-  System.out.println("Access selection (last selector wins):");
+  System.out.println(
+      "Access selection (combinable; any match is reported):");
   System.out.println(
       "  -w, --only-user-writeable   Effective user access (default)");
   System.out.println(
@@ -463,6 +607,16 @@ public class GhostWalker {
       "  -G, --only-group-writeable  Group-write bit is set");
   System.out.println(
       "  -W, --only-world-writeable  Others-write bit is set");
+  System.out.println(
+      "  -s, --suid-sgid             SUID or SGID regular files");
+  System.out.println(
+      "      --suid                  SUID regular files only");
+  System.out.println(
+      "      --sgid                  SGID regular files only");
+  System.out.println(
+      "  SUID/SGID selectors always add owner and group columns.");
+  System.out.println(
+      "  With 2+ selectors a [matched] column lists the hits.");
   System.out.println();
   System.out.println("Optional output columns:");
   System.out.println(
