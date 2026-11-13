@@ -359,12 +359,15 @@ selection is everything the current process can write.
 ```text
 Usage: java -jar GhostWalker.jar [options] <path> [path ...]
 
-Access selection (last selector wins):
+Access selection (combinable; any match is reported):
   -w, --only-user-writeable   Effective user write access (default)
   -r, --read                  Effective read or write access
   -O, --only-owner-writeable  Owner-write bit
   -G, --only-group-writeable  Group-write bit
   -W, --only-world-writeable  Others-write bit
+  -s, --suid-sgid             SUID or SGID regular files
+      --suid                  SUID regular files only
+      --sgid                  SGID regular files only
 
 Optional columns:
   -u, --user                  Owner and group
@@ -385,6 +388,11 @@ Other:
   -h, --help
 ```
 
+Selectors are combined with OR: a path is reported if it matches any
+selector given. With no selector, `-w` is used. When two or more selectors
+are given, a `matched` column (`[...]` in plain output) lists which ones hit,
+separated by `|`, e.g. `-G -W -s` might report `[group-w|world-w]`.
+
 Both `writeable` and `writable` long-option spellings are accepted where
 implemented.
 
@@ -402,12 +410,28 @@ java -jar GhostWalker.jar --read /u
 # World-writable entries
 java -jar GhostWalker.jar --only-world-writeable /
 
+# Group- OR world-writable entries, plus SUID/SGID files
+java -jar GhostWalker.jar -G -W -s /u
+
 # Group-writable entries with identity and timestamps
 java -jar GhostWalker.jar -G -u -m /u
 
 # CSV report
 java -jar GhostWalker.jar -W -u -m --csv /tmp/world.csv /
+
+# SUID/SGID programs (owner and group are always shown)
+java -jar GhostWalker.jar -s -m /
+
+# SUID only, as CSV
+java -jar GhostWalker.jar --suid --csv /tmp/suid.csv /
 ```
+
+SUID/SGID detection reads the `unix:mode` file attribute, since Java's
+`PosixFilePermission` does not model the special bits. Only regular files
+are reported (SGID directories only control group inheritance). If the
+JVM's file system provider lacks the `unix` attribute view, GhostWalker
+exits 2 with an error rather than silently reporting nothing. Matching
+entries display `s`/`S` and `t`/`T` the same way `ls -l` does.
 
 An explicitly supplied root symbolic link is resolved. Links encountered
 below that root are neither displayed nor followed, preventing link cycles.
