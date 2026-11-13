@@ -8,6 +8,7 @@
     "PORTJAVA": "Unix/portscan.java",
     "PORTC": "Unix/portscan.c",
     "SAFAUTH": "Unix/safauth.c",
+    "CATMAP": "Unix/catmap.c",
     "RACF2J": "Unix/racf2john.java",
     "MAKEFILE": "Unix/Makefile",
     "CMPACC": "release/compile_access.jcl",

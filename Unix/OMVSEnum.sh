@@ -1110,7 +1110,8 @@ if [ "$mounteddataset" ]; then
         echo "\t NOT A DATASET \t $dataset"
         continue
       fi
-      if echo $listdsd|grep -q -e ICH35002I -e VPM021E -e IRRV022I -e "Not authorized"; then
+      if echo $listdsd|grep -q -e ICH35002I -e VPM021E -e IRRV022I \
+        -e "Not authorized"; then
         echo "LISTDSD ACCESS DENIED \t $dataset"
         continue
       fi  

@@ -65,7 +65,7 @@ Requirements vary by tool:
 - HLASM and a linker for `ACCESS` and `APFCHECK`
 - ASMA90, HEWL, SYS1.MACLIB and SYS1.MODGEN for the supplied compile jobs
 - z/OS UNIX and Java 8 or newer for Java tools
-- a 31-bit IBM C compiler for the optional USS `safauth` helper
+- a 31-bit IBM C compiler for the USS `safauth` and `catmap` programs
 - appropriate read access to control blocks, configuration members, data sets,
   USS paths, and network targets being assessed
 
@@ -382,7 +382,8 @@ identify approved reachable listener ports.
 
 `UNIXTAR` is a sequential binary tar archive, not an MVS load library.
 The old XMI carried OMVSEnum.jar, GhostWalker.jar, portscan.jar, safauth,
-and portscan-c. This release rebuilds those and adds RACF2John.jar.
+and portscan-c. This release rebuilds those and adds RACF2John.jar and
+catmap.
 JARs and USS executable files require this separate layout; LOADLIB holds
 only MVS load modules.
 
@@ -400,7 +401,7 @@ then GhostWalker twice against `/`: once with `-r -m -u` (read/write-accessible
 paths, last-modified time, owner/group) and once with `-m -u` (writeable
 paths, same detail). Both GhostWalker reports are written to files and then
 `cat` to spool, since the private directory is removed on exit. The other
-UNIXTAR tools (both port scanners, safauth, RACF2John) are still built by
+UNIXTAR tools (both port scanners, safauth, catmap, RACF2John) are still built by
 CMPUNIX but are not run by RUNUSS; edit `release/run_unix.jcl` to invoke
 them. Supply absolute paths for reports you want to retain outside the job.
 
@@ -447,7 +448,8 @@ exit-code, and usage details.
 
 - `Unix/UNIXENUM.jcl` is generated from `Unix/UNIXENUM.sh`.
 - OMVSEnum and GhostWalker reports are runtime output and are not checked in.
-- Compiled `.class` and `.jar` files plus `safauth` are build products.
+- Compiled `.class` and `.jar` files plus `safauth` and `catmap` are build
+  products.
 - `.vscode` and `.claude` files are local editor/assistant configuration, not
   runtime dependencies.
 

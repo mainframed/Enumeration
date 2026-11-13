@@ -18,6 +18,7 @@ public class OMVSEnum {
  // ---- config ----------------------------------------
  static boolean debugMode  = false;
  static boolean quietMode  = false;
+ static boolean assessMode = false;
  static boolean thorough   = false;
  static PrintWriter report = null;
  static String reportFile = null;
@@ -105,6 +106,206 @@ public class OMVSEnum {
   if (report != null) {
    report.println(s);
   }
+ }
+
+ // ---- assessment findings ---------------------------
+ // Collected only in --assess mode, then printed after
+ // the inventory in the same shape as ENUM ASSESS:
+ // Finding N, template id, verification caption, evidence.
+
+ static final int CONTENT_FINDING_CAP = 80;
+ static final int PATH_FILE_REPORT_CAP = 100;
+ static final int PATH_DIR_SCAN_CAP = 4000;
+ static final int USS_USER_CAP = 20000;
+ static final int USS_HOME_REPORT_CAP = 200;
+ static final Object FINDINGS_LOCK = new Object();
+ static final List<AssessmentFinding> findings =
+  new ArrayList<AssessmentFinding>();
+ static final Map<String, AssessmentFinding>
+  findingsById =
+   new LinkedHashMap<String, AssessmentFinding>();
+ static final List<String> FINDING_ORDER =
+  Arrays.asList(
+   "RACF-SPECIAL-ATTRIBUTE",
+   "RACF-OPERATIONS-ATTRIBUTE",
+   "RACF-AUDITOR-ATTRIBUTE",
+   "SAF-SENSITIVE-AUTHORIZATIONS",
+   "BPX-SUPERUSER-SU",
+   "FILEATTR-APF-PERMITTED",
+   "CHOWN-UID-0",
+   "CHOWN-UNRESTRICTED",
+   "UNIX-PERMISSION-OVERRIDE",
+   "HFS-FILE-PERMISSION-BYPASS",
+   "HFS-DIRECTORY-LIST-BYPASS",
+   "PATH-WRITABLE-DIRECTORY",
+   "PATH-WRITABLE-FILE",
+   "PATH-TRUST-RISK",
+   "EXTATTR-TRUST-RISK",
+   "SUID-SGID-TRUST-RISK",
+   "PERSONAL-PATH-SHARED-WRITE",
+   "SENSITIVE-FILE-MODE",
+   "MOUNTED-DATASET-EXCESSIVE-ACCESS",
+   "REMOTE-MOUNT-WEAK-OPTIONS",
+   "UID-0-MULTIPLE-ACCOUNTS",
+   "DUPLICATE-POSIX-UIDS",
+   "USS-WRITABLE-USER-HOME",
+   "IDENTITY-SOURCE-MISMATCH",
+   "PROCESS-LISTING-OTHER-USERS",
+   "SSH-PERMIT-ROOT-LOGIN",
+   "SSH-WEAK-SETTING",
+   "SSH-KEY-FILES-VISIBLE",
+   "PLAINTEXT-SERVICE-LISTENERS",
+   "WILDCARD-SENSITIVE-BINDS",
+   "PLAINTEXT-SERVICE-CONFIG",
+   "HOSTS-EQUIV-READABLE",
+   "RHOSTS-TRUST-FILES",
+   "PRIVATE-KEY-MATERIAL",
+   "GIT-CREDENTIAL-FILES",
+   "HTPASSWD-FILES-VISIBLE",
+   "LOG-CREDENTIAL-MARKERS",
+   "AUDIT-LOG-TRUST-RISK",
+   "CONTENT-SEARCH-MATCHES");
+
+ static final class AssessmentFinding {
+  final String templateId;
+  final String caption;
+  final List<String> chunks =
+   new ArrayList<String>();
+  boolean truncated;
+
+  AssessmentFinding(
+   String templateId, String caption
+  ) {
+   this.templateId = templateId;
+   this.caption = caption;
+  }
+
+  void addContent(String text) {
+   String value = text == null ? "" : text.trim();
+   if (value.isEmpty() || truncated) return;
+   if (chunks.contains(value)) return;
+   chunks.add(value);
+  }
+
+  String text() {
+   StringBuilder body = new StringBuilder();
+   for (String chunk : chunks) {
+    if (body.length() > 0) body.append("\n");
+    body.append(chunk);
+   }
+   return body.toString();
+  }
+ }
+
+ static void finding(
+  String templateId, String caption,
+  String label, String evidence
+ ) {
+  emit("[+]", label, evidence);
+  String content =
+   evidence == null || evidence.trim().isEmpty()
+    ? label : evidence.trim();
+  recordFinding(templateId, caption, content);
+ }
+
+ static void recordFinding(
+  String templateId, String caption, String content
+ ) {
+  if (!assessMode) return;
+  synchronized (FINDINGS_LOCK) {
+   recordFindingLocked(
+    templateId, caption, content);
+  }
+ }
+
+ static void recordFindingLocked(
+  String templateId, String caption, String content
+ ) {
+  AssessmentFinding finding =
+   findingsById.get(templateId);
+  if (finding == null) {
+   finding = new AssessmentFinding(
+    templateId, caption);
+   findings.add(finding);
+   findingsById.put(templateId, finding);
+  }
+  finding.addContent(content);
+ }
+
+ static void recordContentMatch(String evidence) {
+  if (!assessMode) return;
+  synchronized (FINDINGS_LOCK) {
+   AssessmentFinding finding =
+    findingsById.get("CONTENT-SEARCH-MATCHES");
+   if (finding != null &&
+       finding.chunks.size() >=
+        CONTENT_FINDING_CAP) {
+    if (!finding.truncated) {
+     finding.truncated = true;
+     finding.chunks.add(
+      "(additional content matches omitted)");
+    }
+    return;
+   }
+   recordFindingLocked(
+    "CONTENT-SEARCH-MATCHES",
+    "Run OMVSEnum with a content search and " +
+    "observe matching files or lines.",
+    evidence);
+  }
+ }
+
+ static void outputAssessmentResults() {
+  println(
+   "\n################################################");
+  println("# Assessment Findings");
+  println(
+   "################################################");
+  String account = System.getProperty("user.name");
+  if (account != null && !account.trim().isEmpty())
+   println("Account: " + account.trim());
+
+  List<AssessmentFinding> ordered =
+   new ArrayList<AssessmentFinding>();
+  synchronized (FINDINGS_LOCK) {
+   Set<String> emitted = new HashSet<String>();
+   for (String id : FINDING_ORDER) {
+    AssessmentFinding finding =
+     findingsById.get(id);
+    if (finding == null) continue;
+    ordered.add(finding);
+    emitted.add(id);
+   }
+   for (AssessmentFinding finding : findings) {
+    if (!emitted.contains(finding.templateId))
+     ordered.add(finding);
+   }
+  }
+
+  if (ordered.isEmpty()) {
+   println("");
+   println("No security findings were recorded.");
+   return;
+  }
+
+  int number = 1;
+  for (AssessmentFinding finding : ordered) {
+   println("");
+   println("Finding " + number + ": " +
+    finding.templateId);
+   println(repeat('-', 60));
+   println(finding.caption);
+   String body = finding.text();
+   if (!body.isEmpty()) println(body);
+   println("");
+   number++;
+  }
+ }
+
+ static String repeat(char ch, int count) {
+  StringBuilder text = new StringBuilder(count);
+  for (int i = 0; i < count; i++) text.append(ch);
+  return text.toString();
  }
 
  // ---- command execution -----------------------------
@@ -485,10 +686,13 @@ public class OMVSEnum {
      matches[0]++;
      if (filesWithMatches) {
       println("[+] " + file);
+      recordContentMatch(file.toString());
       return;
      }
-     println("[+] " + file + ":" +
-      lineNumber + ": " + line);
+     String hit = file + ":" +
+      lineNumber + ": " + line;
+     println("[+] " + hit);
+     recordContentMatch(hit);
     }
    } finally {
     reader.close();
@@ -583,15 +787,21 @@ public class OMVSEnum {
     emit("[-]", "RACF user profile (LU)", lu);
     String luUpper = lu.toUpperCase();
     if (luUpper.contains("SPECIAL"))
-     emit("[+]",
+     finding("RACF-SPECIAL-ATTRIBUTE",
+      "Run OMVSEnum and observe that LU shows " +
+      "the SPECIAL attribute for the testing account.",
       "User has RACF SPECIAL attribute " +
       "(RACF administrator)", null);
     if (luUpper.contains("OPERATIONS"))
-     emit("[+]",
+     finding("RACF-OPERATIONS-ATTRIBUTE",
+      "Run OMVSEnum and observe that LU shows " +
+      "the OPERATIONS attribute for the testing account.",
       "User has RACF OPERATIONS attribute " +
       "(can read any dataset)", null);
     if (luUpper.contains("AUDITOR"))
-     emit("[+]",
+     finding("RACF-AUDITOR-ATTRIBUTE",
+      "Run OMVSEnum and observe that LU shows " +
+      "the AUDITOR attribute for the testing account.",
       "User has RACF AUDITOR attribute",
       null);
    }
@@ -633,7 +843,9 @@ public class OMVSEnum {
      "su -s timed out; result is unknown",
      null);
    } else if (p.exitValue() == 0) {
-    emit("[+]",
+    finding("BPX-SUPERUSER-SU",
+     "Run OMVSEnum with --active-probes and " +
+     "observe that su -s succeeds without a password.",
      "su -s succeeded without password " +
      "(BPX.SUPERUSER likely permitted or " +
      "RACF permits su to root)", null);
@@ -705,7 +917,9 @@ public class OMVSEnum {
          fields[0].equalsIgnoreCase(
           "PermitRootLogin") &&
          fields[1].equalsIgnoreCase("yes")) {
-      emit("[+]",
+      finding("SSH-PERMIT-ROOT-LOGIN",
+       "Run OMVSEnum and observe that " +
+       "sshd_config permits root login.",
        "sshd: PermitRootLogin yes",
        setting);
      }
@@ -740,7 +954,9 @@ public class OMVSEnum {
     "-exec", "ls", "-la", "{}", ";"
    );
    if (!sshkeys.isEmpty())
-    emit("[+]",
+    finding("SSH-KEY-FILES-VISIBLE",
+     "Run OMVSEnum --thorough and observe " +
+     "SSH key or host files under /u.",
      "SSH key/host files found in /u",
      sshkeys);
   }
@@ -762,8 +978,288 @@ public class OMVSEnum {
      notours);
   }
 
+  // ENUM USSU walks the user database with the
+  // getpwent syscall. /etc/passwd is not that list.
+  writableUssHomes();
   OMVSSecurityChecks.identityHomeChecks();
   OMVSSecurityChecks.sshPostureChecks();
+ }
+
+ // USS accounts returned by the getpwent syscall.
+ // Field order matches ENUM: name, uid, gid, home.
+ static final class UssAccount {
+  final String name;
+  final String uid;
+  final String gid;
+  final String home;
+
+  UssAccount(
+   String name, String uid,
+   String gid, String home
+  ) {
+   this.name = name;
+   this.uid = uid;
+   this.gid = gid;
+   this.home = home;
+  }
+ }
+
+ static final class UssUserWalk {
+  final List<UssAccount> users =
+   new ArrayList<UssAccount>();
+  boolean truncated;
+  String failure;
+ }
+
+ // List every OMVS user the way ENUM does, then
+ // keep homes the current process can write.
+ static void writableUssHomes() {
+  final String FN = "writableUssHomes";
+  dbg(FN, "getpwent user database");
+  UssUserWalk walk = readUssUsers();
+  if (walk.failure != null) {
+   emit("[!]",
+    "USS user database unavailable",
+    walk.failure);
+   return;
+  }
+
+  String me = run("whoami").trim();
+  if (me.isEmpty())
+   me = System.getProperty(
+    "user.name", "").trim();
+  List<String> writable =
+   new ArrayList<String>();
+  List<String> others =
+   new ArrayList<String>();
+  int writableCount = 0;
+  boolean reportCapped = false;
+  for (UssAccount user : walk.users) {
+   if (user.home.isEmpty()) continue;
+   // GhostWalker -m -u on this directory only.
+   String folder =
+    ghostWalkerFolderLine(user.home);
+   if (folder == null) continue;
+   writableCount++;
+   if (writable.size() >= USS_HOME_REPORT_CAP) {
+    reportCapped = true;
+    continue;
+   }
+   String line = user.name + " " + folder;
+   writable.add(line);
+   if (me.isEmpty() ||
+       !user.name.equalsIgnoreCase(me))
+    others.add(line);
+  }
+
+  StringBuilder summary = new StringBuilder();
+  summary.append("lookup=getpwent");
+  if (!me.isEmpty())
+   summary.append(" current=").append(me);
+  summary.append(" users=")
+   .append(walk.users.size());
+  summary.append(" writable=").append(writableCount);
+  if (walk.truncated)
+   summary.append(
+    "\nUser walk stopped at ")
+    .append(USS_USER_CAP)
+    .append(" entries.");
+  if (reportCapped)
+   summary.append(
+    "\nWritable-home report stopped at ")
+    .append(USS_HOME_REPORT_CAP)
+    .append(" entries.");
+  if (writable.isEmpty()) {
+   summary.append(
+    "\nNo USS home directory is writable " +
+    "by the current user.");
+   emit("[-]",
+    "USS homes writable by the current user",
+    summary.toString());
+   return;
+  }
+
+  emit("[-]",
+   "USS homes writable by the current user",
+   summary + "\n" + joinLines(writable));
+  if (others.isEmpty()) return;
+
+  String evidence = joinLines(others);
+  if (walk.truncated || reportCapped)
+   evidence += "\n" + summary;
+  finding("USS-WRITABLE-USER-HOME",
+   "Run OMVSEnum and observe home directories " +
+   "of other USS users that the current user " +
+   "can write.",
+   "Writable USS homes of other users",
+   evidence);
+ }
+
+ // Same selection and line as GhostWalker -m -u
+ // on this path alone. Children are not visited.
+ // An explicit symlink is resolved, then the
+ // target is reported. Returns null when the
+ // path is missing, not a directory, or not
+ // writable by the current process.
+ static String ghostWalkerFolderLine(String home) {
+  final LinkOption noFollow =
+   LinkOption.NOFOLLOW_LINKS;
+  Path requested;
+  try {
+   requested =
+    Paths.get(home).toAbsolutePath().normalize();
+   Files.readAttributes(
+    requested, BasicFileAttributes.class, noFollow);
+  } catch (Exception e) {
+   return null;
+  }
+  Path root = requested;
+  try {
+   if (Files.isSymbolicLink(requested))
+    root = requested.toRealPath();
+  } catch (Exception e) {
+   return null;
+  }
+  try {
+   PosixFileAttributes attrs =
+    Files.readAttributes(
+     root, PosixFileAttributes.class, noFollow);
+   if (attrs.isSymbolicLink()) return null;
+   if (!attrs.isDirectory()) return null;
+   if (!Files.isWritable(root)) return null;
+   String mode = "d" +
+    PosixFilePermissions.toString(
+     attrs.permissions());
+   String modified = new SimpleDateFormat(
+    "yyyy-MM-dd HH:mm:ss").format(new Date(
+     attrs.lastModifiedTime().toMillis()));
+   return mode + " " +
+    attrs.owner().getName() + " " +
+    attrs.group().getName() + " " +
+    modified + " " + root;
+  } catch (Exception e) {
+   return null;
+  }
+ }
+
+ static UssUserWalk readUssUsers() {
+  final String FN = "readUssUsers";
+  UssUserWalk walk = new UssUserWalk();
+  Path script = null;
+  try {
+   script = Files.createTempFile(
+    "omvsenum-getpwent", ".rexx");
+   byte[] program =
+    ussGetpwentRexx().getBytes("IBM1047");
+   Files.write(script, program);
+   Set<PosixFilePermission> mode =
+    new HashSet<PosixFilePermission>();
+   mode.add(PosixFilePermission.OWNER_READ);
+   mode.add(PosixFilePermission.OWNER_WRITE);
+   mode.add(PosixFilePermission.OWNER_EXECUTE);
+   Files.setPosixFilePermissions(script, mode);
+   // Force the EBCDIC tag. A UTF-8 tag would make
+   // the REXX interpreter misread getpwent source.
+   CommandResult tag = execute(
+    10, "/bin/chtag", "-t", "-c", "IBM-1047",
+    script.toString());
+   debugCommand(new String[] {
+    "/bin/chtag", "-t", "-c", "IBM-1047",
+    script.toString()
+   }, tag);
+
+   CommandResult result = execute(
+    120, script.toString());
+   debugCommand(
+    new String[] { script.toString() }, result);
+   if (result.error != null) {
+    walk.failure =
+     "getpwent helper could not be started: " +
+     result.error.getMessage();
+    return walk;
+   }
+   if (result.timedOut) {
+    walk.failure =
+     "getpwent helper timed out after 120 seconds.";
+    return walk;
+   }
+   if (result.exitCode != 0 &&
+       result.stdout.isEmpty()) {
+    String detail = result.stderr.isEmpty()
+     ? "exit " + result.exitCode
+     : result.stderr;
+    walk.failure =
+     "getpwent helper failed: " + detail;
+    return walk;
+   }
+   parseUssUsers(walk, result.stdout);
+   if (walk.users.isEmpty() &&
+       !result.stderr.isEmpty())
+    walk.failure = result.stderr;
+  } catch (Exception e) {
+   dbg(FN, "getpwent failed: " + e);
+   walk.failure =
+    "getpwent lookup failed: " + e.getMessage();
+  } finally {
+   if (script != null) {
+    try {
+     Files.deleteIfExists(script);
+    } catch (IOException e) {
+     dbg(FN, "cannot delete " + script +
+      ": " + e.getMessage());
+    }
+   }
+  }
+  return walk;
+ }
+
+ static void parseUssUsers(
+  UssUserWalk walk, String stdout
+ ) {
+  if (stdout == null || stdout.isEmpty()) return;
+  for (String line : stdout.split("\n")) {
+   String text = line.trim();
+   if (text.isEmpty()) continue;
+   if (text.equals("TRUNCATED")) {
+    walk.truncated = true;
+    continue;
+   }
+   String[] fields = text.split("\\|", -1);
+   if (fields.length < 4) continue;
+   String name = fields[0].trim();
+   String uid = fields[1].trim();
+   String gid = fields[2].trim();
+   String home = fields[3].trim();
+   if (name.isEmpty()) continue;
+   walk.users.add(
+    new UssAccount(name, uid, gid, home));
+  }
+ }
+
+ // ENUM EnumUssUsers calls the getpwent syscall.
+ // From a USS process the same syscall is reached
+ // by executing a REXX program whose first line is
+ // a REXX comment. syscalls('ON') matches ENUM.
+ static String ussGetpwentRexx() {
+  return
+   "/* rexx */\n" +
+   "call syscalls 'ON'\n" +
+   "address syscall\n" +
+   "n = 0\n" +
+   "do forever\n" +
+   "  'getpwent pw.'\n" +
+   "  if retval == 0 | retval == -1 then leave\n" +
+   "  n = n + 1\n" +
+   "  if n > " + USS_USER_CAP + " then do\n" +
+   "    say 'TRUNCATED'\n" +
+   "    leave\n" +
+   "  end\n" +
+   "  say strip(pw.pw_name)'|'" +
+   "strip(pw.pw_uid)'|'" +
+   "strip(pw.pw_gid)'|'" +
+   "strip(pw.pw_dir)\n" +
+   "end\n" +
+   "exit 0\n";
  }
 
  static void environmentalInfo() {
@@ -788,28 +1284,49 @@ public class OMVSEnum {
   if (path != null)
    emit("[-]", "PATH", path);
 
-  // Writable PATH entries = hijacking risk
-  dbg(FN, "checking PATH for writable dirs");
+  // Writable PATH entries = hijacking risk.
+  // Directories can receive a new command name; files
+  // already in those directories can be replaced.
+  dbg(FN, "checking PATH for writable dirs and files");
   if (path != null) {
-   Set<String> writable =
+   Set<String> writableDirs =
     new LinkedHashSet<String>();
+   Set<String> writableFiles =
+    new LinkedHashSet<String>();
+   boolean filesCapped = false;
    for (String entry : path.split(":", -1)) {
     String dir = entry.trim();
     // Empty PATH entries mean the current directory,
     // just like an explicit "." entry.
     if (dir.isEmpty()) dir = ".";
     File d = new File(dir);
-    if (d.exists() &&
-        d.isDirectory() &&
-        d.canWrite()) {
-     writable.add(dir);
-    }
+    if (!d.exists() || !d.isDirectory())
+     continue;
+    if (d.canWrite())
+     writableDirs.add(dir);
+    if (collectWritablePathFiles(
+        dir, writableFiles))
+     filesCapped = true;
    }
-   if (!writable.isEmpty())
-    emit("[+]",
+   if (!writableDirs.isEmpty())
+    finding("PATH-WRITABLE-DIRECTORY",
+     "Run OMVSEnum and observe writable " +
+     "directories in PATH.",
      "Writable directories in PATH " +
      "(PATH hijacking possible)",
-     joinLines(writable));
+     joinLines(writableDirs));
+   if (!writableFiles.isEmpty()) {
+    String evidence = joinLines(writableFiles);
+    if (filesCapped)
+     evidence +=
+      "\n(PATH file scan stopped at the cap)";
+    finding("PATH-WRITABLE-FILE",
+     "Run OMVSEnum and observe writable files " +
+     "inside PATH directories.",
+     "Writable files in PATH directories " +
+     "(existing commands can be replaced)",
+     evidence);
+   }
   }
 
   dbg(FN, "umask");
@@ -819,6 +1336,44 @@ public class OMVSEnum {
    emit("[-]", "umask value", umask);
 
   OMVSSecurityChecks.sensitiveConfigChecks();
+ }
+
+ static boolean collectWritablePathFiles(
+  String dir, Set<String> writable
+ ) {
+  if (writable.size() >= PATH_FILE_REPORT_CAP)
+   return true;
+  DirectoryStream<Path> stream = null;
+  boolean capped = false;
+  try {
+   stream = Files.newDirectoryStream(Paths.get(dir));
+   int seen = 0;
+   for (Path child : stream) {
+    if (seen++ >= PATH_DIR_SCAN_CAP ||
+        writable.size() >= PATH_FILE_REPORT_CAP) {
+     capped = true;
+     break;
+    }
+    File file = child.toFile();
+    if (file.isFile() && file.canWrite())
+     writable.add(child.toString());
+   }
+  } catch (IOException e) {
+   dbg("environmentalInfo",
+    "cannot list " + dir + ": " +
+    e.getMessage());
+  } finally {
+   if (stream != null) {
+    try {
+     stream.close();
+    } catch (IOException e) {
+     dbg("environmentalInfo",
+      "cannot close " + dir + ": " +
+      e.getMessage());
+    }
+   }
+  }
+  return capped;
  }
 
  static String joinLines(
@@ -917,7 +1472,9 @@ public class OMVSEnum {
     }
    }
    if (canSeeAll) {
-    emit("[+]",
+    finding("PROCESS-LISTING-OTHER-USERS",
+     "Run OMVSEnum and observe that ps -ef " +
+     "lists processes owned by other users.",
      "Can list ALL processes " +
      "(elevated privilege indicator)",
      psef);
@@ -1012,7 +1569,9 @@ public class OMVSEnum {
      htpw.append(foundPath).append("\n");
    }
    if (htpw.length() > 0)
-    emit("[+]",
+    finding("HTPASSWD-FILES-VISIBLE",
+     "Run OMVSEnum --thorough and observe " +
+     ".htpasswd files under the scoped roots.",
      ".htpasswd files found " +
      "(may contain password hashes)",
      htpw.toString().trim());
@@ -1154,7 +1713,10 @@ public class OMVSEnum {
       "(safauth)",
       accessList.toString().trim());
     if (elevatedList.length() > 0)
-     emit("[+]",
+     finding(
+      "MOUNTED-DATASET-EXCESSIVE-ACCESS",
+      "Run OMVSEnum and observe UPDATE, " +
+      "CONTROL, or ALTER access to a mounted dataset.",
       "Mounted datasets with better than " +
       "READ SAF access",
       elevatedList.toString().trim());
@@ -1173,7 +1735,9 @@ public class OMVSEnum {
     "extattr", "+a", tmpApf);
    if (rc == 0) {
     apfMarked = true;
-    emit("[+]",
+    finding("FILEATTR-APF-PERMITTED",
+     "Run OMVSEnum with --active-probes and " +
+     "observe that extattr +a succeeds.",
      "extattr +a succeeded! " +
      "Can mark files APF-authorized",
      null);
@@ -1203,7 +1767,9 @@ public class OMVSEnum {
    "PRIVATE KEY-----", "{}", ";"
   );
   if (!keys.isEmpty())
-   emit("[+]",
+   finding("PRIVATE-KEY-MATERIAL",
+    "Run OMVSEnum and observe private key " +
+    "material under /u.",
     "Private key material found in /u",
     keys);
 
@@ -1214,7 +1780,8 @@ public class OMVSEnum {
    "-exec", "ls", "-la", "{}", ";"
   );
   if (!rhosts.isEmpty())
-   emit("[+]",
+   finding("RHOSTS-TRUST-FILES",
+    "Run OMVSEnum and observe .rhosts files under /u.",
     ".rhosts files found " +
     "(rlogin trust relationships)",
     rhosts);
@@ -1226,7 +1793,9 @@ public class OMVSEnum {
     Paths.get("/etc/hosts.equiv"));
    String he = new String(raw).trim();
    if (!he.isEmpty())
-    emit("[+]",
+    finding("HOSTS-EQUIV-READABLE",
+     "Run OMVSEnum and observe that " +
+     "/etc/hosts.equiv is readable.",
      "/etc/hosts.equiv readable",
      he);
   } catch (Exception e) {
@@ -1310,7 +1879,9 @@ public class OMVSEnum {
      gitcred.append(found).append("\n");
    }
    if (gitcred.length() > 0)
-    emit("[+]",
+    finding("GIT-CREDENTIAL-FILES",
+     "Run OMVSEnum --thorough and observe " +
+     ".git-credentials files.",
      "Git credential files found",
      gitcred.toString().trim());
   }
@@ -1364,7 +1935,10 @@ public class OMVSEnum {
       try {
        String line = readFirstLine(f);
        if (line != null) {
-        emit("[+]",
+        finding("HFS-FILE-PERMISSION-BYPASS",
+         "Run OMVSEnum with --active-probes and " +
+         "observe files readable despite " +
+         "owner-only Unix permissions.",
          "HFS BYPASS: readable despite" +
          " owner-only Unix perms",
          f.getAbsolutePath());
@@ -1397,7 +1971,9 @@ public class OMVSEnum {
    try {
     String line = readFirstLine(tf);
     if (line != null) {
-     emit("[+]",
+     finding("UNIX-PERMISSION-OVERRIDE",
+      "Run OMVSEnum with --active-probes and " +
+      "observe that a mode 000 file remains readable.",
       "Can read own 000-perm file! " +
       "RACF dataset ACLs are overriding " +
       "Unix file permissions",
@@ -1446,7 +2022,10 @@ public class OMVSEnum {
      File[] listing = ud.listFiles();
      if (listing != null &&
          listing.length > 0) {
-      emit("[+]",
+      finding("HFS-DIRECTORY-LIST-BYPASS",
+       "Run OMVSEnum with --active-probes and " +
+       "observe a directory listing despite " +
+       "restrictive Unix permissions.",
        "HFS BYPASS: Can list directory" +
        " despite restrictive Unix perms",
        ud.getAbsolutePath());
@@ -1513,7 +2092,9 @@ public class OMVSEnum {
     if (parts.length >= 3)
      isRoot = parts[2].equals("0");
     if (isRoot) {
-     emit("[+]",
+     finding("CHOWN-UID-0",
+      "Run OMVSEnum with --active-probes and " +
+      "observe that chown to UID 0 succeeds.",
       "chown to UID 0 SUCCEEDED! " +
       "CHOWN_UNRESTRICTED or " +
       "SUPERUSER.FILESYS.CHOWN " +
@@ -1564,11 +2145,13 @@ public class OMVSEnum {
     int rc2 = runExitCode(
      "chown", otherUid, tmp);
     if (rc2 == 0) {
-     emit("[+]",
+     finding("CHOWN-UNRESTRICTED",
+      "Run OMVSEnum with --active-probes and " +
+      "observe that chown to another UID succeeds.",
       "chown to UID " + otherUid +
       " SUCCEEDED! " +
       "Unrestricted chown capability",
-      null);
+      "target UID " + otherUid);
      runExitCode("chown", myUid, tmp);
     } else {
      emit("[-]",
@@ -1779,6 +2362,31 @@ public class OMVSEnum {
    System.err.println(l);
  }
 
+ // main() receives only the program argv.
+ // Prefix the documented jar launcher and
+ // quote tokens that would otherwise split.
+ static String invocation(String[] args) {
+  StringBuilder sb = new StringBuilder(
+   "java -jar OMVSEnum.jar");
+  for (String arg : args) {
+   sb.append(' ');
+   sb.append(quoteArg(arg));
+  }
+  return sb.toString();
+ }
+
+ static String quoteArg(String arg) {
+  if (arg.isEmpty()) return "\"\"";
+  for (int i = 0; i < arg.length(); i++) {
+   char c = arg.charAt(i);
+   if (c <= ' ' || c == '"' || c == '\\')
+    return "\"" +
+     arg.replace("\\", "\\\\").replace(
+      "\"", "\\\"") + "\"";
+  }
+  return arg;
+ }
+
  static void printUsage() {
   System.out.println(
    "Usage: java -jar OMVSEnum.jar [options]");
@@ -1815,6 +2423,8 @@ public class OMVSEnum {
   System.out.println();
   System.out.println("Output:");
   System.out.println(
+   "  -a, --assess               Append assessment findings");
+  System.out.println(
    "  -q, --quiet                Findings/warnings only");
   System.out.println(
    "  -r, --report <file>        Also write report file");
@@ -1830,6 +2440,8 @@ public class OMVSEnum {
    "  jobs,software,files,audit,hfs,chown,racf,content");
   System.out.println();
   System.out.println("Examples:");
+  System.out.println(
+   "  java -jar OMVSEnum.jar --assess");
   System.out.println(
    "  java -jar OMVSEnum.jar --thorough --threads 4");
   System.out.println(
@@ -1871,6 +2483,8 @@ public class OMVSEnum {
   println(
    "\n### OMVSEnum started : " +
    DF.format(new Date()));
+  println("### Command: " +
+   invocation(args));
   println(
    "### Verbose: " + !quietMode +
    "  |  Quiet: " + quietMode +
@@ -1880,6 +2494,9 @@ public class OMVSEnum {
   println("### Execution mode: " +
    (activeProbes ? "active probes enabled"
     : "passive (ordinary-user safe default)"));
+  if (assessMode)
+   println("### Assess: findings will be " +
+    "summarized after the inventory");
   if (sectionEnabled("capability") || extendedSaf)
    println("### SAF AUTH checks may be recorded " +
     "by the external security manager");
@@ -1889,6 +2506,9 @@ public class OMVSEnum {
     active);
 
   runSelectedSections();
+
+  if (assessMode)
+   outputAssessmentResults();
 
   println(
    "\n### OMVSEnum complete : " +
@@ -1910,6 +2530,9 @@ public class OMVSEnum {
    } else if (arg.equals("-t") ||
        arg.equals("--thorough")) {
     thorough = true;
+   } else if (arg.equals("-a") ||
+       arg.equals("--assess")) {
+    assessMode = true;
    } else if (arg.equals("-q") ||
        arg.equals("--quiet")) {
     quietMode = true;

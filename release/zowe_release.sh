@@ -109,13 +109,39 @@ submit_job() {
     local resp_file="$JOB_LOG_DIR/$label.json"
 
     echo "-- Submitting $label ($jcl_file)"
-    if ! zowe_cli zos-jobs submit local-file "$jcl_file" \
-            --wait-for-output --rfj \
-            > "$resp_file" 2>&1; then
+    # `submit --wait-for-output` hangs against this z/OSMF until the timeout
+    # even though the job ends within seconds (and a retry would resubmit
+    # it). Submit without waiting, then poll the job status ourselves.
+    # A request either answers in ~3s or never does, so use a short timeout
+    # and retry. A submit that timed out may still have created the job.
+    local jobid="" attempt
+    for attempt in 1 2 3 4 5 6; do
+        if timeout 20 zowe zos-jobs submit local-file "$jcl_file" --rfj \
+                ${ZOSMF_PROFILE:+--zosmf-profile "$ZOSMF_PROFILE"} \
+                > "$resp_file" 2>&1; then
+            jobid=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["data"]["jobid"])' "$resp_file")
+            break
+        fi
+        echo "   $label submit attempt $attempt timed out/failed; retrying"
+    done
+    if [ -z "$jobid" ]; then
         echo "zowe_release.sh: submit failed for $label" >&2
         cat "$resp_file" >&2
         exit 1
     fi
+    echo "   submitted as $jobid; polling status"
+
+    local poll
+    for poll in $(seq 1 60); do
+        timeout 20 zowe zos-jobs view job-status-by-jobid "$jobid" --rfj \
+            ${ZOSMF_PROFILE:+--zosmf-profile "$ZOSMF_PROFILE"} \
+            > "$resp_file.poll" 2>&1 || true
+        if grep -q '"status": *"OUTPUT"' "$resp_file.poll"; then
+            cp "$resp_file.poll" "$resp_file"
+            break
+        fi
+        sleep 2
+    done
 
     python3 - "$resp_file" "$label" <<'PYEOF'
 import json
@@ -158,7 +184,16 @@ PYEOF
 delete_if_present() {
     local dsn="$1"
     echo "-- Deleting $dsn (if present)"
-    zowe_cli zos-files delete data-set "$dsn" -f --ignore-not-found
+    local attempt
+    for attempt in 1 2 3 4 5 6; do
+        if timeout 20 zowe zos-files delete data-set "$dsn" -f --ignore-not-found \
+                ${ZOSMF_PROFILE:+--zosmf-profile "$ZOSMF_PROFILE"}; then
+            return 0
+        fi
+        echo "   delete attempt $attempt timed out/failed; retrying"
+    done
+    echo "zowe_release.sh: could not delete $dsn" >&2
+    exit 1
 }
 
 # ---------------------------------------------------------------------------
@@ -185,11 +220,12 @@ submit_job ALLOCATE "$REPO_ROOT/release/allocate.jcl"
 # ---------------------------------------------------------------------------
 
 echo "== Uploading members =="
+# REST file PUTs hang against this z/OSMF after the first member, so load
+# everything with one IEBGENER job instead (see upload_jcl.py).
 for library in SOURCE JCLLIB REXXLIB XMILIB; do
-    echo "-- Uploading $library"
-    zowe_cli zos-files upload dir-to-pds \
-        "$STAGE_DIR/members/$library" "$HLQ.$library" \
-        --encoding IBM-1047
+    python3 "$REPO_ROOT/release/upload_jcl.py" "$STAGE_DIR/members" \
+        "$STAGE_DIR/upload_$library.jcl" --library "$library"
+    submit_job "UPLOAD_$library" "$STAGE_DIR/upload_$library.jcl"
 done
 
 # ---------------------------------------------------------------------------

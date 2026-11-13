@@ -17,8 +17,9 @@ working output, identical content). The original `PHIL.ENUM.XMIT.xmi` under
   REXXLIB. They are packaged, not automatically executed.
 - SOURCE contains all assembler/Java/C sources and the Makefile. Compile JCL
   is included in both SOURCE and JCLLIB from identical local files.
-- UNIXTAR contains freshly built USS binaries, including RACF2John.jar.
-  Its source is exported as RACF2John.java to match the public class name.
+- UNIXTAR contains freshly built USS binaries, including RACF2John.jar and
+  catmap. RACF2John's source is exported as RACF2John.java to match the
+  public class name.
   Long Java lines were wrapped without changing application logic. (This
   dataset/member was named UNIXBIN in earlier packagings; it was renamed to
   UNIXTAR to describe its actual contents — see "Rebuild history" below.)
@@ -39,10 +40,10 @@ embedded in the shipped jobs, installer or ENUM helper location.
 | Dataset | Format | Members or contents |
 |---|---|---|
 | LOADLIB | PDS, U, block size 32760 | ACCESS, APFCHECK |
-| SOURCE | PDS, FB80, block size 27920 | 13 source/build members |
+| SOURCE | PDS, FB80, block size 27920 | 14 source/build members |
 | REXXLIB | PDS, FB80, block size 27920 | 8 REXX members |
 | JCLLIB | PDS, FB80, block size 27920 | 12 job/runtime/license members |
-| UNIXTAR | PS, U, block size 6144 | Binary tar archive, 6 files |
+| UNIXTAR | PS, U, block size 6144 | Binary tar archive, 7 files |
 | XMILIB | PDS, FB80, block size 3120 | INSTALL plus five nested XMITs |
 | XMI | PS, FB80 | Outer XMIT of XMILIB |
 
@@ -53,7 +54,8 @@ size to avoid oversized physical blocks during the outer IEBCOPY unload.
 LOADLIB contains MVS load modules only. Java JARs and native USS executables
 need UNIXTAR; receiving it does not deploy or execute files in USS. Its tar
 members are OMVSEnum.jar, GhostWalker.jar, portscan.jar, RACF2John.jar,
-safauth and portscan-c. Native executable mode bits are retained in the tar.
+safauth, catmap and portscan-c. Native executable mode bits are retained in
+the tar.
 
 ### SOURCE
 
@@ -67,6 +69,7 @@ safauth and portscan-c. Native executable mode bits are retained in the tar.
 | PORTJAVA | `Unix/portscan.java` |
 | PORTC | `Unix/portscan.c` |
 | SAFAUTH | `Unix/safauth.c` |
+| CATMAP | `Unix/catmap.c` |
 | RACF2J | `Unix/racf2john.java` |
 | MAKEFILE | `Unix/Makefile` |
 | CMPACC | `release/compile_access.jcl` |
@@ -169,7 +172,7 @@ uses spool by default. USS jobs remove their own private working directory,
 so use absolute paths for reports that must persist. RUNUSS runs OMVSEnum's
 default enumeration, then GhostWalker twice against `/` (`-r -m -u`, then
 `-m -u`), cat'ing both reports to spool before cleanup. The other UNIXTAR
-tools (both port scanners, safauth, RACF2John) are built but not run by
+tools (both port scanners, safauth, catmap, RACF2John) are built but not run by
 RUNUSS; edit release/run_unix.jcl to invoke them.
 
 ## Validation and compatibility

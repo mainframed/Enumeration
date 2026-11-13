@@ -340,10 +340,14 @@ final class OMVSSecurityChecks {
   if (zeroNames == null || zeroNames.isEmpty()) {
    OMVSEnum.emit("[!]", "UID 0 identities unavailable",
     "/etc/passwd was unreadable or contained no parseable UID 0.");
-  } else {
-   OMVSEnum.emit(
-    zeroNames.size() > 1 ? "[+]" : "[-]",
+  } else if (zeroNames.size() > 1) {
+   OMVSEnum.finding("UID-0-MULTIPLE-ACCOUNTS",
+    "Run OMVSEnum and observe more than one " +
+    "account name for UID 0.",
     "UID 0 account names", joinValues(zeroNames));
+  } else {
+   OMVSEnum.emit("[-]", "UID 0 account names",
+    joinValues(zeroNames));
   }
   StringBuilder duplicates = new StringBuilder();
   int duplicateCount = 0;
@@ -356,7 +360,10 @@ final class OMVSSecurityChecks {
     .append("\n");
   }
   if (duplicates.length() > 0)
-   OMVSEnum.emit("[+]", "Duplicate POSIX UIDs",
+   OMVSEnum.finding("DUPLICATE-POSIX-UIDS",
+    "Run OMVSEnum and observe POSIX user names " +
+    "that share a UID.",
+    "Duplicate POSIX UIDs",
     duplicates.toString().trim());
 
   String homeValue = System.getenv("HOME");
@@ -809,7 +816,10 @@ final class OMVSSecurityChecks {
     continue;
    risks++;
    if (risks <= 100)
-    OMVSEnum.emit("[+]",
+    OMVSEnum.finding("EXTATTR-TRUST-RISK",
+     "Run OMVSEnum and observe an APF, " +
+     "program-control, or shared-library file " +
+     "that the testing account can replace.",
      "Extended-attribute trust risk",
      entry.getKey() + " attributes=" +
      joinValues(entry.getValue()) + "\n" +
@@ -871,7 +881,10 @@ final class OMVSSecurityChecks {
     continue;
    actionable++;
    if (actionable <= 100)
-    OMVSEnum.emit("[+]",
+    OMVSEnum.finding("SUID-SGID-TRUST-RISK",
+     "Run OMVSEnum --thorough and observe an " +
+     "executable SUID or SGID file that the " +
+     "testing account can replace.",
      "Actionable SUID/SGID trust risk",
      path + " modes=" +
      joinValues(entry.getValue()) + "\n" +
@@ -950,7 +963,9 @@ final class OMVSSecurityChecks {
    OMVSEnum.emit("[-]", "Remote/automount inventory",
     remote.toString().trim());
   if (risky.length() > 0)
-   OMVSEnum.emit("[+]",
+   OMVSEnum.finding("REMOTE-MOUNT-WEAK-OPTIONS",
+    "Run OMVSEnum and observe a remote mount " +
+    "that looks writable without nosuid or nodev.",
     "Potentially writable remote mounts " +
     "without visible nosuid/nodev controls",
     risky.toString().trim() +
@@ -1061,11 +1076,15 @@ final class OMVSSecurityChecks {
    OMVSEnum.emit("[-]", "Listening endpoints",
     listeners.toString().trim());
   if (plaintext.length() > 0)
-   OMVSEnum.emit("[+]",
+   OMVSEnum.finding("PLAINTEXT-SERVICE-LISTENERS",
+    "Run OMVSEnum and observe a visible " +
+    "plaintext service listener.",
     "Visible plaintext service listeners",
     plaintext.toString().trim());
   if (wildcard.length() > 0)
-   OMVSEnum.emit("[+]",
+   OMVSEnum.finding("WILDCARD-SENSITIVE-BINDS",
+    "Run OMVSEnum and observe a sensitive " +
+    "service bound to a wildcard address.",
     "Wildcard sensitive service binds",
     wildcard.toString().trim());
   inspectPlaintextServiceConfig(
@@ -1205,11 +1224,17 @@ final class OMVSSecurityChecks {
    if (!Files.exists(path, NOFOLLOW)) continue;
    found++;
    PathTrust trust = analyzePathTrust(path);
-   String sev =
-    trust.effectivelyWritable ||
-    trust.replacementRisk() ? "[+]" : "[-]";
-   OMVSEnum.emit(sev,
-    "Audit/log integrity trust", trust.toString());
+   boolean risky = trust.effectivelyWritable ||
+    trust.replacementRisk();
+   if (risky)
+    OMVSEnum.finding("AUDIT-LOG-TRUST-RISK",
+     "Run OMVSEnum and observe an audit or log " +
+     "path the testing account can write or replace.",
+     "Audit/log integrity trust",
+     path + "\n" + trust.toString());
+   else
+    OMVSEnum.emit("[-]",
+     "Audit/log integrity trust", trust.toString());
    if (!Files.isReadable(path))
     OMVSEnum.emit("[-]",
      "Audit/log read access denied",
@@ -1357,11 +1382,17 @@ final class OMVSSecurityChecks {
    secondValue = normalizeNumber(secondValue);
   }
   boolean same = firstValue.equals(secondValue);
-  OMVSEnum.emit(same ? "[-]" : "[+]", label,
-   "first=" + firstValue +
+  String detail = "first=" + firstValue +
    "\nsecond=" + secondValue +
    (same ? "\nvalues agree" :
-    "\nidentity sources disagree"));
+    "\nidentity sources disagree");
+  if (same)
+   OMVSEnum.emit("[-]", label, detail);
+  else
+   OMVSEnum.finding("IDENTITY-SOURCE-MISMATCH",
+    "Run OMVSEnum and observe that identity " +
+    "sources disagree for the testing account.",
+    label, label + "\n" + detail);
  }
 
  private static void inspectHomeRoot(
@@ -1434,7 +1465,10 @@ final class OMVSSecurityChecks {
     String value =
      fields[1].toLowerCase(Locale.ENGLISH);
     if (isWeakSshSetting(key, value))
-     OMVSEnum.emit("[+]", "Weak SSH setting",
+     OMVSEnum.finding("SSH-WEAK-SETTING",
+      "Run OMVSEnum and observe a weak SSH " +
+      "daemon or client setting.",
+      "Weak SSH setting",
       config + ":" + number + " " +
       fields[0] + " " + fields[1]);
     if (isSshSettingKey(key) &&
@@ -1967,7 +2001,9 @@ final class OMVSSecurityChecks {
     matches++;
    }
    if (locations.length() > 0)
-    OMVSEnum.emit("[+]",
+    OMVSEnum.finding("LOG-CREDENTIAL-MARKERS",
+     "Run OMVSEnum and observe log locations " +
+     "that contain credential markers.",
      "Credential marker locations in logs",
      locations.toString().trim());
    return matches;
@@ -2044,9 +2080,11 @@ final class OMVSSecurityChecks {
      .append(fields[0]).append("\n");
    }
    if (locations.length() > 0)
-    OMVSEnum.emit("[+]",
-     "Plaintext service configuration entries",
-     locations.toString().trim());
+   OMVSEnum.finding("PLAINTEXT-SERVICE-CONFIG",
+    "Run OMVSEnum and observe configured " +
+    "plaintext service entries.",
+    "Plaintext service configuration entries",
+    locations.toString().trim());
   } catch (Exception e) {
    OMVSEnum.emit("[!]",
     "Service configuration parse unavailable",
@@ -2125,7 +2163,10 @@ final class OMVSSecurityChecks {
   String label, SafResult result
  ) {
   if (result.granted()) {
-   OMVSEnum.emit("[+]", label + " granted",
+   OMVSEnum.finding("SAF-SENSITIVE-AUTHORIZATIONS",
+    "Run OMVSEnum and observe that the testing " +
+    "account is granted these SAF authorizations.",
+    label + " granted",
     result.toString());
   } else if (result.denied()) {
    OMVSEnum.emit("[-]", label + " denied",
@@ -2149,7 +2190,10 @@ final class OMVSSecurityChecks {
   boolean risky = trust.effectivelyWritable ||
    trust.replacementRisk();
   if (risky)
-   OMVSEnum.emit("[+]", label, trust.toString());
+   OMVSEnum.finding("PATH-TRUST-RISK",
+    "Run OMVSEnum and observe a security-sensitive " +
+    "path the testing account can write or replace.",
+    label, label + "\n" + trust.toString());
   else if (emitNormal)
    OMVSEnum.emit("[-]", label, trust.toString());
  }
@@ -2168,15 +2212,20 @@ final class OMVSSecurityChecks {
      PosixFilePermission.GROUP_WRITE) ||
     permissions.contains(
      PosixFilePermission.OTHERS_WRITE);
-   OMVSEnum.emit(sharedWrite ? "[+]" : "[-]",
-    label,
-    path + " owner=" +
+   String detail = path + " owner=" +
     attrs.owner().getName() + " group=" +
     attrs.group().getName() + " mode=" +
     PosixFilePermissions.toString(permissions) +
     (sharedWrite
      ? "\nA different group/other identity may alter it."
-     : "\nOwner writability is normal for a personal path."));
+     : "\nOwner writability is normal for a personal path.");
+   if (sharedWrite)
+    OMVSEnum.finding("PERSONAL-PATH-SHARED-WRITE",
+     "Run OMVSEnum and observe group or other " +
+     "write permission on a personal path.",
+     label, detail);
+   else
+    OMVSEnum.emit("[-]", label, detail);
   } catch (Exception e) {
    OMVSEnum.emit("[!]", label + " unavailable",
     path + ": " + safeMessage(e));
@@ -2211,10 +2260,16 @@ final class OMVSSecurityChecks {
      PosixFilePermission.OTHERS_READ);
    boolean exposed =
     writable || (secret && readableByOthers);
-   OMVSEnum.emit(exposed ? "[+]" : "[-]",
-    "Sensitive file mode",
-    path + " " +
-    PosixFilePermissions.toString(permissions));
+   String detail = path + " " +
+    PosixFilePermissions.toString(permissions);
+   if (exposed)
+    OMVSEnum.finding("SENSITIVE-FILE-MODE",
+     "Run OMVSEnum and observe a sensitive file " +
+     "that group or other can read or write.",
+     "Sensitive file mode", detail);
+   else
+    OMVSEnum.emit("[-]", "Sensitive file mode",
+     detail);
   } catch (Exception e) {
    OMVSEnum.emit("[!]",
     "Sensitive file mode unavailable",

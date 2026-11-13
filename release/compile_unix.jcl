@@ -30,6 +30,8 @@ cp "//'&SYSUID..ENUM.SOURCE(PORTC)'" input.txt;
 sed 's/ *$//' input.txt > portscan.c;
 cp "//'&SYSUID..ENUM.SOURCE(SAFAUTH)'" input.txt;
 sed 's/ *$//' input.txt > safauth.c;
+cp "//'&SYSUID..ENUM.SOURCE(CATMAP)'" input.txt;
+sed 's/ *$//' input.txt > catmap.c;
 cp "//'&SYSUID..ENUM.SOURCE(RACF2J)'" input.txt;
 sed 's/ *$//' input.txt > RACF2John.java;
 cp "//'&SYSUID..ENUM.SOURCE(MAKEFILE)'" input.txt;
@@ -45,7 +47,7 @@ javac -d build/racf2john RACF2John.java;
 jar cfe RACF2John.jar RACF2John -C build/racf2john .;
 printf 'BUILD RACF2John RC=0\n';
 tar -cf unixtar.tar OMVSEnum.jar GhostWalker.jar portscan.jar 
-RACF2John.jar safauth portscan-c;
+RACF2John.jar safauth catmap portscan-c;
 cp -B unixtar.tar "//'&SYSUID..ENUM.UNIXTAR'";
 printf 'BUILD UNIXTAR RC=0\n';
 /*

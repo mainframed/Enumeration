@@ -1,7 +1,6 @@
 CC = c89
 CFLAGS = -Wc,"ASM,NOXPLINK"
-TARGET = safauth
-SOURCE = safauth.c
+C_BINS = safauth catmap
 JAVA_HOME = /usr/lpp/java/J8.0_64
 JAVAC = $(JAVA_HOME)/bin/javac
 JAR = $(JAVA_HOME)/bin/jar
@@ -18,10 +17,13 @@ JAVA_TARGETS = $(OMVS_BUILD)/.built $(GHOST_BUILD)/.built \
 
 .PHONY: all clean jars java
 
-all: $(TARGET) jars
+all: $(C_BINS) jars
 
-$(TARGET): $(SOURCE)
-	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $(SOURCE) $(LDFLAGS) $(LDLIBS)
+safauth: safauth.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ safauth.c $(LDFLAGS) $(LDLIBS)
+
+catmap: catmap.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ catmap.c $(LDFLAGS) $(LDLIBS)
 
 java: $(JAVA_TARGETS)
 
@@ -52,7 +54,7 @@ portscan.jar: $(PORT_BUILD)/.built
 	$(JAR) cfe $@ portscan -C $(PORT_BUILD) .
 
 clean:
-	rm -f $(TARGET) $(JAVA_JARS) \
+	rm -f $(C_BINS) $(JAVA_JARS) \
 		OMVSEnum*.class OMVSSecurityChecks*.class \
 		GhostWalker*.class portscan*.class
 	rm -rf $(BUILD_DIR)

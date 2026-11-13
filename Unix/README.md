@@ -22,6 +22,10 @@ ordinary, non-administrative USS identity.
   ownership changes. Review the target environment before enabling it.
 - `safauth` requests can be recorded by RACF, ACF2, or Top Secret even though
   they do not modify the tested resource.
+- `catmap` walks the master catalog and its user catalogs, then issues a
+  DATASET authorization check for each non-VSAM entry. Those checks can be
+  recorded by the ESM. The report is an inventory of data set names, volume
+  serials, and the caller's access.
 - `--extended-saf` performs additional concrete SURROGAT and JES authorization
   checks. It does not submit jobs or switch identities.
 - Content scans and reports may contain passwords, keys, configuration data,
@@ -35,12 +39,13 @@ ordinary, non-administrative USS identity.
 | `OMVSEnum.java` | Primary USS enumerator and CLI |
 | `OMVSSecurityChecks.java` | Internal OMVSEnum compile/runtime class; no standalone CLI |
 | `safauth.c` | Optional 31-bit SAF authorization helper |
+| `catmap.c` | 31-bit catalog access map; included in UNIXTAR |
 | `GhostWalker.java` | Standalone filesystem permission auditor |
 | `portscan.java` | Java TCP scanner with optional experimental workers |
 | `portscan.c` | C scanner with matching CLI; included in UNIXTAR |
 | `racf2john.java` | Standalone offline RACF hash extractor |
 | `OMVSEnum.sh` | Legacy predecessor retained for reference |
-| `Makefile` | Builds deployed Java classes and `safauth` |
+| `Makefile` | Builds deployed Java classes, `safauth`, and `catmap` |
 | `UNIXENUM.sh` | Generates deployment JCL |
 | `UNIXENUM.jcl` | Generated file; do not edit directly |
 | `*-ADCD-*.raw.txt` / `*.stderr.txt` | Checked-in sample reports |
@@ -50,7 +55,7 @@ ordinary, non-administrative USS identity.
 - z/OS UNIX System Services
 - Java 8 or newer for Java tools
 - `javac` and `java`, normally under `/usr/lpp/java/.../bin`
-- IBM `c89` or a compatible 31-bit z/OS C compiler for `safauth`
+- IBM `c89` or a compatible 31-bit z/OS C compiler for `safauth` and `catmap`
 - compiler options supporting inline assembler and NOXPLINK
 - BPXBATCH and JES for packaged build/run jobs
 - `/bin/tsocmd` and available TSO services for checks that bridge to TSO
@@ -61,7 +66,7 @@ reports that native SAF evidence is unavailable.
 ## Build
 
 The Makefile builds OMVSEnum, OMVSSecurityChecks, GhostWalker, the Java
-port scanner, and the optional native helper:
+port scanner, and the 31-bit native programs `safauth` and `catmap`:
 
 ```sh
 cd Unix
@@ -71,8 +76,9 @@ make
 Targets:
 
 ```sh
-make          # safauth plus all executable Java JARs
-make jars     # all executable Java JARs, without safauth
+make          # safauth, catmap, and all executable Java JARs
+make jars     # all executable Java JARs, without the native programs
+make catmap   # catalog mapper only
 make java     # compile Java classes only
 make clean
 ```
@@ -105,11 +111,12 @@ javac RACF2John.java
 
 Install the root ENUM.XMI as described in [the main README](../README.MD).
 SOURCE includes every Java/C source and the Makefile. JCLLIB(CMPUNIX)
-builds all implementations, including the C port scanner and RACF2John,
-without running them. Java 8 and IBM c89 are external prerequisites.
+builds all implementations, including catmap, the C port scanner, and
+RACF2John, without running them. Java 8 and IBM c89 are external
+prerequisites.
 
 UNIXTAR is a binary tar archive of OMVSEnum.jar, GhostWalker.jar,
-portscan.jar, RACF2John.jar, safauth, and portscan-c. It is received as a
+portscan.jar, RACF2John.jar, safauth, catmap, and portscan-c. It is received as a
 sequential dataset and remains binary throughout transfer and extraction.
 USS binaries do not belong in the MVS LOADLIB.
 
@@ -123,7 +130,7 @@ against `/`: `-r -m -u` (read/write-accessible paths) and `-m -u`
 (writeable paths), both with last-modified time and owner/group. Each
 GhostWalker run writes its report to a file, which is then `cat` to spool
 before the private working directory is removed on exit. The other UNIXTAR
-tools (both port scanners, safauth, RACF2John) are built by CMPUNIX but not
+tools (both port scanners, safauth, catmap, RACF2John) are built by CMPUNIX but not
 run by RUNUSS by default; edit `release/run_unix.jcl` to add them back or
 change GhostWalker's flags/paths. Use absolute report paths to keep output
 beyond spool. No run job is submitted during package validation.
@@ -165,6 +172,7 @@ Content search:
   -C, --case-sensitive       Use case-sensitive matching
 
 Output:
+  -a, --assess               Append assessment findings
   -q, --quiet                Findings and warnings only
   -r, --report <file>        Also write a report file
   -d, --debug                Diagnostics on stderr
@@ -183,6 +191,9 @@ files,audit,hfs,chown,racf,content
 ```sh
 # Passive default scan with the default two workers
 java -jar OMVSEnum.jar
+
+# Full inventory plus an assessment findings appendix
+java -jar OMVSEnum.jar --assess
 
 # Passive scan with four workers
 java -jar OMVSEnum.jar --threads 4
@@ -232,6 +243,16 @@ output contains section results and can be redirected or sent to SYSOUT.
 `--quiet` retains findings and warnings rather than suppressing all output.
 Unavailable commands or permissions are identified; absence of evidence is
 not treated as evidence of a secure configuration.
+
+### Assessment output
+
+`--assess` runs the selected inventory and appends human-readable findings.
+Each recorded issue uses the same shape as ENUM `ASSESS`: a finding number,
+a stable template id, a verification caption, and the evidence observed
+during the run. Repeated evidence for the same template is grouped into one
+finding. The appendix follows the section inventory on standard output, and
+it is included in `--report` when a report file is requested. An empty
+appendix means the selected checks recorded no security findings.
 
 ## OMVSSecurityChecks
 
@@ -283,6 +304,52 @@ make
 
 OMVSEnum searches the current directory and `PATH` for the helper, validates
 its usage contract, and continues with a warning when it is unavailable.
+
+## catmap
+
+`catmap` is a standalone 31-bit program. It reads the master catalog name
+from system control blocks, loads `IGGCSI00`, and walks that catalog plus
+each user catalog connected from it. For each selected non-VSAM entry it issues
+`RACROUTE REQUEST=AUTH,STATUS=ACCESS` against class DATASET and writes one
+fixed-length record. OMVSEnum does not invoke it.
+
+There are no command-line arguments. A 64-bit compile is rejected.
+
+```sh
+make catmap
+./catmap > /tmp/catmap.txt
+```
+
+`make` builds it with the same `c89 -Wc,"ASM,NOXPLINK"` options as
+`safauth`. CMPUNIX does that through `make all` and stores the executable
+in UNIXTAR as `catmap`. RUNUSS does not run it.
+
+Standard output is 80-byte records followed by a newline. Progress and
+failures go to standard error, including a closing
+`catmap: catalogs=N datasets=N errors=N` line.
+
+| Record | Layout |
+|---|---|
+| Catalog banner | `CAT:` immediately followed by the 44-byte catalog name |
+| Catalog error | `ERR:` immediately followed by the catalog name |
+| Data set | bytes 1–7 access, 9–14 volser, 16–59 data set name; the rest are blanks |
+| Trailer | `END:  DUMP OF CATALOGS IS COMPLETE` |
+
+Access values are `NONE`, `READ`, `UPDATE`, `CONTROL`, `ALTER`, `NOTPROT`,
+and `ERROR`. `NOTPROT` means SAF found the data set unprotected. `ERROR`
+means the check did not return a usable access level. A blank volser means
+the catalog entry did not supply one. Only non-VSAM catalog entries (type A)
+are requested. Names that do not start with a letter, `$`, `#`, or `@` are
+omitted.
+
+| Exit code | Meaning |
+|---:|---|
+| 0 | The walk finished. A catalog that failed is an `ERR:` record and is included in the stderr error count |
+| 8 | The walk did not start: unusable master catalog name, `IGGCSI00` unavailable, no memory for the catalog list, or the CSI parameter layout failed its size check |
+
+Authorization checks can be logged by RACF, ACF2, or Top Secret. The report
+names the non-VSAM data sets the walk returned, so treat the output as
+sensitive.
 
 ## GhostWalker
 
@@ -450,14 +517,19 @@ use standard error. Packaged jobs send standard output/error to spool.
 Use absolute report paths to retain reports beyond a run job.
 
 Other generated artifacts include `.class` and `.jar` files, the `safauth`
-executable, user-selected OMVSEnum reports, and GhostWalker report files.
+and `catmap` executables, user-selected OMVSEnum reports, and GhostWalker
+report files.
 
 ## Troubleshooting
 
 - **`java` or `javac` not found:** use the full `/usr/lpp/java/.../bin` path
   or update the Makefile and release build/run jobs.
-- **`safauth` build fails:** verify a 31-bit `c89`, inline-assembler support,
-  and `NOXPLINK`; a 64-bit build is intentionally rejected.
+- **`safauth` or `catmap` build fails:** verify a 31-bit `c89`,
+  inline-assembler support, and `NOXPLINK`; a 64-bit build is intentionally
+  rejected.
+- **`catmap` exits 8:** it must run on z/OS as the 31-bit executable. The
+  stderr line names the startup failure: master catalog name, `IGGCSI00`,
+  memory, or the CSI parameter layout.
 - **OMVSEnum says SAF evidence is unavailable:** place executable `safauth`
   in the current directory or `PATH`.
 - **A content section is rejected:** provide at least one search preset or
