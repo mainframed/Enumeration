@@ -1,0 +1,41 @@
+name: Release XMI
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - 'XMI/*.XMI'
+      - 'XMI/*.xmi'
+      - 'XMI/*.sha256'
+      - 'XMI/**/*.XMI'
+      - 'XMI/**/*.xmi'
+      - 'XMI/**/*.sha256'
+  workflow_dispatch:
+
+concurrency:
+  group: release-xmi
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash .github/scripts/release-xmi.sh
