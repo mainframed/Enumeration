@@ -52,8 +52,13 @@ public class GhostWalker {
  private static boolean showLastModified = false;
  private static boolean csvOutput = false;
  private static boolean debugMode = false;
+ private static boolean verboseMode = false;
  private static String outputName = null;
  private static PrintWriter output;
+ // -f redraws one stderr line. statusText null means
+ // no line is pending. Width pads a shorter replacement.
+ private static String statusText = null;
+ private static int statusWidth = 0;
 
  private static long examined = 0;
  private static long matched = 0;
@@ -86,6 +91,7 @@ public class GhostWalker {
    System.err.println("Error opening output: " + e.getMessage());
    System.exit(2);
   } finally {
+   endFolderStatus();
    if (output != null) {
     output.flush();
     if (outputName != null) {
@@ -175,6 +181,8 @@ public class GhostWalker {
      return usageError(arg + " requires a filename");
     }
     outputName = args[i];
+   } else if ("-v".equals(arg) || "--verbose".equals(arg)) {
+    verboseMode = true;
    } else if ("-D".equals(arg) || "--debug".equals(arg)) {
     debugMode = true;
    } else {
@@ -283,12 +291,15 @@ public class GhostWalker {
   FileVisitor<Path> visitor = new FileVisitor<Path>() {
    public FileVisitResult preVisitDirectory(
        Path dir, BasicFileAttributes ignored) {
+    noteFolder(dir);
     inspect(dir, true);
     return FileVisitResult.CONTINUE;
    }
 
    public FileVisitResult visitFile(
        Path file, BasicFileAttributes attrs) {
+    Path parent = file.getParent();
+    noteFolder(parent == null ? file : parent);
     if (attrs.isSymbolicLink() || Files.isSymbolicLink(file)) {
      skippedLinks++;
      debug("Skipping symbolic link: " + file);
@@ -406,7 +417,7 @@ public class GhostWalker {
      line.append(" [").append(hits).append("]");
     }
     line.append(" ").append(path);
-    output.println(line.toString());
+    writeLine(line.toString());
    }
    matched++;
   } catch (IOException e) {
@@ -467,6 +478,7 @@ public class GhostWalker {
 
  private static void reportRootFailure(Path path, Exception error) {
   failures++;
+  endFolderStatus();
   System.err.println("Error: cannot inspect start path " + path
       + ": " + error.getClass().getSimpleName()
       + ": " + error.getMessage());
@@ -542,7 +554,7 @@ public class GhostWalker {
    header.append(",matched");
   }
   header.append(",path");
-  output.println(header.toString());
+  writeLine(header.toString());
  }
 
  private static void printCsvRow(
@@ -562,7 +574,44 @@ public class GhostWalker {
    row.append(",").append(csv(hits));
   }
   row.append(",").append(csv(path));
-  output.println(row.toString());
+  writeLine(row.toString());
+ }
+
+ private static void writeLine(String line) {
+  output.println(line);
+  if (verboseMode && outputName != null) {
+   System.out.println(line);
+  }
+ }
+
+ // -f only. The line is not a finding and has no mode bits.
+ private static void noteFolder(Path dir) {
+  if (outputName == null || csvOutput || dir == null) {
+   return;
+  }
+  String shown = dir.toAbsolutePath().normalize().toString();
+  String line = "[*] " + shown;
+  if (line.equals(statusText)) {
+   return;
+  }
+  StringBuilder text = new StringBuilder();
+  text.append('\r').append(line);
+  for (int i = line.length(); i < statusWidth; i++) {
+   text.append(' ');
+  }
+  System.err.print(text.toString());
+  System.err.flush();
+  statusWidth = line.length();
+  statusText = line;
+ }
+
+ private static void endFolderStatus() {
+  if (statusText == null) {
+   return;
+  }
+  System.err.println();
+  statusText = null;
+  statusWidth = 0;
  }
 
  private static String csv(String value) {
@@ -633,6 +682,12 @@ public class GhostWalker {
       "  -c, --csv <file>            Write CSV to path/filename");
   System.out.println(
       "  -f, --output <file>         Write plain output to file");
+  System.out.println(
+      "  -v, --verbose               Also print file output");
+  System.out.println(
+      "With -f, stderr shows the directory in progress,");
+  System.out.println(
+      "rewritten in place using its full path.");
   System.out.println();
   System.out.println("Path types:");
   System.out.println(

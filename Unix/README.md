@@ -174,7 +174,8 @@ Content search:
 Output:
   -a, --assess               Append assessment findings
   -q, --quiet                Findings and warnings only
-  -r, --report <file>        Also write a report file
+  -r, --report <file>        Write the report to a file
+  -v, --verbose              With --report, also print it
   -d, --debug                Diagnostics on stderr
   -h, --help                 Show help
 ```
@@ -217,8 +218,12 @@ java -jar OMVSEnum.jar --sections content --credentials \
 # List JCL files containing password
 java -jar OMVSEnum.jar -s content -J -L -R /u
 
-# Write normal output and a report
+# Write the report to a file. Section progress is printed
+# on stderr while the file is filled in.
 java -jar OMVSEnum.jar --report /tmp/omvsenum.txt
+
+# Write the report and also print it to stdout
+java -jar OMVSEnum.jar --report /tmp/omvsenum.txt --verbose
 ```
 
 ### Option constraints
@@ -236,9 +241,14 @@ Invalid arguments exit 2. Failure to open a requested report exits 1.
 
 ### Output and concurrency
 
-Sections can run concurrently, but output is buffered and emitted in the
-fixed section order. The banner and debug diagnostics use stderr. Standard
-output contains section results and can be redirected or sent to SYSOUT.
+Sections can run concurrently. Results are still emitted in the fixed
+section order, and each section is written as soon as every section ahead
+of it has finished. `--report` writes that text to the file and flushes it
+as sections complete, so the file is not empty for the whole run. Stderr
+prints which section is running or complete. `--verbose` also prints the
+report to stdout as it is written. Without `--report`, the same ordered
+text goes to stdout. The banner and debug diagnostics use stderr. Standard
+output can be redirected or sent to SYSOUT.
 
 `--quiet` retains findings and warnings rather than suppressing all output.
 Unavailable commands or permissions are identified; absence of evidence is
@@ -250,8 +260,9 @@ not treated as evidence of a secure configuration.
 Each recorded issue uses the same shape as ENUM `ASSESS`: a finding number,
 a stable template id, a verification caption, and the evidence observed
 during the run. Repeated evidence for the same template is grouped into one
-finding. The appendix follows the section inventory on standard output, and
-it is included in `--report` when a report file is requested. An empty
+finding. The appendix follows the section inventory in the report. It is
+included in `--report` when a report file is requested, and it is printed
+to stdout when there is no report file or `--verbose` is set. An empty
 appendix means the selected checks recorded no security findings.
 
 ## OMVSSecurityChecks
@@ -378,6 +389,7 @@ Optional columns:
 Output:
   -c, --csv <file>            CSV file
   -f, --output <file>         Plain-text file
+  -v, --verbose               Also print file output
 
 Path types:
   -F, --files-only
@@ -438,7 +450,11 @@ below that root are neither displayed nor followed, preventing link cycles.
 The resolved starting directory is included when it matches.
 
 The banner always goes to stderr and does not contaminate redirected findings
-or CSV output. Missing or unusable start paths are always reported on stderr.
+or CSV output. With `-f`, stderr also shows the directory being scanned,
+rewritten on one line using its full path. That line is a progress marker and
+includes no permissions. `--verbose` prints the same plain or CSV output that
+is written to the file. Missing or unusable start paths are always reported
+on stderr.
 Access errors below a valid root are silent by default. Exit 1 means a root or
 subtree could not be searched; use `--debug` for details.
 
@@ -536,8 +552,10 @@ the Java implementation for current assessments.
 ## Generated output
 
 Runtime reports are not checked into the repository. OMVSEnum writes to
-standard output unless `--report` is supplied, while banners and diagnostics
-use standard error. Packaged jobs send standard output/error to spool.
+standard output unless `--report` is supplied. `--report` writes the file
+and prints section progress on stderr; `--verbose` also prints the report.
+Banners and diagnostics use standard error. Packaged jobs send standard
+output/error to spool.
 Use absolute report paths to retain reports beyond a run job.
 
 Other generated artifacts include `.class` and `.jar` files, the `safauth`

@@ -18,6 +18,7 @@ public class OMVSEnum {
  // ---- config ----------------------------------------
  static boolean debugMode  = false;
  static boolean quietMode  = false;
+ static boolean verboseMode = false;
  static boolean assessMode = false;
  static boolean thorough   = false;
  static PrintWriter report = null;
@@ -96,16 +97,61 @@ public class OMVSEnum {
   return sb.toString();
  }
 
+ // A report file keeps the body off stdout unless
+ // --verbose is set. With no report file, stdout
+ // is the report.
+ static boolean echoReport() {
+  return report == null || verboseMode;
+ }
+
  static synchronized void println(String s) {
   StringBuilder captured = SECTION_OUTPUT.get();
   if (captured != null) {
    captured.append(s).append("\n");
    return;
   }
-  System.out.println(s);
-  if (report != null) {
-   report.println(s);
-  }
+  writeText(s + "\n");
+ }
+
+ // Section scans print this to stderr so a long
+ // --report run is not silent, and so the lines
+ // stay out of the report body.
+ static void reportStatus(String message) {
+  if (reportFile == null) return;
+  System.err.println("[*] " + message);
+  System.err.flush();
+ }
+
+ static String sectionTitle(String name) {
+  if (name.equals("system"))
+   return "System Information";
+  if (name.equals("user"))
+   return "User / Group Information";
+  if (name.equals("environment"))
+   return "Environment";
+  if (name.equals("capability"))
+   return "Effective SAF Capabilities";
+  if (name.equals("network"))
+   return "Networking";
+  if (name.equals("services"))
+   return "Services / Processes";
+  if (name.equals("jobs"))
+   return "Scheduled / Startup Execution";
+  if (name.equals("software"))
+   return "Software / Compilers";
+  if (name.equals("files"))
+   return "Interesting Files";
+  if (name.equals("audit"))
+   return "User-visible Audit / Log Integrity";
+  if (name.equals("hfs"))
+   return "HFS Permission Bypass Checks";
+  if (name.equals("chown"))
+   return "CHOWN Privilege Checks";
+  if (name.equals("racf"))
+   return "RACF Searches";
+  if (name.equals("content"))
+   return "Content Search";
+  return name;
  }
 
  // ---- assessment findings ---------------------------
@@ -2427,7 +2473,9 @@ public class OMVSEnum {
   System.out.println(
    "  -q, --quiet                Findings/warnings only");
   System.out.println(
-   "  -r, --report <file>        Also write report file");
+   "  -r, --report <file>        Write report to a file");
+  System.out.println(
+   "  -v, --verbose              With -r, also print the report");
   System.out.println(
    "  -d, --debug                Diagnostics on stderr");
   System.out.println(
@@ -2452,6 +2500,8 @@ public class OMVSEnum {
    "  java -jar OMVSEnum.jar -s content -K -R /u");
   System.out.println(
    "  java -jar OMVSEnum.jar -P -L -R /etc -R /u");
+  System.out.println(
+   "  java -jar OMVSEnum.jar -r report.txt -v");
  }
 
  // ---- main ------------------------------------------
@@ -2471,13 +2521,15 @@ public class OMVSEnum {
   if (reportFile != null) {
    try {
     report = new PrintWriter(
-     new FileWriter(reportFile));
+     new FileWriter(reportFile), true);
    } catch (IOException e) {
     System.err.println(
      "Cannot open report file: " +
      e.getMessage());
     System.exit(1);
    }
+   reportStatus("Writing report to " +
+    reportFile);
   }
 
   println(
@@ -2486,7 +2538,7 @@ public class OMVSEnum {
   println("### Command: " +
    invocation(args));
   println(
-   "### Verbose: " + !quietMode +
+   "### Verbose: " + verboseMode +
    "  |  Quiet: " + quietMode +
    "  |  Debug: " + debugMode +
    "  |  Thorough: " + thorough +
@@ -2517,6 +2569,9 @@ public class OMVSEnum {
   if (report != null) {
    report.flush();
    report.close();
+   report = null;
+   reportStatus("Report written to " +
+    reportFile);
   }
  }
 
@@ -2536,6 +2591,9 @@ public class OMVSEnum {
    } else if (arg.equals("-q") ||
        arg.equals("--quiet")) {
     quietMode = true;
+   } else if (arg.equals("-v") ||
+       arg.equals("--verbose")) {
+    verboseMode = true;
    } else if (arg.equals("-d") ||
        arg.equals("--debug")) {
     debugMode = true;
@@ -2763,7 +2821,11 @@ public class OMVSEnum {
   return actions;
  }
 
- static String captureSection(Runnable action) {
+ static String captureSection(
+  String name, Runnable action
+ ) {
+  reportStatus("Section " + name +
+   " (" + sectionTitle(name) + "): running");
   StringBuilder buffer = new StringBuilder();
   SECTION_OUTPUT.set(buffer);
   try {
@@ -2775,6 +2837,8 @@ public class OMVSEnum {
    dbg("section", "failure: " + error);
   } finally {
    SECTION_OUTPUT.remove();
+   reportStatus("Section " + name +
+    " (" + sectionTitle(name) + "): complete");
   }
   return buffer.toString();
  }
@@ -2790,66 +2854,94 @@ public class OMVSEnum {
    sectionActions();
   Map<String, String> results =
    new HashMap<String, String>();
-  Map<String, Future<String>> futures =
-   new LinkedHashMap<String, Future<String>>();
+  // Index of the next section to emit. Finished
+  // sections wait here until every predecessor
+  // has been written, so the report stays ordered
+  // and still grows while later work runs.
+  int emitted = 0;
   ExecutorService executor = null;
 
   try {
    executor = Executors.newFixedThreadPool(
     threadCount);
+   ExecutorCompletionService<String> done =
+    new ExecutorCompletionService<String>(
+     executor);
+   Map<Future<String>, String> names =
+    new HashMap<Future<String>, String>();
    for (final String name : SECTION_ORDER) {
     if (!sectionEnabled(name) ||
         serialSection(name))
      continue;
     final Runnable action = actions.get(name);
     try {
-     futures.put(name,
-      executor.submit(new Callable<String>() {
+     Future<String> future = done.submit(
+      new Callable<String>() {
        public String call() {
-        return captureSection(action);
+        return captureSection(name, action);
        }
-      }));
+      });
+     names.put(future, name);
     } catch (RuntimeException e) {
      dbg("threads",
       "running " + name + " serially: " +
       e.getMessage());
      results.put(name,
-      captureSection(action));
+      captureSection(name, action));
+     emitted = emitReady(results, emitted);
     }
    }
 
-   for (Map.Entry<String, Future<String>>
-        entry : futures.entrySet()) {
+   int pending = names.size();
+   while (pending > 0) {
+    Future<String> future;
     try {
-     results.put(entry.getKey(),
-      entry.getValue().get());
+     future = done.take();
+    } catch (InterruptedException e) {
+     Thread.currentThread().interrupt();
+     dbg("threads",
+      "interrupted while waiting: " +
+      e.getMessage());
+     break;
+    }
+    String name = names.get(future);
+    try {
+     results.put(name, future.get());
     } catch (Exception e) {
      dbg("threads", "worker failed: " +
       e.getMessage());
-     results.put(entry.getKey(),
-      captureSection(
-       actions.get(entry.getKey())));
+     results.put(name,
+      captureSection(name,
+       actions.get(name)));
     }
+    emitted = emitReady(results, emitted);
+    pending--;
    }
   } catch (Throwable error) {
    dbg("threads",
     "falling back to serial: " +
     error.getMessage());
-   for (String name : SECTION_ORDER) {
-    if (sectionEnabled(name) &&
-        !serialSection(name) &&
-        !results.containsKey(name))
-     results.put(name,
-      captureSection(actions.get(name)));
-   }
   } finally {
    if (executor != null)
     executor.shutdownNow();
   }
 
-  if (sectionEnabled("content"))
+  for (String name : SECTION_ORDER) {
+   if (!sectionEnabled(name) ||
+       serialSection(name) ||
+       results.containsKey(name))
+    continue;
+   results.put(name,
+    captureSection(name, actions.get(name)));
+   emitted = emitReady(results, emitted);
+  }
+
+  if (sectionEnabled("content")) {
    results.put("content",
-    captureSection(actions.get("content")));
+    captureSection("content",
+     actions.get("content")));
+   emitted = emitReady(results, emitted);
+  }
 
   for (String name : SECTION_ORDER) {
    if (!sectionEnabled(name) ||
@@ -2857,21 +2949,50 @@ public class OMVSEnum {
        name.equals("content"))
     continue;
    results.put(name,
-    captureSection(actions.get(name)));
+    captureSection(name, actions.get(name)));
+   emitted = emitReady(results, emitted);
   }
 
-  for (String name : SECTION_ORDER) {
+  emitReady(results, emitted);
+ }
+
+ // Write every finished section up to the first
+ // one that is still running. Returns the new
+ // cursor so the next completion can continue.
+ static int emitReady(
+  Map<String, String> results, int index
+ ) {
+  while (index < SECTION_ORDER.size()) {
+   String name = SECTION_ORDER.get(index);
+   if (!sectionEnabled(name)) {
+    index++;
+    continue;
+   }
+   if (!results.containsKey(name))
+    break;
    String text = results.get(name);
    if (text != null && !text.isEmpty())
     writeCaptured(text);
+   index++;
   }
+  return index;
  }
 
  static synchronized void writeCaptured(
   String text
  ) {
-  System.out.print(text);
-  if (report != null)
+  writeText(text);
+ }
+
+ static synchronized void writeText(String text) {
+  if (text == null || text.isEmpty()) return;
+  if (echoReport()) {
+   System.out.print(text);
+   System.out.flush();
+  }
+  if (report != null) {
    report.print(text);
+   report.flush();
+  }
  }
 }

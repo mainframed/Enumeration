@@ -1,4 +1,5 @@
 .vscode/
+.DS_Store
 
 # Local build output of release/package.jcl. The tracked release artifact
 # lives in XMI/ENUM.XMI(.sha256); these are the rebuildable working copies.
